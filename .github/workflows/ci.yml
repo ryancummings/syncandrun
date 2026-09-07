@@ -17,6 +17,7 @@ jobs:
         with:
           version: 10.15.1
       - run: corepack enable && corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm audit --audit-level=moderate
       - run: corepack pnpm --dir companion exec playwright install --with-deps chromium
       - run: make lint contract-test companion-build companion-test companion-e2e NODE22=node
   containers:

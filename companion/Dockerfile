@@ -13,14 +13,23 @@ COPY companion/ui companion/ui
 COPY companion/src companion/src
 RUN corepack pnpm --dir companion build
 
+FROM node:22-bookworm-slim AS production-dependencies
+
+ENV COREPACK_HOME=/corepack
+ENV PATH=$COREPACK_HOME:$PATH
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY companion/package.json companion/package.json
+RUN corepack enable && corepack pnpm install --prod --frozen-lockfile
+
 FROM node:22-bookworm-slim AS runtime
 
 ENV NODE_ENV=production
 ENV SYNCANDRUN_DATA_DIR=/data
 WORKDIR /app
 
-COPY --from=build /app/node_modules /app/node_modules
-COPY --from=build /app/companion/node_modules /app/companion/node_modules
+COPY --from=production-dependencies /app/node_modules /app/node_modules
+COPY --from=production-dependencies /app/companion/node_modules /app/companion/node_modules
 COPY --from=build /app/companion/package.json /app/companion/package.json
 COPY --from=build /app/companion/dist /app/companion/dist
 

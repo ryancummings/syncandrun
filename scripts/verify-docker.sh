@@ -51,6 +51,8 @@ printf '%s' "$headers" | grep -qi '^X-Content-Type-Options: nosniff'
 
 docker exec "$verify_container" sh -c \
   'test "$(id -u)" = 1000 && test "$(node --version | cut -d. -f1)" = v22 && test -s /data/syncandrun.sqlite && test "$(awk "/VmRSS/ { print \$2 }" /proc/1/status)" -lt 262144'
+docker exec "$verify_container" sh -c \
+  'test ! -e /app/companion/node_modules/typescript && test ! -e /app/companion/node_modules/vite && test ! -e /app/companion/node_modules/vitest'
 docker exec "$verify_container" touch /data/verification-sentinel
 
 docker compose -p "$verify_project" restart companion >/dev/null

@@ -15,6 +15,8 @@ The watch requires trusted HTTPS on port 443. A private tailnet-only URL cannot 
 Clone the public source and choose a reviewed release tag or commit. From the checkout, generate configuration using your actual canonical origin:
 
 ```sh
+git clone https://github.com/ryancummings/syncandrun.git
+cd syncandrun
 python3 scripts/setup-deployment.py --origin https://music.example.com
 # Quiet validation avoids printing the secret in rendered configuration.
 docker compose config --quiet
