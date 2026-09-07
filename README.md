@@ -8,9 +8,9 @@ Sync existing Plex music playlists to a Garmin Forerunner 955 / Solar, then list
 
 Follow [the deployment guide](docs/DEPLOYMENT.md) for Linux amd64 or arm64 with Docker Compose. It covers a domain with Caddy and an optional Tailscale Funnel route that needs no domain purchase or router changes. Tunnel audio compatibility remains subject to physical-watch testing.
 
-The setup helper generates a private encryption secret. The service binds to loopback behind HTTPS. An operator-created, single-use invitation assigns the installation owner; later management requires that owner's Plex account.
+The setup helper generates a private encryption secret. The service binds to loopback behind HTTPS. An operator-created, single-use setup link assigns the installation owner; later management requires that owner's Plex account.
 
-Each installation serves one Plex account, server, and music library. You can host separate installations for guests, with independent credentials and data. Guests must trust the host administrator. [Agent deployment instructions](docs/AGENT_DEPLOYMENT.md) cover preparation, checks, recovery, and handoff without maintainer-private tools.
+Each installation serves its owner’s one Plex account, server, and music library, and can pair multiple watches belonging to that owner. [Agent deployment instructions](docs/AGENT_DEPLOYMENT.md) cover preparation, checks, recovery, and handoff without maintainer-private tools.
 
 Watch builds and development sideloading are described in [DEVELOPMENT.md](docs/DEVELOPMENT.md). No prebuilt watch package or published container image is required: build from a reviewed source revision.
 
@@ -22,7 +22,7 @@ Watch builds and development sideloading are described in [DEVELOPMENT.md](docs/
 - View observed synchronization progress and manage paired watches.
 - Play cached audio through Bluetooth headphones with the phone and network absent.
 
-Plex remains the playlist editor. Album/artist/track browsing, playlist editing, streaming playback, a phone app, billing, and a shared multi-account service are outside this preview. The development target is `fr955`; other watches are not claimed as supported.
+Plex remains the playlist editor. Album/artist/track browsing, playlist editing, streaming playback, a phone app, and billing are outside this preview. Service operation for other people is outside the product scope. The development target is `fr955`; other watches are not claimed as supported.
 
 ## Contribute
 

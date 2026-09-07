@@ -13,7 +13,7 @@ flowchart LR
 
 ## Installation boundary
 
-Each installation has one owner and one Plex account, server, and music library. A host administrator can operate separate guest installations with separate origins, secrets, volumes, and watch credentials. Guests trust that administrator with their credentials and metadata. Separate containers do not protect data from the host administrator.
+Each installation is personal to one owner and uses that owner's one Plex account, server, and music library. The owner may pair multiple watches; each watch has its own credential and synchronization state. The companion has no account sharing or service-provider mode.
 
 An operator creates a short-lived setup link for the first owner. After that claim, only the bound Plex account can obtain management access. Disconnecting Plex must not make an installation available for a stranger to claim. A deliberate operator reset is the recovery boundary.
 
@@ -21,7 +21,7 @@ An operator creates a short-lived setup link for the first owner. After that cla
 
 The owner selects existing audio playlists and a Compact, Balanced, or High MP3 profile. The companion exposes bounded manifest pages under `/api/v1/watch`. The watch downloads sequentially, deduplicates shared tracks, preserves playlist order, and reuses unchanged audio. A completed HTTP transfer is not proof that Garmin committed the audio to its encrypted cache.
 
-The watch retains its last applied revision until required downloads complete. Playback uses cached media without a phone or network. Album browsing, playlist editing, streaming playback, and shared multi-account installations are outside this preview.
+The watch retains its last applied revision until required downloads complete. Playback uses cached media without a phone or network. Album browsing, playlist editing, and streaming playback are outside this preview.
 
 ## Credential and data handling
 

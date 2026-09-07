@@ -28,11 +28,9 @@ Plex and Garmin process data under their own terms when the operator uses
 their products. SyncAndRun is unofficial and is not affiliated with either
 company.
 
-For guest installations, the host administrator can access credentials and
-library metadata, even though other installation owners cannot manage this
-installation. Guests must trust that administrator. Owners authenticate with
-their Plex identity; the companion retains the identity needed to enforce
-ownership after a disconnect.
+The installation owner authenticates with their Plex identity. The companion
+retains the identity needed to enforce ownership after a disconnect. Every
+paired watch belongs to that owner and has its own revocable credential.
 
 An optional tunnel provider routes HTTPS traffic to the host and processes
 connection metadata under its own policy. A self-hosted companion does not

@@ -2,7 +2,7 @@
 
 This is a preview. Automated tests do not establish physical-watch compatibility. Complete the watch acceptance run in [VALIDATION.md](VALIDATION.md), including offline audio playback, before relying on it. Tunnel/watch compatibility remains unverified until that run succeeds with your endpoint.
 
-Each installation has one Plex owner. You may run separate installations for guests. The host administrator can read stored credentials and library metadata; guests must trust that administrator. There is no shared multi-account service.
+Each installation is for one Plex owner on hardware they control. It supports multiple watches belonging to that owner. Hosting for other people is outside the product scope.
 
 ## Requirements
 
@@ -53,13 +53,13 @@ Use the current [Funnel CLI reference](https://tailscale.com/docs/reference/tail
 
 ## Assign the owner
 
-The initial unauthenticated visitor cannot claim the service. The administrator creates a private, single-use setup invitation from inside the container:
+The initial unauthenticated visitor cannot claim the service. The owner creates a private, single-use setup link from inside the container:
 
 ```sh
 docker compose exec companion node companion/dist/operator.js setup-link --output /tmp/setup-link.txt
 ```
 
-Retrieve `/tmp/setup-link.txt` to a private local file (mode 0600), using an operator-controlled terminal, and send its contents to the intended guest through a private channel. For example:
+Retrieve `/tmp/setup-link.txt` to a private local file (mode 0600) using an owner-controlled terminal. For example:
 
 ```sh
 umask 077
@@ -68,23 +68,11 @@ docker cp "$container_id:/tmp/setup-link.txt" ./setup-link.txt
 chmod 600 ./setup-link.txt
 ```
 
-The link expires after 30 minutes. The guest opens it and connects their own Plex account, then selects server, library, playlists, and transcode quality and pairs their watch. Subsequent management requires the installation owner's Plex identity. Delete both copies of the link after use. A new invitation is refused after an owner exists. Do not send invitations via public issues or automated logs.
+The link expires after 30 minutes. The owner opens it and connects their Plex account, then selects server, library, playlists, and transcode quality and pairs one or more watches. Subsequent management requires the same Plex identity. Delete both copies of the link after use. A new setup link is refused after an owner exists. Do not put setup links in public issues or automated logs.
 
 For an existing installation upgraded from a version without owner authentication, prior browser sessions are invalidated. The trusted administrator must issue the setup link to the original Plex account owner before management resumes. Existing library data and watch credentials are retained. To assign a different person, create a fresh installation instead.
 
 Verify `/health/ready` externally, that anonymous management is denied, that a different Plex account cannot manage the installation, and that the watch can sync. Record physical-watch tests separately from container health.
-
-## Host guests
-
-Use a separate checkout/configuration per guest. Choose a unique `--project`, `--port`, and HTTPS hostname for each:
-
-```sh
-python3 scripts/setup-deployment.py --project syncandrun-guest-a --port 3001 --origin https://guest-a.example.com
-```
-
-Each Compose project gets its own network and named data volume; never share `.env`, secrets, data volumes, or invitations. Add a separate host Caddy hostname routing to each loopback port. Protect backup directories per guest. For guests you do not trust with your LAN, isolate each installation in a VM and restrict its outbound network access to the intended Plex server and required external services; a VM on an unrestricted LAN is not network isolation. Resource limits, host disk capacity, updates, and recovery remain the operator's responsibility.
-
-For domain-free guests use a separate VM or machine with its own Tailscale node/name and port-443 Funnel per guest. The application requires a separate HTTPS origin on port 443; do not use path prefixes or Funnel's other public ports to combine guests. VMs can share the same physical host. Separate containers alone do not protect against a malicious machine administrator.
 
 ## Back up and restore
 

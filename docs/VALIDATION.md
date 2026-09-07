@@ -6,7 +6,7 @@ This source preview is not a stable hardware-qualified release. Automated checks
 
 Run `make verify` from a clean checkout with the prerequisites in [DEVELOPMENT.md](DEVELOPMENT.md). Record the source commit and tool versions with the results. This checks the companion, browser journey, protocol fixtures, `fr955` compile and simulator tests, memory profiles, secret scans, and native/cross-architecture containers including backup and restore.
 
-For a public deployment, additionally verify that a visitor without a setup link cannot claim an empty installation, another Plex account cannot obtain management access, a setup link expires and cannot be reused, and owner disconnect does not remove ownership. Test independent guest installations for separate state and credentials.
+For a public deployment, additionally verify that a visitor without a setup link cannot claim an empty installation, another Plex account cannot obtain management access, a setup link expires and cannot be reused, owner disconnect does not remove ownership, and multiple watches belonging to the owner retain separate credentials and synchronization state.
 
 ## Physical acceptance — awaiting the watch owner
 

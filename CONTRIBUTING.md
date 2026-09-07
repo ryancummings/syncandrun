@@ -6,7 +6,7 @@ SyncAndRun welcomes bug reports, documentation improvements, and focused pull re
 
 Use [GitHub Issues](https://github.com/ryancummings/syncandrun/issues) for reproducible bugs and deployment questions. Include the source commit, host architecture, deployment method, expected behavior, and sanitized reproduction steps. For watch problems, include the watch model and firmware. Never upload a database, setup link, token, signing key, real media file, or unedited network trace. Report vulnerabilities through [SECURITY.md](SECURITY.md).
 
-Discuss substantial changes in an issue before implementation. The current product selects existing Plex music playlists, synchronizes them to a watch, and plays them offline. A phone app, billing system, and shared multi-account companion are outside the preview scope.
+Discuss substantial changes in an issue before implementation. The current product selects existing Plex music playlists, synchronizes them to the owner's watches, and plays them offline. A phone app, billing system, and operation for other users are outside the product scope.
 
 ## Make a change
 
@@ -27,4 +27,4 @@ Contributions are distributed under the repository's GPL-3.0 license. Submit onl
 
 Agent-assisted contributions follow the same review and testing rules. The submitting person remains responsible for the patch and its provenance. Public instructions are in [AGENTS.md](AGENTS.md); no personal task tracker or private tools are required.
 
-Be respectful, critique the work rather than the person, and avoid harassment or disclosure of private information. Maintainers can close disruptive discussions and remove abusive content. Support is community-based, with no promised response time or hosted-service commitment.
+Be respectful, critique the work rather than the person, and avoid harassment or disclosure of private information. Maintainers can close disruptive discussions and remove abusive content. Support is community-based, with no promised response time.

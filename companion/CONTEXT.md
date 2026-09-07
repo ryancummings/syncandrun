@@ -6,13 +6,9 @@
 The single user whose Plex connection, playlist choices, and paired watches belong to a companion installation.
 _Avoid_: Host administrator
 
-**Host administrator**:
-The person who operates the hardware for one or more companion installations. An installation owner trusts this person with access to their credentials and library metadata.
-_Avoid_: Installation owner
-
-**Guest installation**:
-A companion installation operated for its owner by another person, with its own credentials, settings, watch pairing, and data.
-_Avoid_: Shared account
+**Paired watch**:
+A Garmin watch belonging to the installation owner, with its own revocable companion credential and synchronization state. One owner may pair multiple watches.
+_Avoid_: User
 
 **Live sync**:
 A view of one watch's current synchronization, inferred from manifest requests, audio transfers, artwork requests, and sync results.

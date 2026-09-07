@@ -2,7 +2,7 @@
 
 Read `README.md` and `docs/ARCHITECTURE.md` before changing behavior. For deployment, follow `docs/AGENT_DEPLOYMENT.md` and its human setup guide. For code changes, follow `CONTRIBUTING.md` and `docs/DEVELOPMENT.md`. `docs/protocol/openapi.yaml` owns the watch contract; `CONTEXT-MAP.md` links the glossary.
 
-- Keep the companion single-owner. Guests use independent installations and trust the host administrator.
+- Keep the companion personal and single-owner. Multiple paired watches must belong to that owner and retain separate credentials and synchronization state.
 - Never print, commit, or include in issue reports Plex credentials, setup links, cookies, database contents, watch credentials, signing keys, or real library metadata.
 - Keep browser and watch deployment traffic on trusted HTTPS. Do not bypass authentication to make a tunnel work.
 - Use fake Plex data for automated testing. Never use production data or volumes for tests.
