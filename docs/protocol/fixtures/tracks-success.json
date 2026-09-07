@@ -1,0 +1,29 @@
+{
+  "protocolVersion": 1,
+  "playlistId": "plex:playlist:morning",
+  "items": [
+    {
+      "id": "plex:track:12345",
+      "contentFingerprint": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "title": "Fixture Song",
+      "artist": "Fixture Artist",
+      "album": "Fixture Album",
+      "durationSeconds": 241,
+      "downloadPath": "/api/v1/watch/tracks/plex:track:12345/audio",
+      "artworkId": "fixtureArtworkId12345",
+      "artworkPath": "/api/v1/watch/a/fixtureArtworkId12345/1786816800/fixtureSignature12345/plex:track:12345"
+    },
+    {
+      "id": "plex:track:67890",
+      "contentFingerprint": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "title": "Second Fixture",
+      "artist": "Fixture Artist",
+      "album": "Fixture Album",
+      "durationSeconds": 180,
+      "downloadPath": "/api/v1/watch/tracks/plex:track:67890/audio",
+      "artworkId": null,
+      "artworkPath": null
+    }
+  ],
+  "nextCursor": null
+}

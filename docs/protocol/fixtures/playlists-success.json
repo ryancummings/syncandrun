@@ -1,0 +1,22 @@
+{
+  "protocolVersion": 1,
+  "items": [
+    {
+      "id": "plex:playlist:morning",
+      "name": "Morning Run",
+      "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "trackCount": 2,
+      "durationSeconds": 421,
+      "tracksPath": "/api/v1/watch/playlists/plex:playlist:morning/tracks"
+    },
+    {
+      "id": "plex:playlist:evening",
+      "name": "Evening Run",
+      "revision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "trackCount": 1,
+      "durationSeconds": 241,
+      "tracksPath": "/api/v1/watch/playlists/plex:playlist:evening/tracks"
+    }
+  ],
+  "nextCursor": null
+}

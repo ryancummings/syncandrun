@@ -1,0 +1,51 @@
+services:
+  companion:
+    build:
+      context: .
+      dockerfile: companion/Dockerfile
+    image: ${SYNCANDRUN_IMAGE:-syncandrun-companion:local}
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    environment:
+      SYNCANDRUN_BASE_URL: ${SYNCANDRUN_BASE_URL:?Set SYNCANDRUN_BASE_URL to the trusted HTTPS origin}
+      SYNCANDRUN_ARTWORK_BASE_URL: ${SYNCANDRUN_ARTWORK_BASE_URL:-}
+      SYNCANDRUN_SECRET: ${SYNCANDRUN_SECRET:?Set SYNCANDRUN_SECRET to at least 32 random bytes}
+      SYNCANDRUN_DATA_DIR: /data
+      SYNCANDRUN_PORT: 3000
+      SYNCANDRUN_LOG_LEVEL: ${SYNCANDRUN_LOG_LEVEL:-info}
+      SYNCANDRUN_TRUST_PROXY: ${SYNCANDRUN_TRUST_PROXY:-false}
+    ports:
+      - "${SYNCANDRUN_BIND_ADDRESS:-127.0.0.1}:${SYNCANDRUN_PORT:-3000}:3000"
+    volumes:
+      - syncandrun-data:/data
+
+  artwork-gateway:
+    image: caddy:2.10-alpine
+    profiles: ["artwork-public"]
+    restart: unless-stopped
+    depends_on:
+      - companion
+    ports:
+      - "127.0.0.1:${SYNCANDRUN_ARTWORK_GATEWAY_PORT:-3016}:3016"
+    volumes:
+      - ./deploy/Caddyfile.artwork-only:/etc/caddy/Caddyfile:ro
+
+  artwork-tunnel:
+    image: cloudflare/cloudflared@sha256:0aa26e284f05e6c77ae375b8c9c11d9eb6a448fb7bcd8d40f31cb6176189eb38
+    profiles: ["artwork-public"]
+    restart: unless-stopped
+    depends_on:
+      - artwork-gateway
+    group_add:
+      - "${SYNCANDRUN_HOST_SECRET_GID:-1000}"
+    command: tunnel --no-autoupdate run --token-file /run/secrets/cloudflared-token
+    volumes:
+      - "${SYNCANDRUN_CLOUDFLARED_TOKEN_FILE:-./cloudflared-token}:/run/secrets/cloudflared-token:ro"
+
+volumes:
+  syncandrun-data:

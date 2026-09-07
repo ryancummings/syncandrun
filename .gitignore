@@ -1,6 +1,47 @@
+# Node and browser tooling
+node_modules/
+companion/node_modules/
+companion/dist/
+companion/coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# Local configuration and credentials
+.env
+cloudflared-token
+.env.*
+!.env.example
+*.pem
+*.key
+*.der
+developer_key*
+
+# Garmin and general build output
+build/
 bin/
-bin/SubMusic.prg.debug.xml
-bin/SubMusic.prg
-bin/SubMusic-settings.json
-.vscode/launch.json
+*.prg
+*.iq
+*.debug.xml
+*.settings.json
+
+# Companion persistence
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Editors and operating systems
+.DS_Store
+.idea/
 .vscode/settings.json
+*.swp
+
+# Third-party agent skills restored from skills-lock.json
+.agents/skills/
+.claude/skills/
+
+# Private setup invitations and Python build cache
+setup-link*.txt
+__pycache__/
+*.pyc

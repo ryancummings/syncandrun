@@ -1,0 +1,15 @@
+[
+  { "status": 401, "body": { "error": { "code": "AUTH_REQUIRED", "message": "Pair this watch with the companion.", "retryable": false, "requestId": "req_fixture_01" } } },
+  { "status": 401, "body": { "error": { "code": "DEVICE_REVOKED", "message": "This watch was removed. Pair it again.", "retryable": false, "requestId": "req_fixture_02" } } },
+  { "status": 400, "body": { "error": { "code": "PAIRING_CODE_INVALID", "message": "Check the pairing code and try again.", "retryable": false, "requestId": "req_fixture_03" } } },
+  { "status": 400, "body": { "error": { "code": "PAIRING_CODE_EXPIRED", "message": "Create a new pairing code in the companion.", "retryable": false, "requestId": "req_fixture_04" } } },
+  { "status": 426, "body": { "error": { "code": "PROTOCOL_UNSUPPORTED", "message": "Update the companion or watch application.", "retryable": false, "requestId": "req_fixture_05" } } },
+  { "status": 503, "body": { "error": { "code": "PLEX_UNAVAILABLE", "message": "The Plex server is unavailable. Try again later.", "retryable": true, "requestId": "req_fixture_06" } } },
+  { "status": 401, "body": { "error": { "code": "PLEX_TOKEN_INVALID", "message": "Reconnect Plex in the companion.", "retryable": false, "requestId": "req_fixture_07" } } },
+  { "status": 404, "body": { "error": { "code": "PLAYLIST_NOT_FOUND", "message": "The playlist was removed from Plex.", "retryable": false, "requestId": "req_fixture_08" } } },
+  { "status": 404, "body": { "error": { "code": "TRACK_NOT_FOUND", "message": "The track was removed from Plex.", "retryable": false, "requestId": "req_fixture_09" } } },
+  { "status": 502, "body": { "error": { "code": "TRANSCODE_FAILED", "message": "Plex could not convert this track.", "retryable": true, "requestId": "req_fixture_10" } } },
+  { "status": 429, "body": { "error": { "code": "RATE_LIMITED", "message": "Wait before trying again.", "retryable": true, "requestId": "req_fixture_11" } } },
+  { "status": 500, "body": { "error": { "code": "INTERNAL_ERROR", "message": "The companion could not complete the request.", "retryable": true, "requestId": "req_fixture_12" } } },
+  { "status": 400, "body": { "error": { "code": "INVALID_REQUEST", "message": "The watch sent an invalid request.", "retryable": false, "requestId": "req_fixture_13" } } }
+]

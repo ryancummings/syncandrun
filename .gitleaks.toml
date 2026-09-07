@@ -1,0 +1,11 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Synthetic test credentials only"
+regexTarget = "match"
+regexes = [
+  '''operator-secret-with-at-least-32-bytes''',
+  '''different-operator-secret-at-least-32''',
+  '''sanitized-plex-token-value''',
+]

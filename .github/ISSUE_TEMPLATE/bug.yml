@@ -1,0 +1,26 @@
+name: Bug report
+description: Report a reproducible problem using sanitized data.
+body:
+  - type: markdown
+    attributes:
+      value: "Do not post credentials, setup links, databases, or private media. Use SECURITY.md for vulnerabilities."
+  - type: input
+    id: revision
+    attributes:
+      label: Source commit or version
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Host architecture, deployment method, and watch model/firmware if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction and expected behavior
+      description: Use fake examples and sanitized logs.
+    validations:
+      required: true

@@ -1,0 +1,1305 @@
+/*
+ * SyncAndRun companion — the One Rad Studio "Console" design language.
+ *
+ * Warm near-black hardware neutrals, one amber-phosphor accent, mono data
+ * readouts, square panels, registration brackets. Dark is the default and
+ * primary theme; `.light` is the warm-paper "Clinical Printout" complement and
+ * re-tunes tokens only, so no rule below needs a theme-specific variant.
+ */
+
+@font-face {
+  font-family: "Archivo Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  src: url("/assets/fonts/archivo-variable-latin.woff2") format("woff2-variations");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("/assets/fonts/ibm-plex-sans-400-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("/assets/fonts/ibm-plex-sans-600-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("/assets/fonts/ibm-plex-mono-400-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("/assets/fonts/ibm-plex-mono-600-latin.woff2") format("woff2");
+}
+
+/* ── Tokens: dark console (default, also the no-JS surface) ─────────────── */
+:root {
+  color-scheme: dark;
+
+  --slate-950: oklch(0.17 0.008 78);
+  --slate-900: oklch(0.22 0.010 78);
+  --slate-850: oklch(0.25 0.011 78);
+  --slate-800: oklch(0.30 0.012 78);
+  --slate-700: oklch(0.38 0.012 78);
+  --slate-600: oklch(0.48 0.012 78);
+  --slate-500: oklch(0.60 0.012 78);
+  --slate-400: oklch(0.74 0.010 78);
+  --slate-300: oklch(0.84 0.008 78);
+  --slate-100: oklch(0.95 0.006 78);
+
+  --orange-300: oklch(0.86 0.11 78);
+  --orange-400: oklch(0.79 0.145 72);
+  --orange-500: oklch(0.70 0.150 65);
+
+  --severity-normal: oklch(0.78 0.15 150);
+  --severity-mild: oklch(0.84 0.15 95);
+  --severity-moderate: oklch(0.78 0.16 60);
+  --severity-severe: oklch(0.70 0.18 25);
+
+  --bg: var(--slate-950);
+  --surface: var(--slate-900);
+  --surface-inset: oklch(0.19 0.009 78);
+  --line: var(--slate-800);
+  --line-strong: var(--slate-700);
+  --text: var(--slate-100);
+  --muted: var(--slate-400);
+  --faint: var(--slate-500);
+  --accent: var(--orange-400);
+  --accent-strong: var(--orange-300);
+  --accent-ink: oklch(0.18 0.03 70);
+  --grain-opacity: 0.035;
+  --phosphor-glow: 0 0 18px oklch(0.79 0.145 72 / 0.35);
+  --scanline: oklch(1 0 0 / 0.028);
+
+  --radius: 0.25rem;
+  /*
+   * One control scale. Every interactive control resolves to one of these two
+   * heights and every status chip to the indicator height, so a row of mixed
+   * controls lines up without per-component tuning. The compact size grows to
+   * the full touch target on small screens (see the narrow-viewport block).
+   */
+  --control-h: 2.75rem;
+  --control-h-sm: 2rem;
+  --indicator-h: 1.5rem;
+  --font-display: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  font-family: var(--font-sans);
+}
+
+/* ── Tokens: "Clinical Printout" light complement ───────────────────────── */
+.light {
+  color-scheme: light;
+
+  --slate-950: oklch(0.97 0.008 85);
+  --slate-900: oklch(0.945 0.009 85);
+  --slate-850: oklch(0.925 0.010 85);
+  --slate-800: oklch(0.88 0.011 85);
+  --slate-700: oklch(0.78 0.012 85);
+  --slate-600: oklch(0.62 0.012 82);
+  --slate-500: oklch(0.50 0.012 80);
+  --slate-400: oklch(0.40 0.012 80);
+  --slate-300: oklch(0.31 0.010 80);
+  --slate-100: oklch(0.20 0.010 80);
+
+  --orange-300: oklch(0.52 0.13 58);
+  --orange-400: oklch(0.55 0.145 60);
+  --orange-500: oklch(0.47 0.140 55);
+
+  --severity-normal: oklch(0.50 0.14 150);
+  --severity-mild: oklch(0.55 0.13 90);
+  --severity-moderate: oklch(0.53 0.15 55);
+  --severity-severe: oklch(0.48 0.18 25);
+
+  --surface: oklch(0.99 0.004 85);
+  --surface-inset: oklch(0.955 0.008 85);
+  --accent-ink: oklch(0.98 0.01 85);
+  --grain-opacity: 0.02;
+  --phosphor-glow: none;
+  --scanline: oklch(0 0 0 / 0.02);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Global film grain: cosmetic, static, never over content interaction. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  line-height: 1.1;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+
+/*
+ * The focus ring is deliberately not amber: amber already means "selected" on
+ * segments, rows, and primary actions, and a matching focus ring reads as a
+ * second active item.
+ */
+:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+/* ── Type ───────────────────────────────────────────────────────────────── */
+.display {
+  font-family: var(--font-display);
+  font-stretch: 125%;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.display-xl {
+  font-size: clamp(2rem, 6vw, 3.6rem);
+}
+
+.display-lg {
+  font-size: clamp(1.5rem, 3.6vw, 2.1rem);
+}
+
+.display-sm {
+  font-size: clamp(0.95rem, 2.6vw, 1.2rem);
+  overflow-wrap: anywhere;
+}
+
+.lede {
+  max-width: 68ch;
+  color: var(--muted);
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The one deliberate label system: mono, dim amber, `//` prefix, trailing rule. */
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 0.75rem;
+  color: color-mix(in oklch, var(--accent) 70%, var(--slate-600));
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+
+.section-label::before {
+  content: "// ";
+}
+
+.section-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+/*
+ * Status chips belong beside the section label rather than in the panel head:
+ * in the head they drop to their own line on a narrow screen and read as a
+ * stray control.
+ */
+.label-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.label-row > .section-label {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.label-row + * {
+  margin-top: 0.75rem;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: var(--indicator-h);
+  padding: 0 0.5rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  white-space: nowrap;
+}
+
+.tag-accent {
+  color: var(--accent-strong);
+  border-color: color-mix(in oklch, var(--accent) 40%, transparent);
+}
+
+.tag-normal {
+  color: var(--severity-normal);
+  border-color: color-mix(in oklch, var(--severity-normal) 40%, transparent);
+}
+
+.tag-mild {
+  color: var(--severity-mild);
+  border-color: color-mix(in oklch, var(--severity-mild) 40%, transparent);
+}
+
+.tag-severe {
+  color: var(--severity-severe);
+  border-color: color-mix(in oklch, var(--severity-severe) 45%, transparent);
+}
+
+/* ── Materials ──────────────────────────────────────────────────────────── */
+.bracket-frame {
+  position: relative;
+}
+
+.bracket-frame::before,
+.bracket-frame::after {
+  content: "";
+  position: absolute;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-color: color-mix(in oklch, var(--accent) 60%, transparent);
+  border-style: solid;
+  pointer-events: none;
+}
+
+.bracket-frame::before {
+  top: -1px;
+  left: -1px;
+  border-width: 1px 0 0 1px;
+}
+
+.bracket-frame::after {
+  right: -1px;
+  bottom: -1px;
+  border-width: 0 1px 1px 0;
+}
+
+/* Inset readout surface — only for panels that represent a screen. */
+.crt {
+  position: relative;
+  background: var(--surface-inset);
+  box-shadow: inset 0 1px 0 oklch(0 0 0 / 0.25);
+  overflow: hidden;
+}
+
+.crt::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--scanline) 0 1px,
+    transparent 1px 3px
+  );
+}
+
+.crt > * {
+  position: relative;
+}
+
+.phosphor {
+  text-shadow: var(--phosphor-glow);
+}
+
+/* ── Shell ──────────────────────────────────────────────────────────────── */
+.skip-link {
+  position: fixed;
+  top: -6rem;
+  left: 1rem;
+  z-index: 20;
+  padding: 0.7rem 1rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.skip-link:focus {
+  top: 1rem;
+}
+
+.masthead {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 68px;
+  padding: 0.75rem clamp(1rem, 5vw, 3.5rem);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.ident {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+
+.ident-cursor {
+  display: inline-block;
+  width: 0.5em;
+  height: 0.75em;
+  margin-left: 0.1em;
+  background: var(--accent);
+  vertical-align: baseline;
+}
+
+.status-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.status-dot {
+  flex: none;
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  background: var(--faint);
+}
+
+.status-dot-live {
+  background: var(--severity-normal);
+}
+
+.status-dot-active {
+  background: var(--accent);
+}
+
+.status-dot-warn {
+  background: var(--severity-mild);
+}
+
+.shell {
+  position: relative;
+  z-index: 1;
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  padding: clamp(1rem, 3vw, 2.5rem) clamp(1rem, 5vw, 3.5rem) 4rem;
+}
+
+.navigation {
+  position: relative;
+  z-index: 1;
+  padding: 1rem clamp(1rem, 5vw, 3.5rem) 0;
+}
+
+/* Segmented tabs: one control for every view switch. */
+.segment-track {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.segment {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-h);
+  padding: 0 0.9rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 150ms, background-color 150ms, border-color 150ms;
+}
+
+.segment:hover {
+  color: var(--text);
+}
+
+.segment[aria-selected="true"],
+.segment[aria-current="page"] {
+  border-color: color-mix(in oklch, var(--accent) 60%, transparent);
+  background: color-mix(in oklch, var(--accent) 18%, transparent);
+  color: var(--accent-strong);
+}
+
+/* ── Panels ─────────────────────────────────────────────────────────────── */
+.panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: clamp(1rem, 3vw, 1.75rem);
+}
+
+.panel + .panel {
+  margin-top: 1.25rem;
+}
+
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+
+.panel-head p {
+  margin-top: 0.4rem;
+}
+
+.stack {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.panel-actions {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+}
+
+/* ── Controls ───────────────────────────────────────────────────────────── */
+button,
+select,
+input {
+  font: inherit;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: var(--control-h);
+  padding: 0 1rem;
+  white-space: nowrap;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 150ms, background-color 150ms, border-color 150ms;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: color-mix(in oklch, var(--accent) 60%, transparent);
+  background: var(--slate-850);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  border-color: color-mix(in oklch, var(--accent) 65%, transparent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+.btn-ghost {
+  background: transparent;
+}
+
+.btn-danger {
+  border-color: color-mix(in oklch, var(--severity-severe) 45%, transparent);
+  background: transparent;
+  color: var(--severity-severe);
+}
+
+.btn-danger:hover:not(:disabled) {
+  border-color: var(--severity-severe);
+  background: color-mix(in oklch, var(--severity-severe) 12%, transparent);
+}
+
+.btn-small {
+  height: var(--control-h-sm);
+  padding: 0 0.7rem;
+  font-size: 0.85rem;
+}
+
+label {
+  font-weight: 600;
+}
+
+.field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.field-hint {
+  color: var(--faint);
+  font-size: 0.85rem;
+}
+
+select,
+input[type="text"] {
+  width: 100%;
+  height: var(--control-h);
+  padding: 0 0.6rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+input[type="checkbox"] {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--accent);
+}
+
+/* Gives a small checkbox a full-size hit area without changing the layout. */
+.check-hit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-h);
+  height: var(--control-h);
+  margin: calc((var(--indicator-h) - var(--control-h)) / 2) -0.5rem;
+  cursor: pointer;
+}
+
+/* ── Worklist rows: the standard list idiom ─────────────────────────────── */
+.worklist {
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.worklist-row {
+  display: grid;
+  /* The action column is capped: an armed confirmation is wide content, and an
+     `auto` track would size to it and starve the title column. */
+  grid-template-columns: 2.2rem auto minmax(0, 1fr) auto fit-content(24rem);
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  text-align: left;
+  transition: background-color 150ms, border-color 150ms;
+}
+
+/* Grid and flex children default to min-content width, which is what lets long
+   mono values and diagnostic tables push out of the panel. */
+.worklist-row > *,
+.worklist-main > * {
+  min-width: 0;
+}
+
+.worklist-row:last-child {
+  border-bottom: none;
+}
+
+.worklist-row:hover {
+  background: var(--slate-850);
+}
+
+.worklist-row-selected {
+  background: color-mix(in oklch, var(--accent) 7%, var(--surface));
+}
+
+.worklist-row-disabled {
+  opacity: 0.6;
+}
+
+.worklist-index {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.worklist-title {
+  display: block;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.worklist-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.75rem;
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Indicators and actions are separate groups, never one mixed flex line: a
+ * 24px status chip and a 44px button sharing a row is what made the controls
+ * look arbitrarily sized.
+ */
+.worklist-status,
+.worklist-actions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+/*
+ * The armed confirmation takes its own full-width line inside the row instead
+ * of competing for the trailing cell, where its prompt used to overflow the
+ * panel on a narrow screen.
+ */
+.worklist-actions > .confirm-bar {
+  flex: 1 0 100%;
+}
+
+/* Diagnostics tables stay legible by scrolling inside the row, never widening it. */
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.table-scroll table {
+  min-width: 30rem;
+}
+
+.icon-tile {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+  color: var(--muted);
+}
+
+.icon-tile svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* ── Data readouts ──────────────────────────────────────────────────────── */
+/*
+ * Cells draw their own hairline instead of the grid painting a line-coloured
+ * background through 1px gaps: an odd number of readouts would otherwise leave
+ * the unfilled cell as a solid block that reads as a broken tile.
+ */
+.readout-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr));
+  gap: 1px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+  overflow: hidden;
+}
+
+.readout {
+  min-width: 0;
+  padding: 0.75rem 0.9rem;
+  background: var(--surface-inset);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+/*
+ * Values and notes are single-line. A wrapping value at the primary size adds
+ * ~40px to a tile, and since every tile in a row matches the tallest, one
+ * changing figure would resize the whole card.
+ */
+.readout-value,
+.readout-note {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.readout-label {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+
+.readout-value {
+  margin-top: 0.2rem;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.readout-value-primary {
+  color: var(--accent);
+  font-size: 1.6rem;
+}
+
+.readout-note {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+
+/* ── Progress ───────────────────────────────────────────────────────────── */
+.progress {
+  height: 0.5rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 400ms linear;
+}
+
+.progress-fill-indeterminate {
+  width: 30%;
+  animation: progress-sweep 1.6s ease-in-out infinite;
+}
+
+@keyframes progress-sweep {
+  0% {
+    margin-left: 0;
+  }
+  50% {
+    margin-left: 70%;
+  }
+  100% {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-fill,
+  .progress-fill-indeterminate {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* The per-track bar reads as secondary to overall sync progress. */
+.progress-subtle {
+  height: 0.25rem;
+  border-color: var(--line);
+}
+
+.progress-subtle .progress-fill {
+  background: color-mix(in oklch, var(--accent) 55%, transparent);
+}
+
+.progress-caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Device cards ───────────────────────────────────────────────────────── */
+/*
+ * Every row below is always rendered, and every variable row is single-line
+ * and truncating. A card is therefore the same height whether the watch is
+ * idle, transferring, or finished, so a state change never makes the list
+ * jump under the pointer.
+ */
+.device-card {
+  display: grid;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.device-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.device-card-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.device-card-status {
+  min-width: 0;
+}
+
+.truncate {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.device-card-track {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.device-card-track strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.device-card-artist {
+  color: var(--muted);
+}
+
+.device-card-placeholder {
+  color: var(--faint);
+}
+
+.device-card-track-figure {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Separates the per-track bar from overall progress; adjacent they read as
+   one doubled bar. */
+.device-card-overall {
+  margin-top: 0.45rem;
+}
+
+/* Reserved line: error codes appear here without changing the card's height. */
+.device-card-errors {
+  min-height: 1.2em;
+  color: var(--severity-mild);
+}
+
+/* ── Notices ────────────────────────────────────────────────────────────── */
+.notice {
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.notice-error {
+  border-color: color-mix(in oklch, var(--severity-severe) 45%, transparent);
+  color: var(--severity-severe);
+}
+
+.notice-info {
+  border-color: color-mix(in oklch, var(--accent) 40%, transparent);
+}
+
+.empty {
+  padding: 2rem 1rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--muted);
+  text-align: center;
+}
+
+.pairing-code {
+  display: block;
+  margin: 0.75rem 0 0.4rem;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: clamp(2rem, 9vw, 3.25rem);
+  font-weight: 600;
+  letter-spacing: 0.22em;
+}
+
+.danger-zone {
+  border-color: color-mix(in oklch, var(--severity-severe) 35%, var(--line));
+}
+
+.confirm-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid color-mix(in oklch, var(--severity-severe) 45%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in oklch, var(--severity-severe) 8%, transparent);
+}
+
+.confirm-bar p {
+  flex: 1 1 12rem;
+  min-width: 0;
+  font-size: 0.92rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* A dot-plus-text status line; the gap replaces per-icon margins. */
+.status-line {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.status-line > .status-dot {
+  transform: translateY(-0.1em);
+}
+
+.spread {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.divider {
+  height: 1px;
+  margin: 1.25rem 0;
+  background: var(--line);
+}
+
+details summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: var(--indicator-h);
+  padding: 0.25rem 0;
+  cursor: pointer;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  list-style: none;
+}
+
+/* A flex summary drops the native marker, so the affordance is drawn back in. */
+details summary::-webkit-details-marker {
+  display: none;
+}
+
+details summary::before {
+  content: "";
+  flex: none;
+  width: 0;
+  height: 0;
+  border-top: 0.3rem solid transparent;
+  border-bottom: 0.3rem solid transparent;
+  border-left: 0.4rem solid currentColor;
+  transition: transform 150ms;
+}
+
+details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+details summary:hover {
+  color: var(--text);
+}
+
+details[open] summary {
+  color: var(--text);
+  margin-bottom: 0.5rem;
+}
+
+.footer {
+  position: relative;
+  z-index: 1;
+  padding: 1.5rem clamp(1rem, 5vw, 3.5rem) 2.5rem;
+  border-top: 1px solid var(--line);
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  :root {
+    /* Every row action becomes a full touch target on a phone. */
+    --control-h-sm: var(--control-h);
+  }
+
+  .masthead {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .status-strip {
+    justify-content: space-between;
+  }
+
+  /* The head's action goes full width beneath the heading rather than sitting
+     as a stray left-aligned control. */
+  .panel-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .panel-head > .btn {
+    width: 100%;
+  }
+
+  .worklist-row {
+    grid-template-columns: 1.8rem minmax(0, 1fr);
+    grid-template-areas:
+      "index main"
+      ".     status"
+      "actions actions";
+    align-items: start;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .worklist-index {
+    grid-area: index;
+    padding-top: 0.2rem;
+  }
+
+  .worklist-row > .icon-tile {
+    display: none;
+  }
+
+  .worklist-main {
+    grid-area: main;
+  }
+
+  /* Status chips follow the text they describe; actions take a full-width row
+     of their own, so every row's controls land in the same place regardless of
+     how much text sits above them. */
+  .worklist-status {
+    grid-area: status;
+    justify-content: flex-start;
+  }
+
+  .worklist-actions {
+    grid-area: actions;
+  }
+
+  .worklist-actions > .btn {
+    flex: 1 1 8rem;
+  }
+
+  /* A row whose only action is a checkbox keeps it beside the title: giving a
+     single small control its own full-width line wastes a screen and puts the
+     target far from the text it applies to. */
+  .worklist-row-check {
+    grid-template-columns: 1.8rem minmax(0, 1fr) var(--control-h);
+    grid-template-areas:
+      "index main  check"
+      ".     status check";
+  }
+
+  .worklist-check {
+    grid-area: check;
+    align-self: center;
+    justify-content: flex-end;
+  }
+
+  .panel-actions/* A dot-plus-text status line; the gap replaces per-icon margins. */
+.status-line {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.status-line > .status-dot {
+  transform: translateY(-0.1em);
+}
+
+.spread {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actions {
+    width: 100%;
+  }
+
+  .actions > .btn {
+    flex: 1 1 100%;
+  }
+
+  /* The per-track bar reads as secondary to overall sync progress. */
+.progress-subtle {
+  height: 0.25rem;
+  border-color: var(--line);
+}
+
+.progress-subtle .progress-fill {
+  background: color-mix(in oklch, var(--accent) 55%, transparent);
+}
+
+.progress-caption {
+    flex-wrap: wrap;
+    gap: 0.15rem 1rem;
+  }
+}
+
+/*
+ * A value that has to be retyped elsewhere — the companion origin goes into the
+ * watch's app settings by hand. The value stays a selectable <code> so it can
+ * still be copied when the clipboard API is unavailable.
+ */
+.copy-field {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+}
+
+.copy-field-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.copy-field-value {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.9rem;
+  color: var(--accent-strong);
+  overflow-wrap: anywhere;
+}
+
+.copy-field .btn {
+  flex: none;
+}
+
+/* Ordered setup instructions. Numbers matter here, so they stay visible. */
+.steps {
+  margin: 1rem 0 0;
+  padding-left: 1.25rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.steps > li + li {
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 30rem) {
+  .copy-field {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  /*
+   * A long section label and its mode tag cannot share 320px. Let the tag drop
+   * to its own line rather than shredding "PRIVATE DATA CONTROLS" into three.
+   */
+  .label-row {
+    flex-wrap: wrap;
+  }
+
+  .label-row > .section-label {
+    min-width: 12rem;
+  }
+}

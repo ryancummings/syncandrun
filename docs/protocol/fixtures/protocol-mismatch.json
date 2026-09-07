@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "PROTOCOL_UNSUPPORTED",
+    "message": "Update the companion or watch application.",
+    "retryable": false,
+    "requestId": "req_fixture_mismatch"
+  }
+}

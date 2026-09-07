@@ -1,0 +1,113 @@
+<strings>
+    <string id="AppName">SyncAndRun</string>
+    <string id="settingsCompanion_title">Companion</string>
+    <string id="settingsCompanion_description">Optional shortcut for entering the companion address and pairing code. Both can also be entered directly on the watch.</string>
+    <string id="CompanionUrl">Companion URL</string>
+    <string id="CompanionUrl_prompt">The address of your companion. HTTPS is recommended; HTTP, IPv4 addresses, and ports are supported. Enter an origin with no path, for example http://192.168.1.20:3000</string>
+    <string id="CompanionUrl_error">Enter an http:// or https:// origin with no path, query, credentials, or trailing slash.</string>
+    <string id="PairingCode">Pairing code</string>
+    <string id="PairingCode_prompt">Six digits from the companion's Watch page. Single use, expires in ten minutes, and clears itself once claimed. You can also enter it on the watch under Settings, Pair watch.</string>
+    <string id="PairingCode_error">Enter the six digits from the companion's Watch page.</string>
+
+    <string id="settingsStatus_title">Status</string>
+    <string id="settingsStatus_description">Reported by the watch. These cannot be edited here.</string>
+    <string id="PairingStatus">Pairing</string>
+    <string id="LastSync">Last sync</string>
+
+    <string id="settingsDiagnostics_title">Diagnostics</string>
+    <string id="settingsDiagnostics_description">Only turn this on if you are chasing a problem.</string>
+    <string id="debug_prompt">Writes a log to the watch for troubleshooting. Leave off for normal use; it costs storage and slows syncing.</string>
+    
+    <string id="ApiStandardPlex">Plex API</string>
+    <string id="debug">Enable Debugging</string>
+    <string id="debug_sublabel">Log debug info to file</string>
+
+    <string id="confSync_Title">Sync settings</string>
+    <string id="confSync_StartSync_label">Sync</string>
+    <string id="confSync_Playlists_title">Choose lists</string>
+    <string id="confSync_Playlists_label">Select Playlists</string>
+    <string id="confSync_SelectPlaylists_label">Select Playlists</string>
+    <string id="confSync_ManagePlaylists_label">Manage Playlists</string>
+    
+    <string id="confSync_MoreInfo_label">More Info</string>
+    <string id="confSync_MoreInfo_title">More Info</string>
+    <string id="confSync_MoreInfo_TestServer_label">Test Server</string>
+    <string id="confSync_MoreInfo_ServerDetail_label">Server</string>
+    <string id="confSync_MoreInfo_ServerDetail_sublabel">Show server settings</string>
+    <string id="confSync_MoreInfo_RemoveAll_label">Remove Data</string>
+    <string id="confSync_MoreInfo_RemoveAll_sublabel">Reset application storage</string>
+    
+    <string id="Browse_label">Browse</string>
+    <string id="More_label">More...</string>
+    <string id="About_label">About</string>
+    <string id="Settings_label">Settings</string>
+    <string id="SyncNow_label">Sync now</string>
+    <string id="Connection_label">Connection</string>
+    <string id="CompanionServer_label">Companion server</string>
+    <string id="CompanionTest_label">Test companion</string>
+    <string id="CompanionOrigin_required">Set the companion server first.</string>
+    <string id="CompanionOrigin_invalid">Invalid address. Use a hostname or IPv4 address, optional port, and no path.</string>
+    <string id="CompanionOrigin_saved">Address saved. Test it, then pair this watch.</string>
+    <string id="CompanionOrigin_invalidToast">Invalid server address</string>
+    <string id="CompanionOrigin_savedToast">Server address saved</string>
+    <string id="OriginEditor_title">Server address</string>
+    <string id="OriginEditor_empty">Enter hostname or IP</string>
+    <string id="OriginEditor_save">SAVE</string>
+    <string id="OriginEditor_cancel">CANCEL</string>
+    <string id="OriginEditor_useHttp">USE HTTP</string>
+    <string id="OriginEditor_useHttps">USE HTTPS</string>
+    <string id="OriginEditor_choose">Up/Down choose; Select</string>
+    <string id="OriginEditor_back">Back deletes; empty exits</string>
+    <string id="OriginEditor_advanced">Advanced editor</string>
+    <string id="OriginEditor_advancedHint">HTTP and compatibility fallback</string>
+    <string id="CompanionTest_checking">Checking companion...</string>
+    <string id="CompanionTest_ready">Companion ready</string>
+    <string id="CompanionTest_notReady">Companion responded but is not ready.</string>
+    <string id="CompanionTest_unreachable">Cannot reach companion. Check Wi-Fi, address, scheme, port, and certificate.</string>
+    <string id="PairWatch_label">Pair watch</string>
+    <string id="PairingPicker_hint">Up/Down, Select</string>
+    <string id="PairingPicker_confirm">Select to save</string>
+    <string id="PairingPicker_saved">Code saved.\nStart a sync to pair.</string>
+    <string id="Profile_label">Server profile</string>
+    <string id="License_label">License / Source</string>
+    <string id="Reset_label">Reset SyncAndRun</string>
+    <string id="AppSettings_label">App Settings</string>
+    <string id="Storage_label">Storage</string>
+    <string id="Version_label">Version</string>
+    <string id="Settings_label">Settings</string>
+
+    <string id="Playlists_label">Playlists</string>
+    <string id="Songs_label">Songs</string>
+    
+    <string id="confSync_PlaylistDetail_label">Playlist Detail</string>
+    <string id="confSync_Test_start">Starting test...</string>
+    
+    <string id="configurePlaybackMessage">Configure\nPlayback</string>
+    
+    <string id="confPlayback_Title">Play</string>
+    <string id="confPlayback_NowPlaying_title">Now Playing</string>
+    <string id="confPlayback_NowPlaying_label">Now Playing</string>
+    <string id="confPlayback_PlayAll_label">Play All</string>
+    <string id="confPlayback_SelectPlaylist_label">Playlists</string>
+    <string id="confPlayback_SelectRadiostation_label">Radiostations</string>
+    <string id="confPlayback_SelectSong_label">Songs</string>
+    <string id="confPlayback_More_label">More...</string>
+    
+    <string id="placeholder_noMenuItems">Nothing to show</string>
+    <string id="placeholder_loading">Loading..</string>
+    <string id="placeholder_noRemotePlaylists">No Remote Playlists</string>
+    <string id="placeholder_noRemoteSongs">No Remote Songs</string>
+    <string id="fetchingSongs">Fetching Songs...</string>
+    <string id="fetchingPlaylists">Fetching Playlists...</string>
+    <string id="playbackMenuTitle">Playlists</string>
+
+    <string id="Menu_PlaylistSongs_title">Songs</string>
+    <string id="Menu_PlayNow_label">Play Now</string>
+    <string id="Menu_PlayShuffle_label">Shuffle</string>
+    <string id="Menu_Songs_label">Songs</string>
+    
+    <string id="Memory_label">Memory</string>
+    <string id="Cache_label">Media cache</string>
+    <string id="Tracks_label">Cached tracks</string>
+    <string id="FailedDownloads_label">Failed downloads</string>
+</strings>

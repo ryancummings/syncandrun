@@ -1,0 +1,9 @@
+:3016 {
+	@artwork path_regexp artwork ^/api/v1/watch/a/[A-Za-z0-9_-]{22}/[0-9]{10}/[A-Za-z0-9_-]{22}/[A-Za-z0-9%._~:-]+$
+	handle @artwork {
+		reverse_proxy companion:3000
+	}
+	handle {
+		respond 404
+	}
+}

@@ -1,0 +1,499 @@
+openapi: 3.1.0
+info:
+  title: SyncAndRun for Garmin watch API
+  version: 1.0.0
+  description: Compact HTTPS contract for protocol version 1.
+servers:
+  - url: https://syncandrun.example.test
+security:
+  - deviceBearer: []
+paths:
+  /api/v1/watch/pair:
+    post:
+      security: []
+      operationId: pairWatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PairRequest'
+      responses:
+        '200':
+          description: Pairing code claimed; device token is returned only here.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PairResponse'
+        '400':
+          $ref: '#/components/responses/WatchError'
+        '426':
+          $ref: '#/components/responses/WatchError'
+        '429':
+          $ref: '#/components/responses/WatchError'
+  /api/v1/watch/config:
+    get:
+      operationId: getWatchConfig
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Current desired-state configuration.
+          headers:
+            ETag:
+              schema:
+                type: string
+                maxLength: 80
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchConfig'
+        '304':
+          description: Configuration is unchanged.
+        '401':
+          $ref: '#/components/responses/WatchError'
+  /api/v1/watch/playlists:
+    get:
+      operationId: listWatchPlaylists
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: One bounded playlist page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaylistPage'
+        '400':
+          $ref: '#/components/responses/WatchError'
+        '401':
+          $ref: '#/components/responses/WatchError'
+  /api/v1/watch/playlists/{playlistId}/tracks:
+    get:
+      operationId: listWatchPlaylistTracks
+      parameters:
+        - $ref: '#/components/parameters/PlaylistId'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: One bounded ordered-track page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackPage'
+        '404':
+          $ref: '#/components/responses/WatchError'
+        '400':
+          $ref: '#/components/responses/WatchError'
+  /api/v1/watch/tracks/{trackId}/audio:
+    get:
+      operationId: downloadWatchAudio
+      parameters:
+        - $ref: '#/components/parameters/TrackId'
+      responses:
+        '200':
+          description: Proxied MP3 stream. Content-Length is supplied when known.
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                contentEncoding: binary
+        '404':
+          $ref: '#/components/responses/WatchError'
+        '400':
+          $ref: '#/components/responses/WatchError'
+        '401':
+          $ref: '#/components/responses/WatchError'
+        '429':
+          $ref: '#/components/responses/WatchError'
+        '502':
+          $ref: '#/components/responses/WatchError'
+        '503':
+          $ref: '#/components/responses/WatchError'
+  /api/v1/watch/a/{artworkId}/{expires}/{signature}/{trackId}:
+    get:
+      security: []
+      operationId: downloadWatchArtwork
+      parameters:
+        - $ref: '#/components/parameters/ArtworkId'
+        - $ref: '#/components/parameters/ArtworkExpires'
+        - $ref: '#/components/parameters/ArtworkSignature'
+        - $ref: '#/components/parameters/TrackId'
+      responses:
+        '200':
+          description: JPEG no larger than 80 by 80 pixels.
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                contentEncoding: binary
+        '404':
+          $ref: '#/components/responses/WatchError'
+        '503':
+          $ref: '#/components/responses/WatchError'
+  /api/v1/watch/sync-result:
+    post:
+      operationId: reportWatchSyncResult
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncResultRequest'
+      responses:
+        '200':
+          description: Result persisted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResultResponse'
+        '400':
+          $ref: '#/components/responses/WatchError'
+        '401':
+          $ref: '#/components/responses/WatchError'
+        '426':
+          $ref: '#/components/responses/WatchError'
+components:
+  securitySchemes:
+    deviceBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-device-token
+  parameters:
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 80
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 160
+    PlaylistId:
+      name: playlistId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/StableId'
+    TrackId:
+      name: trackId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/StableId'
+    ArtworkId:
+      name: artworkId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9_-]{22}$'
+    ArtworkExpires:
+      name: expires
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^\d{10}$'
+    ArtworkSignature:
+      name: signature
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9_-]{22}$'
+  responses:
+    WatchError:
+      description: Stable, sanitized watch error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ProtocolVersion:
+      type: integer
+      const: 1
+    StableId:
+      type: string
+      minLength: 1
+      maxLength: 96
+      pattern: '^[A-Za-z0-9._~:-]+$'
+    Revision:
+      type: string
+      minLength: 64
+      maxLength: 64
+      pattern: '^[a-f0-9]{64}$'
+    PairRequest:
+      type: object
+      additionalProperties: false
+      required: [code, deviceId, deviceName, appVersion, protocolVersion]
+      properties:
+        code:
+          type: string
+          pattern: '^[0-9]{6}$'
+        deviceId:
+          $ref: '#/components/schemas/StableId'
+        deviceName:
+          type: string
+          minLength: 1
+          maxLength: 48
+        appVersion:
+          type: string
+          minLength: 1
+          maxLength: 24
+        protocolVersion:
+          $ref: '#/components/schemas/ProtocolVersion'
+    PairResponse:
+      type: object
+      additionalProperties: false
+      required: [protocolVersion, deviceToken, companionId, manifestRevision]
+      properties:
+        protocolVersion:
+          $ref: '#/components/schemas/ProtocolVersion'
+        deviceToken:
+          type: string
+          minLength: 32
+          maxLength: 160
+        companionId:
+          $ref: '#/components/schemas/StableId'
+        manifestRevision:
+          $ref: '#/components/schemas/Revision'
+    TranscodeProfile:
+      type: string
+      enum: [compact, balanced, high]
+    WatchConfig:
+      type: object
+      additionalProperties: false
+      required: [protocolVersion, manifestRevision, transcodeProfile, pageSize, serverTime]
+      properties:
+        protocolVersion:
+          $ref: '#/components/schemas/ProtocolVersion'
+        manifestRevision:
+          $ref: '#/components/schemas/Revision'
+        transcodeProfile:
+          $ref: '#/components/schemas/TranscodeProfile'
+        pageSize:
+          type: integer
+          const: 10
+        serverTime:
+          type: string
+          format: date-time
+    Playlist:
+      type: object
+      additionalProperties: false
+      required: [id, name, revision, trackCount, durationSeconds, tracksPath]
+      properties:
+        id:
+          $ref: '#/components/schemas/StableId'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        revision:
+          $ref: '#/components/schemas/Revision'
+        trackCount:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        durationSeconds:
+          type: integer
+          minimum: 0
+          maximum: 10000000
+        tracksPath:
+          type: string
+          minLength: 1
+          maxLength: 180
+          pattern: '^/api/v1/watch/'
+    Track:
+      type: object
+      additionalProperties: false
+      required: [id, contentFingerprint, title, artist, album, durationSeconds, downloadPath, artworkId, artworkPath]
+      properties:
+        id:
+          $ref: '#/components/schemas/StableId'
+        contentFingerprint:
+          $ref: '#/components/schemas/Revision'
+        title:
+          type: string
+          maxLength: 80
+        artist:
+          type: string
+          maxLength: 80
+        album:
+          type: string
+          maxLength: 80
+        durationSeconds:
+          type: integer
+          minimum: 0
+          maximum: 86400
+        downloadPath:
+          type: string
+          minLength: 1
+          maxLength: 180
+          pattern: '^/api/v1/watch/'
+        artworkId:
+          type: [string, 'null']
+          maxLength: 32
+          pattern: '^[A-Za-z0-9_-]+$'
+        artworkPath:
+          type: [string, 'null']
+          maxLength: 320
+          description: Relative capability path, or absolute HTTPS capability URL when artwork uses a separate public origin.
+          pattern: '^(?:/api/v1/watch/a/|https://[^/?#@:]+/api/v1/watch/a/)'
+    PlaylistPage:
+      type: object
+      additionalProperties: false
+      required: [protocolVersion, items, nextCursor]
+      properties:
+        protocolVersion:
+          $ref: '#/components/schemas/ProtocolVersion'
+        items:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/Playlist'
+        nextCursor:
+          type: [string, 'null']
+          maxLength: 160
+    TrackPage:
+      type: object
+      additionalProperties: false
+      required: [protocolVersion, playlistId, items, nextCursor]
+      properties:
+        protocolVersion:
+          $ref: '#/components/schemas/ProtocolVersion'
+        playlistId:
+          $ref: '#/components/schemas/StableId'
+        items:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/Track'
+        nextCursor:
+          type: [string, 'null']
+          maxLength: 160
+    SyncCounts:
+      type: object
+      additionalProperties: false
+      required: [downloaded, reused, deleted, failed]
+      properties:
+        downloaded: { type: integer, minimum: 0, maximum: 10000 }
+        reused: { type: integer, minimum: 0, maximum: 10000 }
+        deleted: { type: integer, minimum: 0, maximum: 10000 }
+        failed: { type: integer, minimum: 0, maximum: 10000 }
+    SyncResultRequest:
+      type: object
+      additionalProperties: false
+      required: [protocolVersion, revision, status, counts, errorCodes]
+      properties:
+        protocolVersion:
+          $ref: '#/components/schemas/ProtocolVersion'
+        revision:
+          $ref: '#/components/schemas/Revision'
+        status:
+          type: string
+          enum: [applied, partial, cancelled]
+        counts:
+          $ref: '#/components/schemas/SyncCounts'
+        errorCodes:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/ErrorCode'
+        timings:
+          $ref: '#/components/schemas/SyncTimings'
+    SyncTimings:
+      type: object
+      additionalProperties: false
+      required: [totalMs, metadataMs, audioTotalMs, audioStartupMs, audioTransferMs, audioFinalizeMs, artworkMs, audioBytes, audioProgressCallbacks, audioCount, artworkCount]
+      properties:
+        launchMs: { type: integer, minimum: 0, maximum: 86400000 }
+        totalMs: { type: integer, minimum: 0, maximum: 86400000 }
+        configMs: { type: integer, minimum: 0, maximum: 86400000 }
+        metadataMs: { type: integer, minimum: 0, maximum: 86400000 }
+        audioTotalMs: { type: integer, minimum: 0, maximum: 86400000 }
+        audioStartupMs: { type: integer, minimum: 0, maximum: 86400000 }
+        audioTransferMs: { type: integer, minimum: 0, maximum: 86400000 }
+        audioFinalizeMs: { type: integer, minimum: 0, maximum: 86400000 }
+        artworkMs: { type: integer, minimum: 0, maximum: 86400000 }
+        audioBytes: { type: integer, minimum: 0, maximum: 2000000000 }
+        audioProgressCallbacks: { type: integer, minimum: 0, maximum: 1000000 }
+        audioCount: { type: integer, minimum: 0, maximum: 10000 }
+        artworkCount: { type: integer, minimum: 0, maximum: 10000 }
+    SyncResultResponse:
+      type: object
+      additionalProperties: false
+      required: [recorded]
+      properties:
+        recorded:
+          type: boolean
+          const: true
+    ErrorCode:
+      type: string
+      enum:
+        - AUTH_REQUIRED
+        - DEVICE_REVOKED
+        - PAIRING_CODE_INVALID
+        - PAIRING_CODE_EXPIRED
+        - PROTOCOL_UNSUPPORTED
+        - PLEX_UNAVAILABLE
+        - PLEX_TOKEN_INVALID
+        - PLAYLIST_NOT_FOUND
+        - TRACK_NOT_FOUND
+        - TRANSCODE_FAILED
+        - STORAGE_INSUFFICIENT
+        - RATE_LIMITED
+        - INVALID_REQUEST
+        - INTERNAL_ERROR
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, retryable, requestId]
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode'
+            message:
+              type: string
+              minLength: 1
+              maxLength: 160
+            retryable:
+              type: boolean
+            requestId:
+              type: string
+              minLength: 8
+              maxLength: 32
+    ProtocolScenario:
+      type: object
+      additionalProperties: false
+      required: [name, playlistCount, uniqueTrackCount, pages, sharedTrackIds]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        playlistCount:
+          type: integer
+          minimum: 0
+        uniqueTrackCount:
+          type: integer
+          minimum: 0
+        pages:
+          type: integer
+          minimum: 0
+        sharedTrackIds:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/StableId'

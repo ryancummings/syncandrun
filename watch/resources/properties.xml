@@ -1,0 +1,12 @@
+<properties>
+	<property id="companion_url" type="string"></property>
+	<property id="pairing_code" type="string"></property>
+	<property id="debug" type="boolean">false</property>
+	<!--
+	  Reported by the application, never edited. Surfaced through readonly
+	  settings so the phone shows pairing and sync state next to the two fields
+	  the owner actually fills in.
+	-->
+	<property id="pairing_status" type="string">Not paired</property>
+	<property id="last_sync" type="string">Never</property>
+</properties>

@@ -1,57 +1,48 @@
-# SubMusic
-Synchronize playlists from your own music server: Nextcloud - Subsonic - Ampache - Airsonic - Plex
+# SyncAndRun for Garmin
 
-[<img src="https://developer.garmin.com/static/available-badge-9e49ebfb7336ce47f8df66dfe45d28ae.svg" width="200">](https://apps.garmin.com/en-US/apps/600bd75f-6ccf-4ca5-bc7a-0a4fcfdcf794)
+Sync existing Plex music playlists to a Garmin Forerunner 955 / Solar, then listen through Garmin's native player without a phone or network. The companion runs on your own hardware and is managed in a browser.
 
-## Features:
-- Browse your online playlists and podcasts
-- Make playlists available offline
-- Make latest podcast episode available offline
-- Browse and play your songs offline by playlist, shuffle, play all at once
-- Enable podcast mode if you have podcast episodes in a playlist
-- Listening count is uploaded to your server next time you sync
-- Enjoy Album art (if available on server, not supported on all devices)
+**Preview:** physical-watch acceptance for this source version is incomplete. This is not a stable release or a Connect IQ Store listing. See [validation and limitations](docs/VALIDATION.md).
 
-## How to use
+## Deploy
 
-Set up Synced Playlists    |  Choose from synced playlists | Enjoy your music 
-:-------------------------:|:-------------------------:|:-------------------------:
-![](images/ConfigureSyncVIew.png) | ![](images/ChoosePlaybackView.png) | ![](images/PlaybackView.png)
+Follow [the deployment guide](docs/DEPLOYMENT.md) for Linux amd64 or arm64 with Docker Compose. It covers a domain with Caddy and an optional Tailscale Funnel route that needs no domain purchase or router changes. Tunnel audio compatibility remains subject to physical-watch testing.
 
-## How to set up
-You need a music server supporting either the Ampache API or the Subsonic API and a compatible Garmin Watch. Check the [Garmin App store](https://apps.garmin.com/en-US/apps/600bd75f-6ccf-4ca5-bc7a-0a4fcfdcf794).
+The setup helper generates a private encryption secret. The service binds to loopback behind HTTPS. An operator-created, single-use invitation assigns the installation owner; later management requires that owner's Plex account.
 
-### == Nextcloud ==
+Each installation serves one Plex account, server, and music library. You can host separate installations for guests, with independent credentials and data. Guests must trust the host administrator. [Agent deployment instructions](docs/AGENT_DEPLOYMENT.md) cover preparation, checks, recovery, and handoff without maintainer-private tools.
 
-In the connect iq app settings, choose 'Ampache API' for the 'API backend' option. Install, enable and open the [owncloud/music](https://apps.nextcloud.com/apps/music) app (v0.15.1 or higher). In Settings copy the URL for the Ampache endpoint and paste it into the connect iq app settings. The URL should look like the following: "https://example.nextcloud.com/apps/music/ampache", no trailing slash. Now enter a Description (e.g. "Garmin SubMusic") and Generate API password to enable a new access for the Ampache API endpoint. Enter your username and the generated password in the connect iq app settings.
+Watch builds and development sideloading are described in [DEVELOPMENT.md](docs/DEVELOPMENT.md). No prebuilt watch package or published container image is required: build from a reviewed source revision.
 
-The music app does not transcode music, so supported file types are MP3, MP4, ADTS and WAV files. Only MP3 has been tested, support for the other formats is in beta. Please report issues!
+## What it does
 
-![](images/NextcloudView.png)
+- Select existing Plex audio playlists in a browser.
+- Choose Compact (64 kbps), Balanced (96 kbps), or High (128 kbps) MP3 audio.
+- Synchronize over Wi-Fi, reuse unchanged audio, and deduplicate shared tracks.
+- View observed synchronization progress and manage paired watches.
+- Play cached audio through Bluetooth headphones with the phone and network absent.
 
-### == Ampache ==
+Plex remains the playlist editor. Album/artist/track browsing, playlist editing, streaming playback, a phone app, billing, and a shared multi-account service are outside this preview. The development target is `fr955`; other watches are not claimed as supported.
 
-Requires Ampache version 4.2.0 or higher. For older versions you can enable the SubSonic backend in System settings in the Ampache web UI and select Subsonic API in the connect iq app settings. Choose Ampache API in the Connect IQ app settings and fill in the url, username and password accordingly.
+## Contribute
 
-### == Subsonic/Airsonic ==
+Use [GitHub Issues](https://github.com/ryancummings/syncandrun/issues) and pull requests. Start with [CONTRIBUTING.md](CONTRIBUTING.md), [development setup](docs/DEVELOPMENT.md), and [architecture](docs/ARCHITECTURE.md). The source includes the complete watch and companion; self-hosting has no feature gates.
 
-Supported. Just choose Subsonic API in the Connect IQ app settings and fill in the url, username and your password accordingly.
+```text
+watch/       Garmin Connect IQ Audio Content Provider (Monkey C)
+companion/   Fastify, TypeScript, SQLite, React browser interface
+deploy/     HTTPS proxy examples
+docs/       Deployment, development, architecture, protocol, validation
+```
 
-### == Plex ==
+## Security and privacy
 
-Should be supported now including transcoding. Make sure you enable remote access inside Plex, then login through `plex.tv` and follow [these instructions](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/) to obtain the server address and the API key. The Server Address should look like `https://ip-adress.somehashvalue.plex.direct:32400/`, where `ip-address` and `somehashvalue` are unique for your situation. Now head to Connect IQ app store, choose Plex API in the SubMusic app settings and fill in the Server Address and API key you found. Enjoy your music!
+Plex credentials stay in the companion and are encrypted using the operator secret. The watch holds a revocable companion credential. Audio streams through the companion without a persistent audio cache. Protect the secret and database backups together. Read [SECURITY.md](SECURITY.md) and [PRIVACY.md](PRIVACY.md) before exposing an installation.
 
-## Known issues 
-Below a list of known 'issues'. These are problems that cannot be fixed by design of either the watch software or the API backends chosen.
+Use trusted HTTPS for deployment. The watch's HTTP option is for development and exposes credentials and media in transit. SyncAndRun includes no analytics, advertising, or telemetry. Third-party Plex, Garmin, and optional tunnel services have their own data handling.
 
-**General** - 'Error -300' or 'Error 0': first check the server address for typos. If using HTTP, enable HTTPS on your server. 
-- Do you use self-signed certificates? Install certificates signed by a certificate authority (CA) e.g. Let's Encrypt. Do you limit the TLS cipher suites to only the latest? Try enabling some older ones, see [this issue](https://github.com/memen45/SubMusic/issues/42#issuecomment-1073341881). 
-- Are you using default custom ports such as `<address>:4040` or `<address>:32400`? This is not supported, so use ports 80 and 443 only!
+## License
 
-**SubSonic API** - no more than ~25 songs on a playlist, due to Subsonic API and watch limitations. Do you get 'Error -402' during sync? Remove some songs from the playlist.
+SyncAndRun is free software under GPL-3.0, derived from [SubMusic](https://github.com/memen45/SubMusic) at `3f6830d`. The public history preserves that upstream ancestry and adds the sanitized SyncAndRun source. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md), including bundled font licenses.
 
-**Nextcloud** - does not support transcoding, so supported file types are MP3, MP4, ADTS and WAV files. Other file types will be skipped (shows a 'need sync' in playlist overview).
-
-## == Support ==
-
-If you use the "Contact Developer" option, please make sure to attach your email address to the message so I can reply. You can also go to https://github.com/memen45/SubMusic on GitHub and open an issue.
+This project is unofficial and is not affiliated with Plex, Garmin, or SubMusic's maintainers.

@@ -1,0 +1,7 @@
+{
+  "name": "two playlists share one track",
+  "playlistCount": 2,
+  "uniqueTrackCount": 3,
+  "pages": 2,
+  "sharedTrackIds": ["plex:track:12345"]
+}

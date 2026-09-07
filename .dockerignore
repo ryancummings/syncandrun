@@ -1,0 +1,22 @@
+.git
+.env
+.env.*
+!.env.example
+build
+data
+node_modules
+companion/node_modules
+companion/dist
+companion/coverage
+playwright-report
+test-results
+*.der
+*.key
+*.pem
+*.prg
+*.iq
+
+# Private setup invitations and Python build cache
+setup-link*.txt
+__pycache__/
+*.pyc

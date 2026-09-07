@@ -1,0 +1,27 @@
+{
+  "protocolVersion": 1,
+  "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "status": "applied",
+  "counts": {
+    "downloaded": 3,
+    "reused": 6,
+    "deleted": 0,
+    "failed": 0
+  },
+  "errorCodes": [],
+  "timings": {
+    "launchMs": 8500,
+    "totalMs": 125000,
+    "configMs": 1500,
+    "metadataMs": 5000,
+    "audioTotalMs": 108000,
+    "audioStartupMs": 3000,
+    "audioTransferMs": 96000,
+    "audioFinalizeMs": 9000,
+    "artworkMs": 12000,
+    "audioBytes": 9200000,
+    "audioProgressCallbacks": 180,
+    "audioCount": 3,
+    "artworkCount": 3
+  }
+}

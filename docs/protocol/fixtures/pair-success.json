@@ -1,0 +1,6 @@
+{
+  "protocolVersion": 1,
+  "deviceToken": "device_token_fixture_1234567890abcdefghijklmnop",
+  "companionId": "companion:fixture",
+  "manifestRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

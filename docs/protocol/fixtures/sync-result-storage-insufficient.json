@@ -1,0 +1,12 @@
+{
+  "protocolVersion": 1,
+  "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "status": "partial",
+  "counts": {
+    "downloaded": 0,
+    "reused": 2,
+    "deleted": 0,
+    "failed": 3
+  },
+  "errorCodes": ["STORAGE_INSUFFICIENT"]
+}

@@ -1,0 +1,47 @@
+name: Verify
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  companion:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa
+        with:
+          version: 10.15.1
+      - run: corepack enable && corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm --dir companion exec playwright install --with-deps chromium
+      - run: make lint contract-test companion-build companion-test companion-e2e NODE22=node
+  containers:
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - run: docker build -f companion/Dockerfile -t syncandrun:test .
+      - name: Check container health
+        run: |
+          docker run -d --name companion -e SYNCANDRUN_BASE_URL=https://music.example.test -e SYNCANDRUN_SECRET=verification-only-secret-with-32-bytes syncandrun:test
+          for attempt in $(seq 1 60); do
+            state=$(docker inspect --format '{{.State.Health.Status}}' companion)
+            [ "$state" = healthy ] && exit 0
+            [ "$state" = unhealthy ] && break
+            sleep 2
+          done
+          docker logs companion
+          exit 1
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - run: docker run --rm -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo -v "$PWD:/repo" -w /repo ghcr.io/gitleaks/gitleaks:v8.30.1 git --no-banner --redact .

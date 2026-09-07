@@ -1,0 +1,29 @@
+<!--
+  Grouped so the two things the owner types are separated from the state the
+  application reports back. Connect IQ has no "informational" control, so the
+  reported values are ordinary settings marked readonly: Garmin renders them
+  without an editor, which is the indicator.
+-->
+<settings>
+	<group id="companion" title="@Strings.settingsCompanion_title" description="@Strings.settingsCompanion_description">
+		<setting propertyKey="@Properties.companion_url" title="@Strings.CompanionUrl" prompt="@Strings.CompanionUrl_prompt">
+			<settingConfig type="alphaNumeric" required="false" maxLength="253" errorMessage="@Strings.CompanionUrl_error" />
+		</setting>
+		<setting propertyKey="@Properties.pairing_code" title="@Strings.PairingCode" prompt="@Strings.PairingCode_prompt">
+			<settingConfig type="alphaNumeric" required="false" maxLength="6" errorMessage="@Strings.PairingCode_error" />
+		</setting>
+	</group>
+	<group id="status" title="@Strings.settingsStatus_title" description="@Strings.settingsStatus_description">
+		<setting propertyKey="@Properties.pairing_status" title="@Strings.PairingStatus">
+			<settingConfig type="alphaNumeric" readonly="true" />
+		</setting>
+		<setting propertyKey="@Properties.last_sync" title="@Strings.LastSync">
+			<settingConfig type="alphaNumeric" readonly="true" />
+		</setting>
+	</group>
+	<group id="diagnostics" title="@Strings.settingsDiagnostics_title" description="@Strings.settingsDiagnostics_description">
+		<setting propertyKey="@Properties.debug" title="@Strings.debug" prompt="@Strings.debug_prompt">
+			<settingConfig type="boolean" required="true" />
+		</setting>
+	</group>
+</settings>
