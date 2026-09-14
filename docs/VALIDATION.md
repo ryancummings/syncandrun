@@ -6,6 +6,19 @@ This source preview is not a stable hardware-qualified release. Automated checks
 
 Run `make verify` from a clean checkout with the prerequisites in [DEVELOPMENT.md](DEVELOPMENT.md). Record the source commit and tool versions with the results. This checks the companion, browser journey, protocol fixtures, `fr955` compile and simulator tests, memory profiles, secret scans, and native/cross-architecture containers including backup and restore.
 
+Docker verification creates a unique disposable Compose project and image tags,
+uses an automatically assigned loopback port, and ignores deployment `.env` files,
+Compose overrides, and enabled profiles. It removes only its own test resources.
+The native stage checks startup, browser security headers, restart persistence,
+and stopped-service backup/restore. The cross-architecture stage requires Docker
+Buildx and CPU emulation; missing prerequisites leave that stage unverified and
+cause the command to fail even when the native stage passed.
+
+Secret scanning covers history reachable from the current `HEAD`, the working
+tree, and generated build artifacts. Unrelated fetched branches are outside this
+release gate; inspect all local refs separately with
+`gitleaks git --no-banner --redact --log-opts=--all .` when auditing archives.
+
 For a public deployment, additionally verify that a visitor without a setup link cannot claim an empty installation, another Plex account cannot obtain management access, a setup link expires and cannot be reused, owner disconnect does not remove ownership, and multiple watches belonging to the owner retain separate credentials and synchronization state.
 
 ## Physical acceptance — awaiting the watch owner

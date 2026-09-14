@@ -9,7 +9,7 @@ fi
 report_dir=$(mktemp -d "${TMPDIR:-/tmp}/syncandrun-gitleaks.XXXXXX")
 trap 'rm -rf "$report_dir"' EXIT INT TERM
 
-gitleaks git --no-banner --redact --report-format json \
+gitleaks git --no-banner --redact --log-opts=HEAD --report-format json \
   --report-path "$report_dir/history.json" .
 gitleaks dir --no-banner --redact --report-format json \
   --report-path "$report_dir/tree.json" .
@@ -19,4 +19,4 @@ if [ -d build ]; then
     --report-path "$report_dir/build.json" build
 fi
 
-echo "Secret scan passed for git history, working tree, and generated build artifacts."
+echo "Secret scan passed for current-branch history, working tree, and generated build artifacts."
