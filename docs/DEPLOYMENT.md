@@ -6,11 +6,51 @@ Each installation is for one Plex owner on hardware they control. It supports mu
 
 ## Requirements
 
-Use a Linux amd64 or arm64 host with Docker Engine and the Compose v2 plugin, Git, Python 3, and enough persistent storage. Build on the target architecture. Plex Media Server must be reachable from the container and able to serve/transcode the owner's music. `localhost` inside a container is the container, not the Plex host: use Plex's reachable LAN address or DNS name. Keep Plex authentication enabled.
+For an always-on deployment, use a Linux amd64 or arm64 host with Docker Engine and the Compose v2 plugin, Git, Python 3, and enough persistent storage. For local persistent development, macOS Docker Desktop is also supported by the helper below. Build on the target architecture. Plex Media Server must be reachable from the container and able to serve/transcode the owner's music. `localhost` inside a container is the container, not the Plex host: use Plex's reachable LAN address or DNS name. Keep Plex authentication enabled.
 
 The watch requires trusted HTTPS on port 443. A private tailnet-only URL cannot be accessed directly by a Garmin watch. Choose either a public domain with a host reverse proxy, or the optional Tailscale Funnel route below. Neither route requires making Plex itself anonymously accessible.
 
-## Prepare one installation
+## Repeatable local deployment
+
+For a persistent development or personal instance, run this from a clean checkout
+of a reviewed commit. Choose the instance identity once and keep the state
+directory outside the checkout:
+
+```sh
+python3 scripts/deploy-local.py \
+  --origin https://music.example.com \
+  --project syncandrun-personal \
+  --port 3000 \
+  --state-dir "$HOME/.local/state/syncandrun-personal"
+```
+
+The helper works with a local Linux Docker Engine or macOS Docker Desktop and
+requires Git, Python 3, and `tar`. It creates private configuration once, builds
+only committed files, starts the production Compose service on loopback, and
+checks readiness and HTTP 401 for anonymous management. It does not configure
+HTTPS ingress or connect Plex. Docker Desktop must already be running on macOS;
+desktop sleep and Docker availability affect service availability.
+
+Repeat the same command after restarting Docker or checking out another reviewed
+commit. An unchanged commit reuses its local source/architecture image without a
+build. A new commit builds once; back up the database and environment, then add
+`--upgrade-after-backup` to acknowledge the upgrade. The helper refuses changed
+revisions without that flag. Do not use it for rollback onto a migrated database;
+follow the restore procedure below. A dirty checkout, occupied project/port, changed instance identity, or
+changed/missing encryption secret stops the command. The helper never deletes
+volumes or adopts another deployment. Keep the private `companion.env` and
+`deployment.json` together; the receipt records source commit, actual image ID,
+and successful local checks. Image bytes are not reproducible across fresh builds
+because the base image tag can advance; retain the previous image for rollback.
+
+For the owner invitation, backup, restore, and other commands below, use
+`docker compose --env-file "$HOME/.local/state/syncandrun-personal/companion.env" -f docker-compose.yml`
+in place of `docker compose`, from this checkout. Back up that private
+`companion.env` in place of `.env`. Do not export conflicting Compose or
+`SYNCANDRUN_*` settings when running manual commands. The helper itself ignores
+those ambient settings and selects its own explicit file/project.
+
+## Manual installation
 
 Clone the public source and choose a reviewed release tag or commit. From the checkout, generate configuration using your actual canonical origin:
 

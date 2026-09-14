@@ -2,7 +2,7 @@
 
 ## Companion prerequisites
 
-Install Git, Node.js 22, and Corepack. Docker with the Compose plugin is required for deployment verification, but not companion development. Run the commands below from the repository root. The repository pins pnpm in `package.json`. Tests use a fake Plex service and synthetic credentials, so a real Plex account is not needed.
+Install Git, Python 3 (for deployment and verification-script tests), Node.js 22, and Corepack. Docker with the Compose plugin is required for deployment verification, but not companion development. Run the commands below from the repository root. The repository pins pnpm in `package.json`. Tests use a fake Plex service and synthetic credentials, so a real Plex account is not needed.
 
 ```sh
 corepack enable
@@ -26,6 +26,11 @@ This command builds the browser UI and watches backend source changes. After edi
 The demo binds only to loopback and uses synthetic credentials, metadata, and placeholder media. Its setup routes exist only in the test harness, which is excluded from the production build. Keep it local. The example HTTPS watch address in Settings is a fixture, not a deployed endpoint, and the placeholder audio is not playable music. This workflow verifies browser development; real Plex transcoding and physical-watch playback require a real installation.
 
 ## Development against real Plex
+
+For a persistent container that starts quickly on repeat runs, use the
+[repeatable local deployment command](DEPLOYMENT.md#repeatable-local-deployment).
+It supports Linux Docker Engine and a running Docker Desktop on macOS. Use the
+direct source process below when you need backend watch mode.
 
 Use [DEPLOYMENT.md](DEPLOYMENT.md) for the intended instance, trusted HTTPS, environment setup, and owner invitation. Put your generated environment file in a private directory outside the repository, and add `SYNCANDRUN_DATA_DIR=/absolute/private/path/data` to it. The directory must be writable by your user; `/data` is the container default. Keep the existing secret with its database. Then run, substituting your private environment-file path:
 
