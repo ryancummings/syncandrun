@@ -38,6 +38,28 @@ Both worktrees were also inspected recursively, excluding `.git` and `node_modul
 | `public-release/AGENTS.md`, `public-release/gitleaks.toml` | 2 | Already present under their mapped public root paths. |
 | `scripts/export-public.py` | 1 | One-time sanitizing exporter. Ongoing changes can be developed directly in the public repository. |
 
+## Development and operational verification
+
+The following evidence was recorded on 2026-09-13 for public code revision `59e2467`. The export comparison above remains tied to its original baseline.
+
+| Requirement | Evidence and remaining gate |
+|---|---|
+| Companion installs and runs locally | Frozen installation succeeded with Node 22.23.2 and pnpm 10.15.1. The documented fake-Plex demo was started and its health checked. It supports browser development with synthetic metadata and placeholder media; live Plex authentication and transcoding were not verified. |
+| Automated checks, including `fr955` | Lint and builds passed, with 152 companion tests across 26 files, 24 protocol fixtures, and two Playwright journeys. Four Python verifier regression tests passed using a stub SDK; these verify failure handling, not Garmin compilation. The current host lacks the Garmin SDK, Java, and signing key, so `fr955` compilation, simulator tests, and memory profiles were not run. |
+| Working Compose deployment | Isolated native container build, loopback reachability, browser security headers, restart persistence, and stopped-service backup/restore passed after the Fastify and listener fixes. Local cross-architecture verification was not run because Buildx is absent. No owner installation, live Plex connection, or trusted HTTPS ingress was configured or validated. |
+| CI green on main | [CI for `59e2467`](https://github.com/ryancummings/syncandrun/actions/runs/34796719373) passed all four jobs: companion, native amd64 container, native arm64 container, and secrets. The companion job includes the dependency audit, four verifier regression tests, builds, companion tests, protocol fixtures, and browser journeys. The secrets job scanned history reachable from this revision's HEAD. Local HEAD/tree secret scans passed earlier and are separate evidence. |
+| Cold contributor onboarding | README, CONTRIBUTING, development, architecture, deployment, and security guidance were reviewed together; all 43 local Markdown links checked resolved. The fake-Plex workflow is documented, and real-Plex development now documents loopback binding and local owner invitation. |
+| Needed archive-only material retained | All 191 export-mapped files match at the compared baseline. Useful watch invariants, pairing, MTP, and troubleshooting knowledge were ported as listed above; no missing implementation remains. |
+
+For subsequent changes, check CI for the exact code revision:
+
+```sh
+gh run list --repo ryancummings/syncandrun --branch main --workflow ci.yml \
+  --json headSha,status,conclusion,url
+```
+
+Select the run whose `headSha` matches the revision being assessed and inspect its jobs. A successful CI run does not include Garmin or physical-watch qualification. No physical Forerunner 955, live Plex server, or chosen HTTPS endpoint was validated in this verification; those remain required before claiming everyday use is proven.
+
 ## Retiring the archive
 
 There is no missing source-code dependency requiring development to continue in the private archive. Before deleting its checkout, preserve any desired private historical evidence and confirm local branches, tags, stash, and unpushed commits have durable copies. Matching source trees does not back up an installation, its database, encryption secret, signing key, or a known-good watch artifact. Keep those separately under the operator's control.
