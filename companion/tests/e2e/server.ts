@@ -14,10 +14,11 @@ import { buildApp } from "../../src/server/app.js";
 import { createFakePlexServer } from "../helpers/fake-plex.js";
 
 const secret = "operator-secret-with-at-least-32-bytes";
-const port = Number(process.env.SYNCANDRUN_E2E_PORT ?? 34117);
+const demo = process.argv.includes("--demo");
+const port = Number(demo ? (process.env.SYNCANDRUN_DEMO_PORT ?? 3000) : (process.env.SYNCANDRUN_E2E_PORT ?? 34117));
 const dataDir = await mkdtemp(join(tmpdir(), "syncandrun-playwright-"));
 const fake = await createFakePlexServer();
-fake.setPlaylistLeafCount("20", 10_001);
+if (!demo) fake.setPlaylistLeafCount("20", 10_001);
 const database = new CompanionDatabase(dataDir);
 database.migrate();
 
@@ -53,10 +54,16 @@ const app = buildApp(
 
 // Test-only bootstrap endpoint; this file is excluded from the production build.
 app.get("/__test/setup-link", async () => ({ path: `/#setup=${new OwnerRepository(database.connection).issueInvitation()}` }));
+if (demo) {
+  app.get("/__demo/start", async (_request, reply) =>
+    reply.header("Cache-Control", "no-store").redirect(`/#setup=${new OwnerRepository(database.connection).issueInvitation()}`)
+  );
+}
 
 async function shutdown() {
   await app.close();
   await fake.app.close();
+  database.close();
   await rm(dataDir, { recursive: true, force: true });
 }
 
@@ -64,3 +71,4 @@ process.once("SIGINT", () => { void shutdown().finally(() => process.exit(0)); }
 process.once("SIGTERM", () => { void shutdown().finally(() => process.exit(0)); });
 
 await app.listen({ host: "127.0.0.1", port });
+if (demo) console.log(`Fake-Plex demo ready at http://127.0.0.1:${port}/__demo/start (temporary data; resets on restart).`);

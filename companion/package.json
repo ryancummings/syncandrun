@@ -8,6 +8,7 @@
   "scripts": {
     "build": "pnpm ui:typecheck && pnpm ui:build && tsc --project tsconfig.build.json",
     "dev": "tsx watch src/main.ts",
+    "dev:demo": "pnpm ui:build && tsx watch tests/e2e/server.ts --demo",
     "e2e": "playwright test --config playwright.config.ts",
     "start": "node dist/main.js",
     "test": "vitest run --config vitest.config.ts",

@@ -14,7 +14,7 @@ export default defineConfig({
     screenshot: "only-on-failure"
   },
   webServer: {
-    command: `SYNCANDRUN_E2E_PORT=${port} corepack pnpm dlx node@22 node_modules/tsx/dist/cli.mjs tests/e2e/server.ts`,
+    command: `SYNCANDRUN_E2E_PORT=${port} "${process.execPath}" node_modules/tsx/dist/cli.mjs tests/e2e/server.ts`,
     url: `http://127.0.0.1:${port}/health/ready`,
     reuseExistingServer: false,
     timeout: 30_000
