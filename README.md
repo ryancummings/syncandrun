@@ -28,6 +28,8 @@ Plex remains the playlist editor. Album/artist/track browsing, playlist editing,
 
 Use [GitHub Issues](https://github.com/ryancummings/syncandrun/issues) and pull requests. Start with [CONTRIBUTING.md](CONTRIBUTING.md), [development setup](docs/DEVELOPMENT.md), and [architecture](docs/ARCHITECTURE.md). The source includes the complete watch and companion; self-hosting has no feature gates.
 
+The [source completeness audit](docs/SOURCE_COMPLETENESS.md) records the comparison with the legacy archive and where useful development knowledge was preserved.
+
 ```text
 watch/       Garmin Connect IQ Audio Content Provider (Monkey C)
 companion/   Fastify, TypeScript, SQLite, React browser interface
