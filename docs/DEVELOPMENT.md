@@ -34,7 +34,21 @@ make companion-ui NODE22=node
 node --env-file=/absolute/private/path/companion.env companion/node_modules/tsx/dist/cli.mjs watch companion/src/main.ts
 ```
 
-Node parses this file without executing shell code. `make companion-dev NODE22=node` is equivalent when the variables are already exported, but does not automatically read `.env`. This API listener must sit behind your intended HTTPS proxy; it is not the local fake-Plex demo. Never run tests against its data directory or enable test authentication on a real installation. Rebuild the browser bundle and restart the API after UI changes.
+Node parses this file without executing shell code. `make companion-dev NODE22=node` is equivalent when the variables are already exported, but does not automatically read `.env`. The API binds to `127.0.0.1` by default and must sit behind your intended HTTPS proxy; it is not the local fake-Plex demo. Never run tests against its data directory or enable test authentication on a real installation. Rebuild the browser bundle and restart the API after UI changes.
+
+With that process running, create the owner invitation from a second terminal,
+using the same private environment file and a new private output filename:
+
+```sh
+node --env-file=/absolute/private/path/companion.env companion/node_modules/tsx/dist/cli.mjs companion/src/operator.ts setup-link --output /absolute/private/path/setup-link.txt
+```
+
+Open the saved link privately in your browser and complete Plex authentication.
+It expires after 30 minutes; delete the file after use. Do not paste its contents
+into logs or issue reports. `SYNCANDRUN_HOST` can explicitly select another IP
+address, but keep direct development on loopback behind HTTPS. The Docker image
+sets this variable to `0.0.0.0` inside its container so Compose's loopback-only
+published port can reach it; `SYNCANDRUN_BIND_ADDRESS` controls that host mapping.
 
 ## Watch toolchain
 

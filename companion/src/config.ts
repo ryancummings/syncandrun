@@ -52,6 +52,9 @@ const environmentSchema = z.object({
     message: "must contain at least 32 bytes"
   }),
   SYNCANDRUN_DATA_DIR: z.string().min(1).default("/data"),
+  SYNCANDRUN_HOST: z.string().refine((value) => isIP(value) !== 0, {
+    message: "must be an IPv4 or IPv6 address"
+  }).default("127.0.0.1"),
   SYNCANDRUN_PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
   SYNCANDRUN_LOG_LEVEL: logLevelSchema.default("info"),
   SYNCANDRUN_TRUST_PROXY: trustProxySchema
@@ -62,6 +65,7 @@ export interface RuntimeConfig {
   artworkBaseUrl?: URL;
   secret: string;
   dataDir: string;
+  host: string;
   port: number;
   logLevel: z.infer<typeof logLevelSchema>;
   /** `true`, `false`, or the proxies whose forwarded-for header is believed. */
@@ -107,6 +111,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Runtim
     ...(artworkBaseUrl === undefined ? {} : { artworkBaseUrl }),
     secret: parsed.data.SYNCANDRUN_SECRET,
     dataDir: resolve(parsed.data.SYNCANDRUN_DATA_DIR),
+    host: parsed.data.SYNCANDRUN_HOST,
     port: parsed.data.SYNCANDRUN_PORT,
     logLevel: parsed.data.SYNCANDRUN_LOG_LEVEL,
     trustProxy: parsed.data.SYNCANDRUN_TRUST_PROXY

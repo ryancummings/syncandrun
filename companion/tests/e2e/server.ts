@@ -28,6 +28,7 @@ const config: RuntimeConfig = {
   dataDir,
   port,
   logLevel: "silent",
+  host: "127.0.0.1",
   trustProxy: false
 };
 const setup = new PlexSetupService(database.connection, secret, {

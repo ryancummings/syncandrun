@@ -22,6 +22,7 @@ describe("browser UI", () => {
       dataDir,
       port: 3000,
       logLevel: "silent",
+      host: "127.0.0.1",
       trustProxy: false
     };
     const database = new CompanionDatabase(dataDir);

@@ -20,9 +20,28 @@ describe("runtime configuration", () => {
     expect(config.baseUrl.href).toBe("https://music.example.test/");
     expect(config.artworkBaseUrl?.href).toBe("https://art.example.test/");
     expect(config.port).toBe(3000);
+    expect(config.host).toBe("127.0.0.1");
     expect(config.logLevel).toBe("info");
     expect(config.trustProxy).toBe(false);
   });
+
+  it.each(["127.0.0.1", "0.0.0.0", "::1", "::"])("accepts an explicit listener address %s", (host) => {
+    expect(loadConfig({
+      SYNCANDRUN_BASE_URL: "https://music.example.test",
+      SYNCANDRUN_SECRET: "a".repeat(32),
+      SYNCANDRUN_HOST: host
+    }).host).toBe(host);
+  });
+
+  it.each(["", "localhost", "https://example.test", "127.0.0.1:3000"])(
+    "rejects an invalid listener address %s", (host) => {
+      expect(() => loadConfig({
+        SYNCANDRUN_BASE_URL: "https://music.example.test",
+        SYNCANDRUN_SECRET: "a".repeat(32),
+        SYNCANDRUN_HOST: host
+      })).toThrow("SYNCANDRUN_HOST");
+    }
+  );
 
   it.each([
     ["true", true],

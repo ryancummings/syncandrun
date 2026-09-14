@@ -25,6 +25,8 @@ RUN corepack enable && corepack pnpm install --prod --frozen-lockfile
 FROM node:22-bookworm-slim AS runtime
 
 ENV NODE_ENV=production
+# Containers must listen on their network interface for published ports.
+ENV SYNCANDRUN_HOST=0.0.0.0
 ENV SYNCANDRUN_DATA_DIR=/data
 WORKDIR /app
 

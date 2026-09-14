@@ -26,7 +26,7 @@ async function fixture(secret = defaultSecret) {
   const setup = new PlexSetupService(db.connection, secret, { plexOrigin: fake.origin, fetch: fake.fetch });
   const sessions = new BrowserSessionRepository(db.connection, secret);
   const management = new BrowserManagementService(db.connection, secret);
-  const app = buildApp({ baseUrl, dataDir, secret, port: 3000, logLevel: "silent", trustProxy: false }, db,
+  const app = buildApp({ baseUrl, dataDir, secret, host: "127.0.0.1", port: 3000, logLevel: "silent", trustProxy: false }, db,
     { plexSetup: setup, browserSessions: sessions, management });
   cleanup.push(() => app.close());
   return { db, fake, owners, setup, sessions, management, app };
