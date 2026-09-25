@@ -3,6 +3,7 @@ import { access, mkdir, open, unlink } from "node:fs/promises";
 import { isIP } from "node:net";
 import { resolve } from "node:path";
 import { z } from "zod";
+import { isPrivateLanHttpUrl } from "./lan-http.js";
 
 const logLevelSchema = z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]);
 /** Subnet keywords understood by Fastify's proxy-address parser. */
@@ -44,6 +45,7 @@ const trustProxySchema = z
 
 const environmentSchema = z.object({
   SYNCANDRUN_BASE_URL: z.string().min(1),
+  SYNCANDRUN_ALLOW_LAN_HTTP: z.enum(["true", "false"]).default("false"),
   SYNCANDRUN_ARTWORK_BASE_URL: z.preprocess(
     (value) => value === "" ? undefined : value,
     z.string().min(1).optional()
@@ -95,6 +97,21 @@ function parseHttpsOrigin(value: string, variable: "SYNCANDRUN_BASE_URL" | "SYNC
   return new URL(url.origin);
 }
 
+function parseBaseOrigin(value: string, allowLanHttp: boolean): URL {
+  if (!allowLanHttp) return parseHttpsOrigin(value, "SYNCANDRUN_BASE_URL");
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("SYNCANDRUN_BASE_URL must be a private IPv4 HTTP origin when LAN HTTP is enabled");
+  }
+  if (!isPrivateLanHttpUrl(url) || url.username !== "" || url.password !== "" || url.search !== ""
+      || url.hash !== "" || (url.pathname !== "" && url.pathname !== "/")) {
+    throw new Error("SYNCANDRUN_BASE_URL must be a private IPv4 HTTP origin on port 80 without credentials, path, query, or fragment when LAN HTTP is enabled");
+  }
+  return new URL(url.origin);
+}
+
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): RuntimeConfig {
   const parsed = environmentSchema.safeParse(environment);
   if (!parsed.success) {
@@ -107,7 +124,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Runtim
     ? undefined
     : parseHttpsOrigin(parsed.data.SYNCANDRUN_ARTWORK_BASE_URL, "SYNCANDRUN_ARTWORK_BASE_URL");
   return {
-    baseUrl: parseHttpsOrigin(parsed.data.SYNCANDRUN_BASE_URL, "SYNCANDRUN_BASE_URL"),
+    baseUrl: parseBaseOrigin(parsed.data.SYNCANDRUN_BASE_URL, parsed.data.SYNCANDRUN_ALLOW_LAN_HTTP === "true"),
     ...(artworkBaseUrl === undefined ? {} : { artworkBaseUrl }),
     secret: parsed.data.SYNCANDRUN_SECRET,
     dataDir: resolve(parsed.data.SYNCANDRUN_DATA_DIR),

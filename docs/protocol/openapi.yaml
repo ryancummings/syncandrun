@@ -2,9 +2,11 @@ openapi: 3.1.0
 info:
   title: SyncAndRun for Garmin watch API
   version: 1.0.0
-  description: Compact HTTPS contract for protocol version 1.
+  description: Compact watch contract for protocol version 1. HTTPS is the default; private-LAN HTTP requires explicit operator opt-in.
 servers:
   - url: https://syncandrun.example.test
+  - url: http://192.168.1.20
+    description: Opt-in private-LAN HTTP origin.
 security:
   - deviceBearer: []
 paths:

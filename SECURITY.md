@@ -12,7 +12,7 @@ Security fixes target the current preview development line. There is no stable r
 
 Each installation has one owner. Only an operator-created, single-use setup link can start initial ownership setup, and subsequent access must match that owner's Plex identity. Disconnect does not transfer ownership. The owner may pair multiple watches, each with its own revocable credential.
 
-Expose only trusted HTTPS through the intended proxy. Keep the application port on loopback, restrict trusted proxy addresses, and avoid proxy access logs that retain sensitive requests. The optional Funnel route depends on the provider's availability and bandwidth policy. Never disable TLS verification to work around certificate failures.
+Use trusted HTTPS by default. The optional home-LAN HTTP route sends setup links, browser sessions, watch credentials, and media without encryption on that network; restrict it to a private LAN interface and enable it only with the owner's informed choice. Keep the application port on loopback, restrict trusted proxy addresses, and avoid proxy access logs that retain sensitive requests. The optional Funnel route depends on the provider's availability and bandwidth policy. Never disable TLS verification to work around certificate failures.
 
 ## Protect and recover
 

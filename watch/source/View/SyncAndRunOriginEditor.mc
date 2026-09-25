@@ -5,6 +5,7 @@ using Toybox.WatchUi;
 module SyncAndRun {
 
 	const ORIGIN_EDITOR_CHARACTERS = "abcdefghijklmnopqrstuvwxyz0123456789.-:";
+	const ORIGIN_EDITOR_LAN_CHARACTERS = "0123456789.";
 	const ORIGIN_EDITOR_SAVE = 1;
 	const ORIGIN_EDITOR_CANCEL = 2;
 	const ORIGIN_EDITOR_NO_ACTION = 0;
@@ -22,12 +23,22 @@ module SyncAndRun {
 		private var d_scheme = "https://";
 		private var d_authority = "";
 		private var d_selection = ORIGIN_EDITOR_CHARACTER_OFFSET;
+		private var d_lanMode = false;
 
-		function initialize(value) {
+		function initialize(value, lanMode) {
 			View.initialize();
+			d_lanMode = lanMode;
+			if (d_lanMode) { d_scheme = "http://"; }
 
 			if (!(value instanceof Lang.String)) { return; }
 			var candidate = value.toLower();
+			if (d_lanMode) {
+				if ((candidate.length() >= 7) && candidate.substring(0, 7).equals("http://")) {
+					var host = candidate.substring(7, null);
+					if (CompanionOrigin.validCompanionIpv4(host)) { d_authority = host; }
+				}
+				return;
+			}
 			if ((candidate.length() >= 8) && candidate.substring(0, 8).equals("https://")) {
 				d_authority = candidate.substring(8, null);
 			} else if ((candidate.length() >= 7) && candidate.substring(0, 7).equals("http://")) {
@@ -43,8 +54,10 @@ module SyncAndRun {
 		}
 
 		function selectionCount() {
-			return ORIGIN_EDITOR_CHARACTER_OFFSET + ORIGIN_EDITOR_CHARACTERS.length();
+			return ORIGIN_EDITOR_CHARACTER_OFFSET + characters().length();
 		}
+
+		private function characters() { return d_lanMode ? ORIGIN_EDITOR_LAN_CHARACTERS : ORIGIN_EDITOR_CHARACTERS; }
 
 		function adjust(delta) {
 			d_selection = (d_selection + delta + selectionCount()) % selectionCount();
@@ -53,7 +66,7 @@ module SyncAndRun {
 
 		function selectCharacter(character) {
 			if (!(character instanceof Lang.String) || (character.length() != 1)) { return false; }
-			var index = ORIGIN_EDITOR_CHARACTERS.find(character);
+			var index = characters().find(character);
 			if (index == null) { return false; }
 			d_selection = ORIGIN_EDITOR_CHARACTER_OFFSET + index;
 			return true;
@@ -67,7 +80,7 @@ module SyncAndRun {
 
 		function appendCharacter(character) {
 			if (!(character instanceof Lang.String) || (character.length() != 1)
-				|| (ORIGIN_EDITOR_CHARACTERS.find(character) == null)
+				|| (characters().find(character) == null)
 				|| (d_authority.length() >= ORIGIN_EDITOR_MAX_AUTHORITY_LENGTH)) { return false; }
 			d_authority += character;
 			WatchUi.requestUpdate();
@@ -82,6 +95,7 @@ module SyncAndRun {
 		}
 
 		function toggleScheme() {
+			if (d_lanMode) { return; }
 			d_scheme = d_scheme.equals("https://") ? "http://" : "https://";
 			WatchUi.requestUpdate();
 		}
@@ -90,6 +104,8 @@ module SyncAndRun {
 
 		function scheme() { return d_scheme; }
 
+		function isLanMode() { return d_lanMode; }
+
 		function candidate() { return d_scheme + d_authority; }
 
 		function selectedLabel() {
@@ -97,6 +113,7 @@ module SyncAndRun {
 				return WatchUi.loadResource(Rez.Strings.OriginEditor_save);
 			}
 			if (d_selection == ORIGIN_EDITOR_SCHEME_INDEX) {
+				if (d_lanMode) { return WatchUi.loadResource(Rez.Strings.OriginEditor_lanHttp); }
 				return WatchUi.loadResource(d_scheme.equals("https://")
 					? Rez.Strings.OriginEditor_useHttp
 					: Rez.Strings.OriginEditor_useHttps);
@@ -105,7 +122,7 @@ module SyncAndRun {
 				return WatchUi.loadResource(Rez.Strings.OriginEditor_cancel);
 			}
 			var index = d_selection - ORIGIN_EDITOR_CHARACTER_OFFSET;
-			return ORIGIN_EDITOR_CHARACTERS.substring(index, index + 1);
+			return characters().substring(index, index + 1);
 		}
 
 		// Returns a non-zero action only when the delegate must leave or save.
@@ -189,7 +206,8 @@ module SyncAndRun {
 			}
 			if (action != ORIGIN_EDITOR_SAVE) { return true; }
 
-			if (!CompanionOrigin.save(d_view.candidate())) {
+			if ((d_view.isLanMode() && !CompanionOrigin.validPrivateLanIpv4(d_view.authority()))
+				|| !CompanionOrigin.save(d_view.candidate())) {
 				WatchUi.pushView(new TextView(WatchUi.loadResource(Rez.Strings.CompanionOrigin_invalid)),
 					null, WatchUi.SLIDE_IMMEDIATE);
 				return true;

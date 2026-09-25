@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isPrivateLanHttpUrl } from "../lan-http.js";
 
 const product = "SyncAndRun for Garmin";
 const version = "1.0.0-dev.0";
@@ -24,6 +25,7 @@ type Fetch = typeof fetch;
 
 export interface PlexAuthClientOptions {
   clientIdentifier: string;
+  allowLanHttp?: boolean;
   plexOrigin?: URL;
   authOrigin?: URL;
   fetch?: Fetch;
@@ -66,6 +68,7 @@ export class PlexAuthClient {
   readonly #authOrigin: URL;
   readonly #fetch: Fetch;
   readonly #timeoutMs: number;
+  readonly #allowLanHttp: boolean;
 
   constructor(options: PlexAuthClientOptions) {
     if (options.clientIdentifier.length === 0) throw new Error("Plex client identifier is required");
@@ -74,10 +77,13 @@ export class PlexAuthClient {
     this.#authOrigin = options.authOrigin ?? defaultAuthOrigin;
     this.#fetch = options.fetch ?? fetch;
     this.#timeoutMs = options.timeoutMs ?? defaultTimeoutMs;
+    this.#allowLanHttp = options.allowLanHttp ?? false;
   }
 
   async createPin(forwardUrl: URL): Promise<PlexPin> {
-    if (forwardUrl.protocol !== "https:") throw new Error("Plex authentication forward URL must use HTTPS");
+    if (forwardUrl.protocol !== "https:" && !(this.#allowLanHttp && isPrivateLanHttpUrl(forwardUrl))) {
+      throw new Error("Plex authentication forward URL must use HTTPS or explicit private-LAN HTTP");
+    }
     const url = new URL("/api/v2/pins", this.#plexOrigin);
     url.searchParams.set("strong", "true");
     const response = await this.#request(url, { method: "POST" });

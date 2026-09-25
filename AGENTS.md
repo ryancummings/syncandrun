@@ -4,7 +4,7 @@ Read `README.md` and `docs/ARCHITECTURE.md` before changing behavior. For deploy
 
 - Keep the companion personal and single-owner. Multiple paired watches must belong to that owner and retain separate credentials and synchronization state.
 - Never print, commit, or include in issue reports Plex credentials, setup links, cookies, database contents, watch credentials, signing keys, or real library metadata.
-- Keep browser and watch deployment traffic on trusted HTTPS. Do not bypass authentication to make a tunnel work.
+- Use trusted HTTPS by default. An operator may explicitly opt into the documented home-LAN HTTP route for browser and watch traffic on a private IP. Keep the companion on loopback, restrict LAN ingress, and preserve authentication.
 - Use fake Plex data for automated testing. Never use production data or volumes for tests.
 - Start required development servers yourself after checking whether they are already running; wait for readiness before testing.
 - Preserve GPL-3.0 licensing, SubMusic ancestry, and asset attribution. Keep `upstream` pointed at `https://github.com/memen45/SubMusic.git`; do not rewrite inherited history.

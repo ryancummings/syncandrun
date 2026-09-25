@@ -31,7 +31,7 @@ test("completes setup, playlist selection, pairing, naming, live status, and del
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   // The settings console mixes state it only reports with state it can change,
   // and the watch address is the one value the operator must retype elsewhere.
-  await expect(page.getByText("https://music.example.test/")).toBeVisible();
+  await expect(page.getByText("https://music.example.test")).toBeVisible();
   await expect(page.getByRole("button", { name: "Copy" })).toBeVisible();
   await expect(page.getByText("Read-only").first()).toBeVisible();
   await expect(page.getByText("Editable")).toBeVisible();

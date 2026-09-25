@@ -4,10 +4,10 @@ The Garmin watch and the companion have separate responsibilities. The companion
 
 ```mermaid
 flowchart LR
-    Browser -->|HTTPS management| Companion
+    Browser -->|HTTPS by default; optional LAN HTTP| Companion
     Companion -->|Authentication| Plex[Plex account service]
     Companion -->|Metadata and MP3 transcodes| PMS[Plex Media Server]
-    Watch -->|HTTPS pairing and sync| Companion
+    Watch -->|HTTPS by default; optional LAN HTTP| Companion
     Watch -->|Offline playback| Headphones[Bluetooth headphones]
 ```
 
@@ -40,6 +40,6 @@ The implementation lives in [the reconciler](../watch/source/SyncAndRunReconcile
 
 The companion encrypts the Plex credential using the operator secret and stores it in SQLite. The browser and watch never receive that persisted Plex credential. Watch bearer credentials are revocable; short-lived signed artwork URLs support Garmin's image transport. Treat setup links, browser sessions, watch credentials, and artwork capabilities as sensitive.
 
-The companion streams audio without a permanent audio cache. SQLite and the operator secret must be backed up together. HTTPS protects browser and watch traffic; the underlying watch can accept HTTP for development, but the supported deployment guides require HTTPS.
+The companion streams audio without a permanent audio cache. SQLite and the operator secret must be backed up together. HTTPS protects browser and watch traffic by default. An operator can explicitly opt into HTTP on a trusted home LAN for both browser management and watch sync. That route exposes browser sessions, watch credentials, and media to observers on the LAN; the application port stays on loopback behind the LAN proxy.
 
 See the [protocol](protocol/README.md), [domain glossary](../CONTEXT-MAP.md), [deployment guide](DEPLOYMENT.md), [watch troubleshooting](WATCH_TROUBLESHOOTING.md), and [security policy](../SECURITY.md).

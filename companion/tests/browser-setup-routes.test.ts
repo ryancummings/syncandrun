@@ -20,11 +20,11 @@ afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
-async function createTestApp() {
+async function createTestApp(baseUrl = "https://music.example.test") {
   const dataDir = await mkdtemp(join(tmpdir(), "syncandrun-browser-routes-"));
   temporaryDirectories.push(dataDir);
   const config: RuntimeConfig = {
-    baseUrl: new URL("https://music.example.test"),
+    baseUrl: new URL(baseUrl),
     secret,
     dataDir,
     port: 3000,
@@ -40,6 +40,7 @@ async function createTestApp() {
   const plexSetup = new PlexSetupService(database.connection, secret, {
     plexOrigin: server.origin,
     authOrigin: new URL("https://app.plex.example.test"),
+    allowLanHttp: config.baseUrl.protocol === "http:",
     fetch: server.fetch
   });
   const browserSessions = new BrowserSessionRepository(database.connection, secret);
@@ -172,7 +173,7 @@ describe("browser Plex setup routes", () => {
       version: "1.0.0-dev.0",
       // The browser is the only place the operator can read the origin that has
       // to be typed into the watch's app settings by hand.
-      companionUrl: "https://music.example.test/"
+      companionUrl: "https://music.example.test"
     });
     const pairing = await app.inject({
       method: "POST",
@@ -221,6 +222,25 @@ describe("browser Plex setup routes", () => {
     const response = await app.inject({ method: "GET", url: "/api/v1/setup/plex/servers" });
     expect(response.statusCode).toBe(401);
     expect(response.json()).toMatchObject({ error: { code: "AUTH_REQUIRED" } });
+    await app.close();
+  });
+
+  it("supports an opted-in private-IP HTTP browser session without a Secure cookie", async () => {
+    const { app, server } = await createTestApp("http://192.168.1.20");
+    const started = await app.inject({ method: "POST", url: "/api/v1/setup/plex/pin" });
+    expect(started.statusCode).toBe(200);
+    expect(started.json().authUrl).toContain("forwardUrl=http%3A%2F%2F192.168.1.20%2Fsetup%2Fplex%2Fcallback");
+    server.claimPin();
+    const claimed = await app.inject({ method: "GET", url: `/api/v1/setup/plex/pin/${started.json().sessionId}` });
+    expect(claimed.statusCode).toBe(200);
+    const cookie = claimed.headers["set-cookie"];
+    if (typeof cookie !== "string") throw new Error("Expected a browser session cookie");
+    expect(cookie).toContain("HttpOnly");
+    expect(cookie).not.toContain("Secure");
+    const settings = await app.inject({ method: "GET", url: "/api/v1/settings", headers: { cookie: cookie.split(";", 1)[0]! } });
+    expect(settings.json().companionUrl).toBe("http://192.168.1.20");
+    const anonymous = await app.inject({ method: "GET", url: "/api/v1/settings" });
+    expect(anonymous.statusCode).toBe(401);
     await app.close();
   });
 });

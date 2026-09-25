@@ -4,11 +4,12 @@
 self-hosted companion and the Garmin watch. JSON fixtures are sanitized and
 shared by companion route tests and watch parser tests.
 
-All watch requests use HTTPS. After pairing, the watch sends its revocable
+Watch requests use HTTPS by default; the owner can explicitly opt into HTTP on
+a private home-LAN IP. After pairing, the watch sends its revocable
 device credential as `Authorization: Bearer <device-token>` for JSON and audio
 requests. Connect IQ SDK 9.2 supports custom headers on
 `Communications.makeWebRequest` with audio response content, so long-lived
-credentials are never placed in URLs. `makeImageRequest` cannot attach that
+credentials are never placed in URLs. LAN HTTP exposes those credentials in transit. `makeImageRequest` cannot attach that
 header, so each manifest artwork location instead carries a six-hour HMAC
 capability scoped to one track and artwork identity. It may be a relative path
 on the companion origin or an absolute HTTPS URL on a separately configured

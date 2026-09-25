@@ -4,6 +4,7 @@
 import argparse
 import fcntl
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -28,6 +29,8 @@ def output(*args, **kwargs):
 def arguments():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--origin", required=True)
+    parser.add_argument("--allow-lan-http", action="store_true",
+                        help="Opt into unencrypted browser and watch traffic on a private LAN IP")
     parser.add_argument("--project", required=True)
     parser.add_argument("--port", required=True, type=int)
     parser.add_argument("--state-dir", required=True, type=Path)
@@ -35,11 +38,20 @@ def arguments():
                         help="Allow a changed source revision after taking a stopped-service backup")
     args = parser.parse_args()
     origin = urlsplit(args.origin)
-    if (origin.scheme != "https" or not origin.hostname or origin.netloc != origin.hostname
-            or origin.path not in ("", "/") or origin.query or origin.fragment
-            or not re.fullmatch(r"[a-zA-Z0-9.-]+", origin.hostname)):
-        parser.error("--origin must be a canonical HTTPS DNS origin on port 443")
-    args.origin = f"https://{origin.hostname}"
+    try:
+        address = ipaddress.ip_address(origin.hostname or "")
+        private_lan = any(address in network for network in (
+            ipaddress.ip_network("10.0.0.0/8"), ipaddress.ip_network("172.16.0.0/12"),
+            ipaddress.ip_network("192.168.0.0/16")))
+    except ValueError:
+        private_lan = False
+    valid_https = (origin.scheme == "https" and not args.allow_lan_http
+                   and re.fullmatch(r"[a-zA-Z0-9.-]+", origin.hostname or ""))
+    valid_lan_http = origin.scheme == "http" and args.allow_lan_http and private_lan
+    if (not (valid_https or valid_lan_http) or origin.netloc != origin.hostname
+            or origin.path not in ("", "/") or origin.query or origin.fragment):
+        parser.error("--origin must be an HTTPS DNS origin on port 443, or a private IPv4 HTTP origin on port 80 with --allow-lan-http")
+    args.origin = f"{origin.scheme}://{origin.hostname}"
     if not re.fullmatch(r"[a-z][a-z0-9_-]{0,48}", args.project):
         parser.error("--project must start with a lowercase letter and use letters, digits, _ or -")
     if not 1024 <= args.port <= 65535:
@@ -119,8 +131,11 @@ def deploy(args, repo, state_dir, revision, environment):
     if not env_file.exists():
         if receipt_file.exists():
             raise RuntimeError("Saved environment is missing; restore it instead of generating a new secret")
-        run(sys.executable, str(repo / "scripts/setup-deployment.py"), "--origin", args.origin,
-            "--project", args.project, "--port", str(args.port), "--output", str(env_file))
+        setup = [sys.executable, str(repo / "scripts/setup-deployment.py"), "--origin", args.origin,
+                 "--project", args.project, "--port", str(args.port), "--output", str(env_file)]
+        if args.allow_lan_http:
+            setup.append("--allow-lan-http")
+        run(*setup)
     if env_file.stat().st_mode & 0o077:
         raise RuntimeError("Private environment file must have mode 0600")
     values = read_environment(env_file)
@@ -128,6 +143,7 @@ def deploy(args, repo, state_dir, revision, environment):
                 "secret_sha256": hashlib.sha256(values.get("SYNCANDRUN_SECRET", "").encode()).hexdigest()}
     if (values.get("COMPOSE_PROJECT_NAME") != args.project
             or values.get("SYNCANDRUN_BASE_URL") != args.origin
+            or values.get("SYNCANDRUN_ALLOW_LAN_HTTP", "false") != ("true" if args.allow_lan_http else "false")
             or values.get("SYNCANDRUN_PORT") != str(args.port)
             or values.get("SYNCANDRUN_BIND_ADDRESS") != "127.0.0.1"
             or len(values.get("SYNCANDRUN_SECRET", "")) < 32):
@@ -193,7 +209,7 @@ def deploy(args, repo, state_dir, revision, environment):
     save(receipt_file, json.dumps({"identity": identity, "source_commit": revision,
                                   "image": image, "image_id": image_id, "health": "passed", "anonymous_management": "denied"}, indent=2) + "\n")
     print(f"Ready on 127.0.0.1:{args.port}; anonymous management denied. Source: {revision}")
-    print("HTTPS ingress, owner Plex authentication, and watch acceptance are separate operator steps.")
+    print("Ingress, owner Plex authentication, and watch acceptance are separate operator steps.")
 
 
 if __name__ == "__main__":

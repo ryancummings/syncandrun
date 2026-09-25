@@ -90,7 +90,7 @@ export function registerBrowserRoutes<Logger extends FastifyBaseLogger>(
       reply.header("Cache-Control", "no-store");
       if (status.status !== "claimed" && status.status !== "completed") return status;
       const session = dependencies.browserSessions.create(parsed.data);
-      setSessionCookie(reply, session.token, session.expiresAt);
+      setSessionCookie(reply, session.token, session.expiresAt, config.baseUrl.protocol === "https:");
       return { ...status, csrfToken: session.csrfToken };
     } catch (error) {
       if (error instanceof OwnerAuthorizationError) return sendBrowserError(request, reply, 403, "OWNER_REQUIRED", error.message);
@@ -247,7 +247,7 @@ export function registerBrowserRoutes<Logger extends FastifyBaseLogger>(
     reply.header("Cache-Control", "no-store");
     // The watch's companion_url app setting has to be typed in by hand, so the
     // browser has to be able to show the origin this companion answers on.
-    return { ...dependencies.management.getSettings(), companionUrl: config.baseUrl.href };
+    return { ...dependencies.management.getSettings(), companionUrl: config.baseUrl.origin };
   });
 
   app.get("/api/v1/devices", async (request, reply) => {
@@ -459,17 +459,17 @@ function parseCookies(header: string | undefined): Record<string, string> {
   return cookies;
 }
 
-function setSessionCookie(reply: FastifyReply, token: string, expiresAt: string): void {
+function setSessionCookie(reply: FastifyReply, token: string, expiresAt: string, secure: boolean): void {
   reply.header(
     "Set-Cookie",
-    `${sessionCookieName}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Expires=${new Date(expiresAt).toUTCString()}`
+    `${sessionCookieName}=${token}; Path=/; HttpOnly${secure ? "; Secure" : ""}; SameSite=Lax; Expires=${new Date(expiresAt).toUTCString()}`
   );
 }
 
 function clearSessionCookie(reply: FastifyReply): void {
   reply.header(
     "Set-Cookie",
-    `${sessionCookieName}=; Path=/; HttpOnly; Secure; SameSite=Lax; Expires=Thu, 01 Jan 1970 00:00:00 GMT`
+    `${sessionCookieName}=; Path=/; HttpOnly; SameSite=Lax; Expires=Thu, 01 Jan 1970 00:00:00 GMT`
   );
 }
 
