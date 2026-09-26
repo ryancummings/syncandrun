@@ -4,11 +4,32 @@ This is a preview. Automated tests do not establish physical-watch compatibility
 
 Each installation is for one Plex owner on hardware they control. It supports multiple watches belonging to that owner. Hosting for other people is outside the product scope.
 
+## Quick start on a home network
+
+```sh
+git clone https://github.com/ryancummings/syncandrun.git
+cd syncandrun
+docker compose up -d --build
+```
+
+Open `http://<this computer's IP address>` and select **Sign in with Plex**. No environment file, secret, setup link, or proxy is needed:
+
+- The companion listens on port 80 of every address the computer has. Set `SYNCANDRUN_PORT` to use another port.
+- It generates its encryption secret into the `syncandrun-data` volume on first start. Back up that volume as a whole: the secret and the database belong together.
+- The first Plex account to finish signing in owns the installation. Afterwards only that account can sign in to manage it. To give it to another account, delete its data from **Settings** or remove the volume.
+- The Watch page shows the address and pairing code to enter on the watch, taken from the address you opened the page with. Use the computer's IP address rather than its name: watches often cannot look up local computer names.
+
+Traffic is plain HTTP, so anyone on the same network could read setup, sessions, watch credentials, and music in transit. That is the intended tradeoff for a home network. Do not forward port 80 from your router. Use the HTTPS routes below if the network is shared or the companion must be reachable from outside.
+
+To upgrade, run `git pull` and `docker compose up -d --build` again. Paired watches and settings are kept.
+
+The rest of this guide covers advanced installations: HTTPS, a public domain, a reverse proxy, or Tailscale Funnel.
+
 ## Requirements
 
 For an always-on deployment, use a Linux amd64 or arm64 host with Docker Engine and the Compose v2 plugin, Git, Python 3, and enough persistent storage. For local persistent development, macOS Docker Desktop is also supported by the helper below. Build on the target architecture. Plex Media Server must be reachable from the container and able to serve/transcode the owner's music. `localhost` inside a container is the container, not the Plex host: use Plex's reachable LAN address or DNS name. Keep Plex authentication enabled.
 
-Trusted HTTPS on port 443 is the default. A private tailnet-only URL cannot be accessed directly by a Garmin watch. Choose a public domain, a home-LAN domain whose DNS resolves to a reachable LAN proxy, or the optional Tailscale Funnel route below. For a home network you control, you may instead explicitly opt into an HTTP private IPv4 origin; it needs no DNS or certificate but exposes setup links, browser sessions, watch credentials, and media in transit on that LAN. Set the companion origin to the exact address the browser and watch use. None of these routes requires making Plex itself anonymously accessible.
+Plain HTTP on the home network, described above, is the default. A private tailnet-only URL cannot be accessed directly by a Garmin watch. For HTTPS, choose a public domain, a home-LAN domain whose DNS resolves to a reachable LAN proxy, or the optional Tailscale Funnel route below, and set `SYNCANDRUN_BASE_URL` to the exact address the browser and watch use. None of these routes requires making Plex itself anonymously accessible.
 
 ## Repeatable local deployment
 
@@ -82,26 +103,9 @@ The reverse proxy may run on a different host from the companion. In that case, 
 
 Verify the complete route from a device on the watch's Wi-Fi: DNS answer, certificate, `/health/ready`, owner authentication, pairing, artwork, and a sustained audio download. Check that the endpoint is inaccessible from outside the LAN if home-only access is intended. A valid certificate and a healthy proxy do not prove that the watch accepts the route; complete [physical acceptance](VALIDATION.md#physical-acceptance--awaiting-the-watch-owner) on the Forerunner. If the watch-visible origin changes later, pair the watch again.
 
-## Opt-in HTTP on a home LAN
+## Plain HTTP behind a reverse proxy
 
-For a trusted home network, the operator can use one numeric address for both the browser and watch. This is an explicit security tradeoff: anyone who can observe or modify traffic on that LAN can read setup links, browser session cookies, watch bearer credentials, pairing traffic, and media. Use the HTTPS routes above if the LAN is shared or untrusted. The companion still requires Plex authentication; the HTTP option does not make anonymous management available.
-
-Choose a stable RFC 1918 IPv4 address for the LAN proxy, such as `192.168.1.20`. Port 80 must be reachable from the phone or computer used for browser setup and from the watch's Wi-Fi. Keep the companion's Docker port bound to loopback and put a reverse proxy on the LAN address. Do not forward port 80 from the router or expose the proxy on a public interface. Adapt [the LAN Caddy example](../deploy/Caddyfile.lan-http.example) for a proxy on the same host; for a different companion host, replace its loopback upstream with a private authenticated, certificate-verified HTTPS upstream such as Tailscale Serve. The proxy must not disable upstream TLS verification. Restrict the proxy to home-LAN clients with the host firewall and router policy.
-
-Run the helper with the HTTP opt-in flag and the address the watch will enter:
-
-```sh
-python3 scripts/deploy-local.py \
-  --origin http://192.168.1.20 \
-  --allow-lan-http \
-  --project syncandrun-personal \
-  --port 3000 \
-  --state-dir "$HOME/.local/state/syncandrun-personal"
-```
-
-For a manual installation, pass the same `--origin` and `--allow-lan-http` to `scripts/setup-deployment.py`. The flag is required for a private-IP HTTP origin and is rejected with an HTTPS origin. The generated environment records `SYNCANDRUN_ALLOW_LAN_HTTP=true`. Keep the IP and port stable: changing the origin requires the watch to pair again. Enter only `192.168.1.20` using **Settings → Home LAN IP** on the watch; the editor supplies `http://`. Garmin Connect settings can also send the full `http://192.168.1.20` address to the watch. Use a static DHCP lease or fixed address so it does not drift.
-
-Verify `/health/ready` and that anonymous `/api/v1/settings` returns 401 from another home-LAN device. Complete Plex login and owner setup in the browser, then pair and sync on the physical watch over home Wi-Fi. A local HTTP response or a successful browser login does not establish Garmin HTTP, transfer, or offline playback compatibility. Verify the address is unreachable from outside the LAN.
+The quick start serves plain HTTP directly and needs no proxy. If you already run a reverse proxy on the home network and want it in front of the companion, publish the companion on loopback with `SYNCANDRUN_BIND_ADDRESS=127.0.0.1 SYNCANDRUN_PORT=3000` and point the proxy at `127.0.0.1:3000`. [The LAN Caddy example](../deploy/Caddyfile.lan-http.example) shows the shape. Pairing still uses whatever address the browser and watch reach the proxy on.
 
 ## HTTPS without a domain or router access
 
@@ -122,24 +126,9 @@ Use the current [Funnel CLI reference](https://tailscale.com/docs/reference/tail
 
 ## Assign the owner
 
-The initial unauthenticated visitor cannot claim the service. The owner creates a private, single-use setup link from inside the container:
+The first Plex account to finish signing in owns the installation. Afterwards only that account can manage it, and other accounts are refused before any session is issued. Sign in as the owner before exposing an installation beyond your home network, so nobody else can claim it first.
 
-```sh
-docker compose exec companion node companion/dist/operator.js setup-link --output /tmp/setup-link.txt
-```
-
-Retrieve `/tmp/setup-link.txt` to a private local file (mode 0600) using an owner-controlled terminal. For example:
-
-```sh
-umask 077
-container_id=$(docker compose ps -q companion)
-docker cp "$container_id:/tmp/setup-link.txt" ./setup-link.txt
-chmod 600 ./setup-link.txt
-```
-
-The link expires after 30 minutes. The owner opens it and connects their Plex account, then selects server, library, playlists, and transcode quality and pairs one or more watches. Subsequent management requires the same Plex identity. Delete both copies of the link after use. A new setup link is refused after an owner exists. Do not put setup links in public issues or automated logs.
-
-For an existing installation upgraded from a version without owner authentication, prior browser sessions are invalidated. The trusted administrator must issue the setup link to the original Plex account owner before management resumes. Existing library data and watch credentials are retained. To assign a different person, create a fresh installation instead.
+An installation upgraded from a version without owner authentication loses its previous browser sessions and keeps its library data and watch credentials; the next Plex sign-in claims it. To give an installation to a different person, delete its data from **Settings** or create a fresh installation.
 
 Verify `/health/ready` externally, that anonymous management is denied, that a different Plex account cannot manage the installation, and that the watch can sync. Record physical-watch tests separately from container health.
 
@@ -177,4 +166,4 @@ The restore runs as the container's node user so restored files remain accessibl
 3. Run `docker compose up -d --wait --wait-timeout 120`, check health, owner login, and sync. Keep the previous image and backup until validated. Do not run image pruning during the rollback window.
 4. To roll back, stop ingress and the new service. Restore the pre-upgrade environment/data into a new project using the old image and matching source, then validate and switch ingress. Simply running old code against a migrated database is not a supported rollback.
 
-To transfer ownership, disable ingress, back up the old installation, stop it, and create a fresh project with a fresh secret and empty volume. Issue a new setup link and pair watches again. Do not delete volumes as a troubleshooting shortcut. Intentional retirement can remove the old project's data only after the administrator has decided the backup is sufficient.
+To transfer ownership, disable ingress, back up the old installation, stop it, and create a fresh project with a fresh secret and empty volume. The new owner signs in first; pair watches again. Do not delete volumes as a troubleshooting shortcut. Intentional retirement can remove the old project's data only after the administrator has decided the backup is sufficient.

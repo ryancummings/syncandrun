@@ -4,11 +4,23 @@ Sync existing Plex music playlists to a Garmin Forerunner 955 / Solar, then list
 
 **Preview:** physical-watch acceptance for this source version is incomplete. This is not a stable release or a Connect IQ Store listing. See [validation and limitations](docs/VALIDATION.md).
 
-## Deploy
+## Quick start
 
-Follow [the deployment guide](docs/DEPLOYMENT.md) for Linux amd64 or arm64 with Docker Compose. It covers public and home-LAN HTTPS domains, an opt-in home-LAN HTTP address, and optional Tailscale Funnel. The chosen route needs physical-watch testing, including sustained audio transfer.
+On a computer on your home network that is always on, with Docker installed:
 
-The setup helper generates a private encryption secret. The service binds to loopback behind the chosen proxy. An operator-created, single-use setup link assigns the installation owner; later management requires that owner's Plex account.
+```sh
+git clone https://github.com/ryancummings/syncandrun.git
+cd syncandrun
+docker compose up -d --build
+```
+
+Then:
+
+1. Open `http://<that computer's IP address>` in a browser, for example `http://192.168.1.20`.
+2. Select **Sign in with Plex**. The first Plex account to sign in owns this SyncAndRun; only that account can manage it afterwards.
+3. Choose your playlists, then select **Next: pair your watch** and follow the three steps shown. They include the exact address and code to enter on the watch.
+
+Nothing else needs configuring. The companion answers on port 80 over plain HTTP, which suits a home network: anyone on that network could read the traffic. To use another port, run `SYNCANDRUN_PORT=8080 docker compose up -d --build`; the Watch page then shows the address with its port. The [deployment guide](docs/DEPLOYMENT.md) also covers HTTPS, public domains, reverse proxies, backups, and upgrades.
 
 Each installation serves its owner’s one Plex account, server, and music library, and can pair multiple watches belonging to that owner. [Agent deployment instructions](docs/AGENT_DEPLOYMENT.md) cover preparation, checks, recovery, and handoff without maintainer-private tools.
 
@@ -41,7 +53,7 @@ docs/       Deployment, development, architecture, protocol, validation
 
 Plex credentials stay in the companion and are encrypted using the operator secret. The watch holds a revocable companion credential. Audio streams through the companion without a persistent audio cache. Protect the secret and database backups together. Read [SECURITY.md](SECURITY.md) and [PRIVACY.md](PRIVACY.md) before exposing an installation.
 
-Use trusted HTTPS by default. An operator can explicitly opt into HTTP on a private home-LAN IP; that exposes setup links, browser sessions, watch credentials, and media in transit on the LAN. SyncAndRun includes no analytics, advertising, or telemetry. Third-party Plex, Garmin, and optional tunnel services have their own data handling.
+The default home installation uses plain HTTP, which exposes browser sessions, watch credentials, and media in transit to others on the same network; the deployment guide covers HTTPS. SyncAndRun includes no analytics, advertising, or telemetry. Third-party Plex, Garmin, and optional tunnel services have their own data handling.
 
 ## License
 
