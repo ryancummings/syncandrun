@@ -140,14 +140,19 @@ module SyncAndRun {
 			if (!d_view.advance()) { return true; }
 
 			// A saved code is a claim, not a pairing. The reconciler exchanges
-			// it on the next sync and clears it once a token is stored.
+			// it during a sync, which runs over Wi-Fi; requests made from this
+			// menu would go through the phone, which may refuse plain HTTP.
 			Application.Storage.setValue(PAIRING_CODE_KEY, d_view.code());
+			var syncNow = (new Client()).validOrigin();
 
 			// Replace rather than pop-then-push: the confirmation takes the
 			// picker's place in one step, so Back returns to the menu the
 			// picker was opened from whatever the stack depth is.
-			WatchUi.switchToView(new TextView(WatchUi.loadResource(Rez.Strings.PairingPicker_saved)),
+			WatchUi.switchToView(new TextView(WatchUi.loadResource(syncNow
+					? Rez.Strings.PairingPicker_saved
+					: Rez.Strings.PairingPicker_savedManual)),
 				null, WatchUi.SLIDE_IMMEDIATE);
+			if (syncNow) { Menu.Playback.onSyncNow(); }
 			return true;
 		}
 

@@ -86,12 +86,12 @@ module SyncAndRun {
             d_metadataTracks = 0;
             d_metadataTotalTracks = 0;
             d_lastPercentage = 0;
-            if (!d_client.validOrigin()) { finishWithMessage("Set a companion server address."); return; }
+            if (!d_client.validOrigin()) { finishWithMessage("Set the server in Settings > Server address."); return; }
             notifyStatus("Preparing", 0, 0, 0, 0, 0);
             if (!(State.token() instanceof Lang.String)) {
                 var code = pairingCode();
                 if (code == null) {
-                    finishWithMessage("Create and enter a pairing code.");
+                    finishWithMessage("Pair this watch in Settings > Pair watch.");
                     return;
                 }
                 notifyStatus("Pairing", 0, 0, 1, 0, 0);

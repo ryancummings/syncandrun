@@ -16,31 +16,28 @@ module SyncAndRun {
 				if ($.debug) {
 					System.println("Menu.Settings::load()");
 				}
+				// Setup order: where the server is, then pairing. Anything else
+				// is for unusual installations or troubleshooting.
 				return MenuBase.setItems([
 					{
-						LABEL => WatchUi.loadResource(Rez.Strings.CompanionServer_label),
+						LABEL => WatchUi.loadResource(Rez.Strings.OriginEditor_title),
 						SUBLABEL => method(:companionServer),
-						METHOD => method(:onEditCompanion),
-					},
-					{
-						LABEL => WatchUi.loadResource(Rez.Strings.OriginEditor_advanced),
-						SUBLABEL => WatchUi.loadResource(Rez.Strings.OriginEditor_advancedHint),
-						METHOD => method(:onEditCompanionAdvanced),
-					},
-					{
-						LABEL => WatchUi.loadResource(Rez.Strings.OriginEditor_lanTitle),
-						SUBLABEL => WatchUi.loadResource(Rez.Strings.OriginEditor_lanHint),
 						METHOD => method(:onEditLanIp),
-					},
-					{
-						LABEL => WatchUi.loadResource(Rez.Strings.CompanionTest_label),
-						SUBLABEL => method(:connectionStatus),
-						METHOD => method(:onTestCompanion),
 					},
 					{
 						LABEL => WatchUi.loadResource(Rez.Strings.PairWatch_label),
 						SUBLABEL => method(:pairingState),
 						METHOD => method(:onPairWatch),
+					},
+					{
+						LABEL => WatchUi.loadResource(Rez.Strings.OtherAddress_label),
+						SUBLABEL => WatchUi.loadResource(Rez.Strings.OtherAddress_hint),
+						METHOD => method(:onEditCompanion),
+					},
+					{
+						LABEL => WatchUi.loadResource(Rez.Strings.CompanionTest_label),
+						SUBLABEL => method(:connectionStatus),
+						METHOD => method(:onTestCompanion),
 					},
 					{
 						LABEL => WatchUi.loadResource(Rez.Strings.Profile_label),

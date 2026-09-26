@@ -41,16 +41,14 @@ module SyncAndRun {
             return (separators == 3) && (digits > 0) && (octet <= 255);
         }
 
-        function validPrivateLanIpv4(host) {
-            if (!validCompanionIpv4(host)) { return false; }
-            var firstDot = host.find(".");
-            var first = host.substring(0, firstDot).toNumber();
-            if (first == 10) { return true; }
-            var rest = host.substring(firstDot + 1, null);
-            var secondDot = rest.find(".");
-            var second = rest.substring(0, secondDot).toNumber();
-            return (first == 192 && second == 168)
-                || (first == 172 && second >= 16 && second <= 31);
+        // What the Server address editor accepts: an IPv4 address with an
+        // optional port, such as 192.168.1.20 or 192.168.1.20:3000.
+        function validIpv4Authority(authority) {
+            if (!(authority instanceof Lang.String)) { return false; }
+            var colon = authority.find(":");
+            if (colon == null) { return validCompanionIpv4(authority); }
+            return validCompanionIpv4(authority.substring(0, colon))
+                && validCompanionPort(authority.substring(colon + 1, null));
         }
 
         function validCompanionHost(host) {
@@ -74,13 +72,14 @@ module SyncAndRun {
         }
 
         // Accept a hostname or IPv4 address, with an optional explicit HTTP(S)
-        // scheme and port. Hostname-only input defaults to HTTPS. Paths and other
+        // scheme and port. A bare IPv4 address defaults to HTTP, as a home
+        // companion serves it; a bare hostname defaults to HTTPS. Paths and other
         // URL features remain unsupported so every saved value is an origin.
         function normalize(value) {
             if (!(value instanceof Lang.String)) { return null; }
             var candidate = value.toLower();
             if (candidate.length() > 253) { return null; }
-            var scheme = "https://";
+            var scheme = validIpv4Authority(candidate) ? "http://" : "https://";
             var authority = candidate;
             if ((candidate.length() >= 8) && candidate.substring(0, 8).equals("https://")) {
                 authority = candidate.substring(8, null);

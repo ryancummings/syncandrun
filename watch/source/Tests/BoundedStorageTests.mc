@@ -454,17 +454,19 @@ module BoundedStorageTests {
         Test.assertEqual("https://music.example.test", SyncAndRun.CompanionOrigin.normalize("Music.Example.Test"));
         Test.assertEqual("https://music.example.test", SyncAndRun.CompanionOrigin.normalize("HTTPS://MUSIC.EXAMPLE.TEST"));
         Test.assertEqual("http://music.example.test", SyncAndRun.CompanionOrigin.normalize("HTTP://MUSIC.EXAMPLE.TEST"));
-        Test.assertEqual("https://192.168.1.20", SyncAndRun.CompanionOrigin.normalize("192.168.1.20"));
+        Test.assertEqual("http://192.168.1.20", SyncAndRun.CompanionOrigin.normalize("192.168.1.20"));
+        Test.assertEqual("http://192.168.1.20:3000", SyncAndRun.CompanionOrigin.normalize("192.168.1.20:3000"));
+        Test.assertEqual("https://192.168.1.20", SyncAndRun.CompanionOrigin.normalize("https://192.168.1.20"));
         Test.assertEqual("http://192.168.1.20:3000", SyncAndRun.CompanionOrigin.normalize("http://192.168.1.20:3000"));
-        Test.assert(SyncAndRun.CompanionOrigin.validPrivateLanIpv4("10.4.13.21"));
-        Test.assert(SyncAndRun.CompanionOrigin.validPrivateLanIpv4("172.31.0.1"));
-        Test.assert(SyncAndRun.CompanionOrigin.validPrivateLanIpv4("192.168.1.20"));
-        Test.assert(!SyncAndRun.CompanionOrigin.validPrivateLanIpv4("172.32.0.1"));
-        Test.assert(!SyncAndRun.CompanionOrigin.validPrivateLanIpv4("8.8.8.8"));
-        Test.assert(!SyncAndRun.CompanionOrigin.validPrivateLanIpv4("010.0.0.1"));
-        Test.assert(!SyncAndRun.CompanionOrigin.validPrivateLanIpv4("0192.168.1.20"));
-        Test.assert(!SyncAndRun.CompanionOrigin.validPrivateLanIpv4("192.168.1.020"));
-        Test.assert(!SyncAndRun.CompanionOrigin.validPrivateLanIpv4("192.168.1.0000"));
+        Test.assert(SyncAndRun.CompanionOrigin.validIpv4Authority("10.4.13.21"));
+        Test.assert(SyncAndRun.CompanionOrigin.validIpv4Authority("172.32.0.1"));
+        Test.assert(SyncAndRun.CompanionOrigin.validIpv4Authority("192.168.1.20:3000"));
+        Test.assert(!SyncAndRun.CompanionOrigin.validIpv4Authority("192.168.1.20:"));
+        Test.assert(!SyncAndRun.CompanionOrigin.validIpv4Authority("192.168.1.20:70000"));
+        Test.assert(!SyncAndRun.CompanionOrigin.validIpv4Authority("010.0.0.1"));
+        Test.assert(!SyncAndRun.CompanionOrigin.validIpv4Authority("0192.168.1.20"));
+        Test.assert(!SyncAndRun.CompanionOrigin.validIpv4Authority("192.168.1.020"));
+        Test.assert(!SyncAndRun.CompanionOrigin.validIpv4Authority("192.168.1.0000"));
         Test.assertEqual("https://music.example.test:8443", SyncAndRun.CompanionOrigin.normalize("https://music.example.test:8443"));
         Test.assert(SyncAndRun.CompanionOrigin.normalize("https://music.example.test/path") == null);
         Test.assert(SyncAndRun.CompanionOrigin.normalize("http://music.example.test:0") == null);
@@ -580,13 +582,14 @@ module BoundedStorageTests {
         editor.adjust(1);
         Test.assertEqual("SAVE", editor.selectedLabel());
 
-        // The home-LAN entry starts on HTTP and offers only digits and dots.
+        // The Server address entry starts on HTTP and offers only digits,
+        // dots, and a colon for an optional port.
         editor = new SyncAndRun.CompanionOriginEditor("https://music.example.test", true);
         Test.assertEqual("http://", editor.candidate());
         Test.assert(editor.selectCharacter("1"));
         Test.assertEqual(SyncAndRun.ORIGIN_EDITOR_NO_ACTION, editor.activate());
         Test.assert(!editor.selectCharacter("a"));
-        Test.assert(!editor.appendCharacter(":"));
+        Test.assert(!editor.appendCharacter("a"));
         Test.assert(editor.appendCharacter("0"));
         Test.assert(editor.appendCharacter("."));
         Test.assertEqual("http://10.", editor.candidate());
@@ -596,6 +599,8 @@ module BoundedStorageTests {
         Test.assertEqual("http://", editor.scheme());
         editor = new SyncAndRun.CompanionOriginEditor("http://192.168.1.20", true);
         Test.assertEqual("192.168.1.20", editor.authority());
+        editor = new SyncAndRun.CompanionOriginEditor("http://192.168.1.20:3000", true);
+        Test.assertEqual("192.168.1.20:3000", editor.authority());
         return true;
     }
 }

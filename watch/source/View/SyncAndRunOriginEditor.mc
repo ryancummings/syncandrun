@@ -5,7 +5,7 @@ using Toybox.WatchUi;
 module SyncAndRun {
 
 	const ORIGIN_EDITOR_CHARACTERS = "abcdefghijklmnopqrstuvwxyz0123456789.-:";
-	const ORIGIN_EDITOR_LAN_CHARACTERS = "0123456789.";
+	const ORIGIN_EDITOR_LAN_CHARACTERS = "0123456789.:";
 	const ORIGIN_EDITOR_SAVE = 1;
 	const ORIGIN_EDITOR_CANCEL = 2;
 	const ORIGIN_EDITOR_NO_ACTION = 0;
@@ -35,7 +35,7 @@ module SyncAndRun {
 			if (d_lanMode) {
 				if ((candidate.length() >= 7) && candidate.substring(0, 7).equals("http://")) {
 					var host = candidate.substring(7, null);
-					if (CompanionOrigin.validCompanionIpv4(host)) { d_authority = host; }
+					if (CompanionOrigin.validIpv4Authority(host)) { d_authority = host; }
 				}
 				return;
 			}
@@ -206,7 +206,7 @@ module SyncAndRun {
 			}
 			if (action != ORIGIN_EDITOR_SAVE) { return true; }
 
-			if ((d_view.isLanMode() && !CompanionOrigin.validPrivateLanIpv4(d_view.authority()))
+			if ((d_view.isLanMode() && !CompanionOrigin.validIpv4Authority(d_view.authority()))
 				|| !CompanionOrigin.save(d_view.candidate())) {
 				WatchUi.pushView(new TextView(WatchUi.loadResource(Rez.Strings.CompanionOrigin_invalid)),
 					null, WatchUi.SLIDE_IMMEDIATE);
