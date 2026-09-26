@@ -90,6 +90,29 @@ module SetupTests {
     }
 
     (:test)
+    function connectionCheckRunsOnceWithoutReplacingANormalSync(logger) {
+        var key = SyncAndRun.CompanionConnectionTest.REQUEST_KEY;
+        var previous = Application.Storage.getValue(key);
+        var resultKey = SyncAndRun.CompanionConnectionTest.RESULT_KEY;
+        var previousResult = Application.Storage.getValue(resultKey);
+        try {
+            Application.Storage.setValue(key, true);
+            Test.assert(SyncAndRun.CompanionConnectionTest.takeRequest());
+            Test.assert(!SyncAndRun.CompanionConnectionTest.takeRequest());
+            SyncAndRun.CompanionConnectionTest.saveResult("Ready on Wi-Fi");
+            Test.assertEqual("Ready on Wi-Fi", (new SyncAndRun.Menu.Settings()).connectionStatus());
+            SyncAndRun.CompanionConnectionTest.clearResult();
+            Test.assert(SyncAndRun.CompanionConnectionTest.result() == null);
+        } finally {
+            if (previous == null) { Application.Storage.deleteValue(key); }
+            else { Application.Storage.setValue(key, previous); }
+            if (previousResult == null) { Application.Storage.deleteValue(resultKey); }
+            else { Application.Storage.setValue(resultKey, previousResult); }
+        }
+        return true;
+    }
+
+    (:test)
     function addressPickerStartsFromHomePrefixAndResumesSavedAddress(logger) {
         var picker = new SyncAndRun.AddressPicker(null, true);
         Test.assertEqual("http://192.168.1.0", picker.origin());

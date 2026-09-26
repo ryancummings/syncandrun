@@ -70,6 +70,8 @@ module SyncAndRun {
 			}
 
 			function connectionStatus() {
+				var result = SyncAndRun.CompanionConnectionTest.result();
+				if (result instanceof Lang.String) { return result; }
 				return (new SyncAndRun.Client()).validOrigin() ? "Ready to check" : "Address required";
 			}
 
@@ -105,7 +107,7 @@ module SyncAndRun {
 						null, WatchUi.SLIDE_IMMEDIATE);
 					return;
 				}
-				(new SyncAndRun.CompanionConnectionTest()).start();
+				SyncAndRun.CompanionConnectionTest.start();
 			}
 
 			function pairingState() {
