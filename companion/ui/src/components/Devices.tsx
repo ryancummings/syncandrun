@@ -629,6 +629,8 @@ export function watchAddress(location: Pick<Location, "protocol" | "hostname" | 
 export function WatchSteps({ pairing }: { pairing: { code: string; expiresAt: string } | null }) {
   const address = watchAddress();
   const nameOnly = !/^\d{1,3}(\.\d{1,3}){3}$/.test(window.location.hostname);
+  const watchDigits = address.ip === null ? null : window.location.hostname.split(".")
+    .map((part) => part.padStart(3, "0")).join(".");
   return (
     <ol className="steps watch-steps" aria-live="polite">
       <li>
@@ -639,7 +641,9 @@ export function WatchSteps({ pairing }: { pairing: { code: string; expiresAt: st
         {address.ip !== null ? (
           <>
             Enter the server address <strong className="mono phosphor">{address.ip}</strong>. The watch
-            continues to the pairing code on its own.
+            uses three digits for each part: enter <strong className="mono">{watchDigits}</strong> for the
+            address shown. If the address has a port, set it on the watch's review screen.
+            It continues to the pairing code on its own.
           </>
         ) : (
           <>

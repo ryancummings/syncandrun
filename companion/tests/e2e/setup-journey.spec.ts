@@ -22,8 +22,11 @@ test("completes setup, playlist selection, pairing, naming, live status, and del
   await expect(page.getByLabel("Fixture Shared")).toBeDisabled();
   await expect(page.getByText("This playlist exceeds the 10,000-track safety limit and cannot be added.")).toBeVisible();
   await page.getByLabel("Fixture Favorites").check();
-  await page.getByRole("button", { name: "Save playlist selection" }).click();
-  await expect(page.getByText("Playlist selection saved.")).toBeAttached();
+  await page.getByLabel("Fixture Favorites").uncheck();
+  await page.getByLabel("Fixture Favorites").check();
+  await expect(page.getByRole("button", { name: "Save playlist selection" })).toHaveCount(0);
+  await expect(page.getByText("Saved. Pending the next watch sync.")).toBeVisible();
+  await expect(page.locator(".worklist-status").getByText("Pending sync")).toBeVisible();
 
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   // The settings console mixes state it only reports with state it can change,
@@ -40,6 +43,7 @@ test("completes setup, playlist selection, pairing, naming, live status, and del
   // With no watch paired, the page opens on a ready code and the exact address.
   await expect(page.getByRole("heading", { name: "Pair your watch" })).toBeVisible();
   await expect(page.locator(".watch-steps").getByText("127.0.0.1:34117")).toBeVisible();
+  await expect(page.locator(".watch-steps").getByText("127.000.000.001")).toBeVisible();
   const code = (await page.locator(".pairing-code").innerText()).trim();
   expect(code).toMatch(/^[0-9]{6}$/);
   const deviceToken = await page.evaluate(async (pairingCode) => {
@@ -97,6 +101,9 @@ test("completes setup, playlist selection, pairing, naming, live status, and del
   }, deviceToken);
 
   await expect(page.getByText("Sync applied", { exact: false }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Playlists", exact: true }).click();
+  await expect(page.locator(".worklist-status").getByText("Synced")).toBeVisible();
+  await page.getByRole("button", { name: "Watch", exact: true }).click();
   // The finished card still names the last track it transferred.
   await expect(page.getByText("Fixture One", { exact: false }).first()).toBeVisible();
   expect(await cardHeight()).toBe(idleHeight);
@@ -140,6 +147,73 @@ test("completes setup, playlist selection, pairing, naming, live status, and del
   await page.getByRole("button", { name: "Delete all local data" }).click();
   await page.getByRole("button", { name: "Confirm deletion" }).click();
   await expect(page.getByRole("button", { name: "Sign in with Plex" })).toBeVisible();
+});
+
+test("shows a failed automatic playlist save and retries it", async ({ page }) => {
+  await page.goto("/");
+  const popupPromise = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Sign in with Plex" }).click();
+  const popup = await popupPromise;
+  await expect(popup.getByText("SyncAndRun fixture authorization complete.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Plex playlists" })).toBeVisible();
+
+  let attempts = 0;
+  await page.route("**/api/v1/playlists/selection", async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({
+        error: { message: "Fixture save failed." }
+      }) });
+    } else {
+      await route.continue();
+    }
+  });
+
+  await page.getByLabel("Fixture Favorites").check();
+  await expect(page.getByText("Fixture save failed.")).toBeVisible();
+  await expect(page.locator(".worklist-status").getByText("Not saved")).toBeVisible();
+  await page.getByRole("button", { name: "Retry save" }).click();
+  await expect(page.getByText("Saved. Pending the next watch sync.")).toBeVisible();
+  expect(attempts).toBe(2);
+
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Delete all local data" }).click();
+  await page.getByRole("button", { name: "Confirm deletion" }).click();
+  await expect(page.getByRole("button", { name: "Sign in with Plex" })).toBeVisible();
+});
+
+test("saves the final checkbox state after a change during an in-flight save", async ({ page }) => {
+  await page.goto("/");
+  const popupPromise = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Sign in with Plex" }).click();
+  const popup = await popupPromise;
+  await expect(popup.getByText("SyncAndRun fixture authorization complete.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Plex playlists" })).toBeVisible();
+
+  let startFirst!: () => void;
+  const firstStarted = new Promise<void>((resolve) => { startFirst = resolve; });
+  let releaseFirst!: () => void;
+  const firstRelease = new Promise<void>((resolve) => { releaseFirst = resolve; });
+  let attempts = 0;
+  await page.route("**/api/v1/playlists/selection", async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      startFirst();
+      await firstRelease;
+    }
+    await route.continue();
+  });
+
+  await page.getByLabel("Fixture Favorites").check();
+  await firstStarted;
+  await page.getByLabel("Fixture Favorites").uncheck();
+  releaseFirst();
+  await expect.poll(async () => page.evaluate(async () => {
+    const result = await (await fetch("/api/v1/playlists")).json() as { playlists: Array<{ selected: boolean }> };
+    return result.playlists.some((playlist) => playlist.selected);
+  })).toBe(false);
+  await expect.poll(() => attempts).toBe(2);
+  await expect(page.getByText("Select playlists to save them automatically.")).toBeVisible();
 });
 
 test("switches between the console and printout themes and remembers the choice", async ({ page }) => {

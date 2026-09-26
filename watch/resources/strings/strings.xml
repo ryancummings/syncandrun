@@ -78,6 +78,7 @@
     <string id="Setup_help">On your computer, open the SyncAndRun Watch page. Enter the address and 6-digit code it shows.</string>
     <string id="Setup_pairing">Pairing over Wi-Fi.\nMusic starts syncing next.</string>
     <string id="AddressPicker_change">UP/DOWN change digit</string>
+    <string id="AddressPicker_threeDigits">3 digits per part: 010 = 10</string>
     <string id="AddressPicker_next">START next, BACK back</string>
     <string id="AddressPicker_save">START to save</string>
     <string id="AddressPicker_port">UP/DOWN change port</string>

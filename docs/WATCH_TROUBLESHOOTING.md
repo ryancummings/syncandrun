@@ -8,7 +8,7 @@ Open SyncAndRun from the watch's Music menu. Garmin opens its own player first; 
 
 Choose **Set up watch** and follow the two steps. Each step opens the next one on its own:
 
-1. **Server address.** Enter the address from the companion's Watch page, not the Plex server address. Four digit wheels start at `192.168.1.0`: UP/DOWN changes the underlined digit, START moves to the next digit, and BACK returns to the previous one. A review screen follows. START saves the address on the standard HTTP port 80; UP or DOWN on the review screen changes the port first.
+1. **Server address.** Enter the address from the companion's Watch page, not the Plex server address. Each number uses three digit wheels: enter `010.004.013.024` for `10.4.13.24`. Four digit wheels start at `192.168.1.0`: UP/DOWN changes the underlined digit, START moves to the next digit, and BACK returns to the previous one. The review screen shows the ordinary address without leading zeroes. START saves it on the standard HTTP port 80; UP or DOWN on the review screen changes the port first.
 2. **Pairing code.** Create a fresh code on the Watch page and enter its six digits the same way. START on the last digit saves the code, pairs over Wi-Fi, and starts the first sync. Codes expire after ten minutes.
 
 If setup stops part-way, **Set up watch** reopens at the next unfinished step. **Settings -> Server address** and **Settings -> Pair watch** change either value later. **Settings -> Test connection** checks that the companion answers. A new address requires pairing again and keeps cached audio.

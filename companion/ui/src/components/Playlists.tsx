@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
 import { api, errorMessage, type Playlist, type Profile, type SyncStatus } from "../api";
 import { formatBytes, formatDuration, formatRemaining } from "../format";
 import { Notice, PlaylistIcon, Readout, SectionLabel } from "./primitives";
@@ -10,12 +9,14 @@ export function Playlists({
   csrf,
   profile,
   status,
+  manifestRevision,
   announce,
   onPairWatch
 }: {
   csrf: string;
   profile: Profile;
   status: SyncStatus | null;
+  manifestRevision: string | null;
   announce: (message: string) => void;
   /** Offered once playlists are saved and no watch is paired yet. */
   onPairWatch: () => void;
@@ -26,6 +27,8 @@ export function Playlists({
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const [savedRevision, setSavedRevision] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -52,31 +55,40 @@ export function Playlists({
   const throughputBps = status?.devices[0]?.estimate.throughputBps ?? null;
   const estimatedMs = throughputBps === null ? null : Math.round((estimatedBytes * 8000) / throughputBps);
   const dirty = selected.size !== saved.size || [...selected].some((id) => !saved.has(id));
+  const expectedRevision = savedRevision ?? manifestRevision;
+  const fullySynced = !dirty && expectedRevision !== null && status !== null
+    && status.plan.manifestRevision === expectedRevision && status.devices.length > 0
+    && status.devices.every((device) => device.upToDate);
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      await api("/api/v1/playlists/selection", {
+  // Let quick checkbox changes settle, then serialize writes. A change made
+  // during a request remains in selected and is saved after that request ends.
+  useEffect(() => {
+    if (!loaded || !dirty || busy || saveFailed) return;
+    const timer = window.setTimeout(() => {
+      const choice = new Set(selected);
+      setBusy(true);
+      void api<{ manifestRevision: string }>("/api/v1/playlists/selection", {
         method: "POST",
         csrf,
-        body: { selectedPlaylistIds: [...selected] }
-      });
-      announce("Playlist selection saved.");
-      await load();
-    } catch (cause) {
-      setError(errorMessage(cause, "Playlist selection failed."));
-    } finally {
-      setBusy(false);
-    }
-  }
+        body: { selectedPlaylistIds: [...choice] }
+      }).then((result) => {
+        setSaved(choice);
+        setSavedRevision(result.manifestRevision);
+        announce("Playlist selection saved. Sync the watch to apply it.");
+      }).catch((cause) => {
+        setError(errorMessage(cause, "Playlist selection failed."));
+        setSaveFailed(true);
+      }).finally(() => setBusy(false));
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [announce, busy, csrf, dirty, loaded, saveFailed, selected]);
 
   async function refresh() {
     setBusy(true);
     setError(null);
     try {
-      await api("/api/v1/playlists/refresh", { method: "POST", csrf });
+      const result = await api<{ manifestRevision: string }>("/api/v1/playlists/refresh", { method: "POST", csrf });
+      setSavedRevision(result.manifestRevision);
       announce("Plex playlists refreshed.");
       await load();
     } catch (cause) {
@@ -94,7 +106,7 @@ export function Playlists({
           <h1 className="display display-lg">Plex playlists</h1>
           <p className="meta">Select whole audio playlists. Track browsing and playlist editing stay in Plex.</p>
         </div>
-        <button type="button" className="btn" disabled={busy} onClick={() => void refresh()}>
+        <button type="button" className="btn" disabled={busy || dirty} onClick={() => void refresh()}>
           Refresh from Plex
         </button>
       </div>
@@ -113,7 +125,7 @@ export function Playlists({
         />
       </div>
 
-      <form onSubmit={submit}>
+      <div>
         {loaded && playlists.length === 0 && (
           <p className="empty">No audio playlists were found in this Plex library.</p>
         )}
@@ -147,7 +159,9 @@ export function Playlists({
                     )}
                   </span>
                   <span className="worklist-status">
-                    {isSelected && <span className="tag tag-accent">Synced</span>}
+                    {isSelected && <span className="tag tag-accent">
+                      {saveFailed ? "Not saved" : dirty ? "Saving" : fullySynced ? "Synced" : "Pending sync"}
+                    </span>}
                   </span>
                   <span className="worklist-actions worklist-check">
                     <span className="check-hit">
@@ -158,14 +172,16 @@ export function Playlists({
                         checked={isSelected}
                         disabled={locked}
                         aria-label={playlist.title}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          setSaveFailed(false);
+                          setError(null);
                           setSelected((current) => {
                             const next = new Set(current);
                             if (event.target.checked) next.add(playlist.id);
                             else next.delete(playlist.id);
                             return next;
-                          })
-                        }
+                          });
+                        }}
                       />
                     </span>
                   </span>
@@ -176,21 +192,24 @@ export function Playlists({
         )}
         <div className="panel-actions spread">
           <p className="meta">
-            {dirty ? "Unsaved changes. Watches pick up the new selection on their next sync." : "Selection matches the companion manifest."}
+            {saveFailed ? "Selection was not saved. Retry to send it to the companion."
+              : dirty ? "Saving selection…"
+                : saved.size > 0 ? (fullySynced ? "All paired watches have this selection." : "Saved. Pending the next watch sync.")
+                  : "Select playlists to save them automatically."}
           </p>
           <div className="actions">
-            {!dirty && saved.size > 0 && status !== null && status.devices.length === 0 ? (
+            {saveFailed ? (
+              <button type="button" className="btn btn-primary" onClick={() => { setSaveFailed(false); setError(null); }}>
+                Retry save
+              </button>
+            ) : !dirty && saved.size > 0 && status !== null && status.devices.length === 0 ? (
               <button type="button" className="btn btn-primary" onClick={onPairWatch}>
                 Next: pair your watch
               </button>
-            ) : (
-              <button className="btn btn-primary" disabled={busy || !dirty}>
-                Save playlist selection
-              </button>
-            )}
+            ) : null}
           </div>
         </div>
-      </form>
+      </div>
     </section>
   );
 }
