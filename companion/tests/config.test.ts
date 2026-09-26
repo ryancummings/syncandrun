@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -17,7 +17,7 @@ describe("runtime configuration", () => {
       SYNCANDRUN_SECRET: "a".repeat(32),
       SYNCANDRUN_DATA_DIR: "./data-test"
     });
-    expect(config.baseUrl.href).toBe("https://music.example.test/");
+    expect(config.baseUrl?.href).toBe("https://music.example.test/");
     expect(config.artworkBaseUrl?.href).toBe("https://art.example.test/");
     expect(config.port).toBe(3000);
     expect(config.host).toBe("127.0.0.1");
@@ -91,26 +91,29 @@ describe("runtime configuration", () => {
   );
 
   it.each([
-    ["http://music.example.test", "HTTPS origin"],
     ["https://music.example.test/path", "without credentials, path"],
-    ["https://music.example.test:8443", "nonstandard port"],
-    ["not a url", "valid HTTPS origin"]
+    ["ftp://music.example.test", "http:// or https:// origin"],
+    ["not a url", "http:// or https:// origin"]
   ])("rejects an invalid base URL: %s", (baseUrl, expectedMessage) => {
     expect(() => loadConfig({ SYNCANDRUN_BASE_URL: baseUrl, SYNCANDRUN_SECRET: "a".repeat(32) })).toThrow(
       expectedMessage
     );
   });
 
-  it("allows an HTTP origin only with explicit private-LAN opt-in", () => {
-    const environment = { SYNCANDRUN_SECRET: "a".repeat(32), SYNCANDRUN_ALLOW_LAN_HTTP: "true" };
-    expect(loadConfig({ ...environment, SYNCANDRUN_BASE_URL: "http://192.168.1.20" }).baseUrl.origin)
-      .toBe("http://192.168.1.20");
-    for (const origin of ["http://8.8.8.8", "http://127.0.0.1", "http://example.test",
-      "http://192.168.1.20:3000", "https://music.example.test"]) {
-      expect(() => loadConfig({ ...environment, SYNCANDRUN_BASE_URL: origin })).toThrow("SYNCANDRUN_BASE_URL");
+  it.each(["http://192.168.1.20", "http://192.168.1.20:3000", "http://nas.local", "https://music.example.test:8443"])(
+    "accepts an HTTP or HTTPS base URL on any host and port: %s", (origin) => {
+      expect(loadConfig({ SYNCANDRUN_SECRET: "a".repeat(32), SYNCANDRUN_BASE_URL: origin }).baseUrl?.origin).toBe(origin);
     }
-    expect(() => loadConfig({ SYNCANDRUN_SECRET: environment.SYNCANDRUN_SECRET,
-      SYNCANDRUN_BASE_URL: "http://192.168.1.20" })).toThrow("HTTPS origin");
+  );
+
+  it("needs no configuration: the address follows each request and the secret is generated once", async () => {
+    const root = await mkdtemp(join(tmpdir(), "syncandrun-config-"));
+    temporaryDirectories.push(root);
+    const first = loadConfig({ SYNCANDRUN_DATA_DIR: root });
+    expect(first.baseUrl).toBeUndefined();
+    expect(Buffer.byteLength(first.secret, "utf8")).toBeGreaterThanOrEqual(32);
+    expect((await stat(join(root, "secret"))).mode & 0o777).toBe(0o600);
+    expect(loadConfig({ SYNCANDRUN_DATA_DIR: root }).secret).toBe(first.secret);
   });
 
   it("rejects weak secrets without echoing them", () => {

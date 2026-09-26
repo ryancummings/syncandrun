@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type Database from "better-sqlite3";
 
 export class OwnerAuthorizationError extends Error {
-  constructor() { super("Use a valid setup link or sign in as this installation's owner."); }
+  constructor() { super("This SyncAndRun already belongs to another Plex account. Sign in with that account."); }
 }
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 
@@ -26,30 +26,26 @@ export class OwnerRepository {
       { plex_user_id: string } | undefined)?.plex_user_id;
   }
 
-  checkStart(token: string | undefined, now: Date): void {
-    if (this.owner() !== undefined && token === undefined) return;
-    if (token === undefined || !/^[A-Za-z0-9_-]{43}$/.test(token) || this.owner() !== undefined ||
-      !this.database.prepare("SELECT 1 FROM setup_invitation WHERE id=1 AND token_hash=? AND expires_at>? AND session_id IS NULL")
-        .get(digest(token), now.toISOString())) throw new OwnerAuthorizationError();
-  }
+  /**
+   * Anyone may start a Plex sign-in. Before an owner exists the first account
+   * to finish claims the installation; afterwards only that account is let in
+   * (see `claim`). A home companion therefore needs no setup link, but an
+   * operator-issued one still works.
+   */
+  checkStart(_token: string | undefined, _now: Date): void {}
 
   reserve(token: string | undefined, sessionId: string, now: Date): void {
-    this.checkStart(token, now);
-    if (token !== undefined) {
-      const changed = this.database.prepare("UPDATE setup_invitation SET session_id=? WHERE id=1 AND token_hash=? AND session_id IS NULL AND expires_at>?")
-        .run(sessionId, digest(token), now.toISOString());
-      if (changed.changes !== 1) throw new OwnerAuthorizationError();
-    }
+    if (token === undefined || this.owner() !== undefined) return;
+    // A stale or mistyped link does not block setup; it just is not used.
+    this.database.prepare("UPDATE setup_invitation SET session_id=? WHERE id=1 AND token_hash=? AND session_id IS NULL AND expires_at>?")
+      .run(sessionId, digest(token), now.toISOString());
   }
 
-  claim(userId: string, sessionId: string, now: Date): void {
+  claim(userId: string, _sessionId: string, _now: Date): void {
     const owner = this.owner();
     if (owner !== undefined) {
       if (owner !== userId) throw new OwnerAuthorizationError();
       return;
-    }
-    if (!this.database.prepare("SELECT 1 FROM setup_invitation WHERE id=1 AND session_id=? AND expires_at>?").get(sessionId, now.toISOString())) {
-      throw new OwnerAuthorizationError();
     }
     this.database.prepare("INSERT INTO installation_owner(id, plex_user_id) VALUES (1, ?)").run(userId);
     this.database.prepare("DELETE FROM setup_invitation").run();

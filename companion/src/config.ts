@@ -1,9 +1,9 @@
-import { constants } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { constants, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { access, mkdir, open, unlink } from "node:fs/promises";
 import { isIP } from "node:net";
 import { resolve } from "node:path";
 import { z } from "zod";
-import { isPrivateLanHttpUrl } from "./lan-http.js";
 
 const logLevelSchema = z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]);
 /** Subnet keywords understood by Fastify's proxy-address parser. */
@@ -43,14 +43,12 @@ const trustProxySchema = z
     return entries;
   });
 
+const optionalString = z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional());
+
 const environmentSchema = z.object({
-  SYNCANDRUN_BASE_URL: z.string().min(1),
-  SYNCANDRUN_ALLOW_LAN_HTTP: z.enum(["true", "false"]).default("false"),
-  SYNCANDRUN_ARTWORK_BASE_URL: z.preprocess(
-    (value) => value === "" ? undefined : value,
-    z.string().min(1).optional()
-  ),
-  SYNCANDRUN_SECRET: z.string().refine((value) => Buffer.byteLength(value, "utf8") >= 32, {
+  SYNCANDRUN_BASE_URL: optionalString,
+  SYNCANDRUN_ARTWORK_BASE_URL: optionalString,
+  SYNCANDRUN_SECRET: optionalString.refine((value) => value === undefined || Buffer.byteLength(value, "utf8") >= 32, {
     message: "must contain at least 32 bytes"
   }),
   SYNCANDRUN_DATA_DIR: z.string().min(1).default("/data"),
@@ -63,7 +61,12 @@ const environmentSchema = z.object({
 });
 
 export interface RuntimeConfig {
-  baseUrl: URL;
+  /**
+   * The address browsers and watches use, when the operator pins one. Without
+   * it the companion answers on whatever address a request arrived at, so a
+   * home installation works on its LAN IP with no configuration.
+   */
+  baseUrl?: URL;
   artworkBaseUrl?: URL;
   secret: string;
   dataDir: string;
@@ -97,19 +100,41 @@ function parseHttpsOrigin(value: string, variable: "SYNCANDRUN_BASE_URL" | "SYNC
   return new URL(url.origin);
 }
 
-function parseBaseOrigin(value: string, allowLanHttp: boolean): URL {
-  if (!allowLanHttp) return parseHttpsOrigin(value, "SYNCANDRUN_BASE_URL");
+function parseBaseOrigin(value: string): URL {
   let url: URL;
   try {
     url = new URL(value);
   } catch {
-    throw new Error("SYNCANDRUN_BASE_URL must be a private IPv4 HTTP origin when LAN HTTP is enabled");
+    throw new Error("SYNCANDRUN_BASE_URL must be an http:// or https:// origin");
   }
-  if (!isPrivateLanHttpUrl(url) || url.username !== "" || url.password !== "" || url.search !== ""
-      || url.hash !== "" || (url.pathname !== "" && url.pathname !== "/")) {
-    throw new Error("SYNCANDRUN_BASE_URL must be a private IPv4 HTTP origin on port 80 without credentials, path, query, or fragment when LAN HTTP is enabled");
+  if ((url.protocol !== "http:" && url.protocol !== "https:") || url.username !== "" || url.password !== ""
+      || url.search !== "" || url.hash !== "" || (url.pathname !== "" && url.pathname !== "/")) {
+    throw new Error("SYNCANDRUN_BASE_URL must be an http:// or https:// origin without credentials, path, query, or fragment");
   }
   return new URL(url.origin);
+}
+
+/**
+ * Reuses the secret generated on first start, or creates one. Plex credentials
+ * are encrypted with it, so it lives beside the database it protects.
+ */
+function persistentSecret(dataDir: string): string {
+  const path = resolve(dataDir, "secret");
+  try {
+    return readFileSync(path, "utf8").trim();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  const secret = randomBytes(32).toString("hex");
+  try {
+    writeFileSync(path, `${secret}\n`, { flag: "wx", mode: 0o600 });
+  } catch (error) {
+    // Another process created it first; use theirs.
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") return readFileSync(path, "utf8").trim();
+    throw error;
+  }
+  return secret;
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): RuntimeConfig {
@@ -123,11 +148,13 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Runtim
   const artworkBaseUrl = parsed.data.SYNCANDRUN_ARTWORK_BASE_URL === undefined
     ? undefined
     : parseHttpsOrigin(parsed.data.SYNCANDRUN_ARTWORK_BASE_URL, "SYNCANDRUN_ARTWORK_BASE_URL");
+  const baseUrl = parsed.data.SYNCANDRUN_BASE_URL === undefined ? undefined : parseBaseOrigin(parsed.data.SYNCANDRUN_BASE_URL);
+  const dataDir = resolve(parsed.data.SYNCANDRUN_DATA_DIR);
   return {
-    baseUrl: parseBaseOrigin(parsed.data.SYNCANDRUN_BASE_URL, parsed.data.SYNCANDRUN_ALLOW_LAN_HTTP === "true"),
+    ...(baseUrl === undefined ? {} : { baseUrl }),
     ...(artworkBaseUrl === undefined ? {} : { artworkBaseUrl }),
-    secret: parsed.data.SYNCANDRUN_SECRET,
-    dataDir: resolve(parsed.data.SYNCANDRUN_DATA_DIR),
+    secret: parsed.data.SYNCANDRUN_SECRET ?? persistentSecret(dataDir),
+    dataDir,
     host: parsed.data.SYNCANDRUN_HOST,
     port: parsed.data.SYNCANDRUN_PORT,
     logLevel: parsed.data.SYNCANDRUN_LOG_LEVEL,

@@ -133,6 +133,7 @@ export interface SyncStatus {
 
 export interface PlexConnection {
   uri: string;
+  local: boolean;
   relay: boolean;
 }
 
