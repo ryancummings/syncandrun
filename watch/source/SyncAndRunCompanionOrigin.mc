@@ -121,6 +121,7 @@ module SyncAndRun {
             Application.Storage.setValue(STORAGE_KEY, origin);
             Application.Properties.setValue("companion_url", origin);
             if (!(previous instanceof Lang.String) || !previous.equals(origin)) {
+                CompanionConnectionTest.clearResult();
                 // Credentials belong to one companion. Preserve cached audio, but
                 // require a fresh claim before the new server can change it.
                 State.clearPairing();

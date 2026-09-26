@@ -63,6 +63,7 @@ module SyncAndRun {
         }
 
         function start() {
+            var connectionCheck = CompanionConnectionTest.takeRequest();
             d_cancelled = false;
             d_revision = null;
             d_run = 0;
@@ -87,6 +88,11 @@ module SyncAndRun {
             d_metadataTotalTracks = 0;
             d_lastPercentage = 0;
             if (!d_client.validOrigin()) { finishWithMessage("Not set up. Choose Set up watch."); return; }
+            if (connectionCheck) {
+                notifyStatus("Checking companion over Wi-Fi", 0, 0, 0, 0, 0);
+                d_client.health(method(:onConnectionCheck));
+                return;
+            }
             notifyStatus("Preparing", 0, 0, 0, 0, 0);
             if (!(State.token() instanceof Lang.String)) {
                 var code = pairingCode();
@@ -99,6 +105,24 @@ module SyncAndRun {
                 return;
             }
             requestConfig();
+        }
+
+        function onConnectionCheck(responseCode, data) {
+            if (d_cancelled) { return; }
+            if ((responseCode == 200) && (data instanceof Lang.Dictionary)
+                && (data["status"] instanceof Lang.String) && data["status"].equals("ok")) {
+                CompanionConnectionTest.saveResult("Ready on Wi-Fi");
+                SyncStatus.update("Companion ready on Wi-Fi", 0, 0, 100, null, d_counts);
+                d_notifyComplete.invoke(null);
+                return;
+            }
+            if ((responseCode >= 200) && (responseCode < 600)) {
+                CompanionConnectionTest.saveResult("Companion not ready");
+                finishWithMessage("Companion answered but is not ready.");
+                return;
+            }
+            CompanionConnectionTest.saveResult("Cannot reach over Wi-Fi");
+            finishWithMessage("Cannot reach companion over watch Wi-Fi.");
         }
 
         function stop() {

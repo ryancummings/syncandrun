@@ -143,6 +143,9 @@ module SyncAndRun {
 				hints = [Rez.Strings.AddressPicker_change, Rez.Strings.AddressPicker_next];
 			} else {
 				drawAddress(dc, width, height);
+				dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+				dc.drawText(width / 2, (height * 3) / 10, small,
+					WatchUi.loadResource(Rez.Strings.AddressPicker_threeDigits), Graphics.TEXT_JUSTIFY_CENTER);
 				hints = [Rez.Strings.AddressPicker_change, Rez.Strings.AddressPicker_next];
 			}
 

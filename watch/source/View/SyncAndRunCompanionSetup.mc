@@ -1,3 +1,4 @@
+using Toybox.Application;
 using Toybox.Lang;
 using Toybox.WatchUi;
 
@@ -53,30 +54,28 @@ module SyncAndRun {
 		function onCancel() { return true; }
 	}
 
-	class CompanionConnectionTest {
-
-		private var d_view;
-
-		function initialize() {
-			d_view = new TextView(WatchUi.loadResource(Rez.Strings.CompanionTest_checking));
-		}
+	// A playback-menu web request can travel through the phone, which may
+	// reject home-LAN HTTP. Test through the same Wi-Fi sync context as pairing.
+	module CompanionConnectionTest {
+		const REQUEST_KEY = "syncandrun.connection_check_requested";
+		const RESULT_KEY = "syncandrun.connection_check_result";
 
 		function start() {
-			WatchUi.pushView(d_view, null, WatchUi.SLIDE_IMMEDIATE);
-			(new Client()).health(method(:onResponse));
+			Application.Storage.deleteValue(RESULT_KEY);
+			Application.Storage.setValue(REQUEST_KEY, true);
+			Menu.Playback.onSyncNow();
 		}
 
-		function onResponse(responseCode, data) {
-			if ((responseCode == 200) && (data instanceof Lang.Dictionary)
-				&& (data["status"] instanceof Lang.String) && data["status"].equals("ok")) {
-				d_view.setText(WatchUi.loadResource(Rez.Strings.CompanionTest_ready) + "\n" + companionAddress());
-				return;
-			}
-			if ((responseCode >= 200) && (responseCode < 600)) {
-				d_view.setText(WatchUi.loadResource(Rez.Strings.CompanionTest_notReady));
-				return;
-			}
-			d_view.setText(WatchUi.loadResource(Rez.Strings.CompanionTest_unreachable));
+		function result() { return Application.Storage.getValue(RESULT_KEY); }
+
+		function saveResult(value) { Application.Storage.setValue(RESULT_KEY, value); }
+
+		function clearResult() { Application.Storage.deleteValue(RESULT_KEY); }
+
+		function takeRequest() {
+			var requested = Application.Storage.getValue(REQUEST_KEY) == true;
+			Application.Storage.deleteValue(REQUEST_KEY);
+			return requested;
 		}
 	}
 }

@@ -140,6 +140,7 @@ export function App() {
               csrf={csrf}
               profile={settings?.transcodeProfile ?? "balanced"}
               status={status}
+              manifestRevision={settings?.manifestRevision ?? null}
               announce={(message) => {
                 announce(message);
                 void loadSettings();
