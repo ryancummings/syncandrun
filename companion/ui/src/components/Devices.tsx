@@ -53,10 +53,13 @@ export function Devices({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [loaded, setLoaded] = useState(false);
+
   const load = useCallback(async () => {
     try {
       setDevices((await api<{ devices: Device[] }>("/api/v1/devices")).devices);
       setError(null);
+      setLoaded(true);
     } catch (cause) {
       setError(errorMessage(cause, "Paired watches could not be loaded."));
     }
@@ -81,7 +84,7 @@ export function Devices({
     (entry) => entry.live !== null && entry.live.finishedStatus === null
   ).length;
 
-  async function createCode() {
+  const createCode = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
@@ -97,7 +100,13 @@ export function Devices({
     } finally {
       setBusy(false);
     }
-  }
+  }, [announce, csrf, refreshStatus]);
+
+  // The first visit with no watch goes straight to a usable code.
+  const firstWatch = loaded && active.length === 0;
+  useEffect(() => {
+    if (firstWatch && pairing === null) void createCode();
+  }, [firstWatch, pairing, createCode]);
 
   async function mutate(action: () => Promise<unknown>, success: string, failure: string) {
     setBusy(true);
@@ -154,23 +163,21 @@ export function Devices({
         <div className="panel-head">
           <div>
             <SectionLabel>Garmin connection</SectionLabel>
-            <h2 className="display display-lg">Paired watches</h2>
-            <p className="meta">Create a six-character code, then enter it in SyncAndRun on your watch.</p>
+            <h2 className="display display-lg">{active.length === 0 ? "Pair your watch" : "Paired watches"}</h2>
+            <p className="meta">
+              {active.length === 0
+                ? "Three steps on the watch, with it on the same Wi-Fi as this computer."
+                : "To add another watch, create a code and follow the same steps on it."}
+            </p>
           </div>
           <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void createCode()}>
-            Create pairing code
+            {pairing === null ? "Create pairing code" : "New code"}
           </button>
         </div>
 
         {error !== null && <Notice tone="error">{error}</Notice>}
 
-        {pairing !== null && (
-          <div className="panel crt" style={{ marginBottom: "1.25rem" }} aria-live="polite">
-            <p className="readout-label">Pairing code</p>
-            <strong className="pairing-code phosphor">{pairing.code}</strong>
-            <p className="meta mono">Expires {formatDate(pairing.expiresAt)}</p>
-          </div>
-        )}
+        {(pairing !== null || active.length === 0) && <WatchSteps pairing={pairing} />}
 
         {active.length === 0 && <p className="empty">No watches are paired yet.</p>}
         {active.length > 0 && (
@@ -584,5 +591,63 @@ function DeviceDetail({ device, history }: { device: Device; history: SyncHistor
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * What to type on the watch. The browser's address bar is the only reliable
+ * source: inside Docker the companion cannot see the host's LAN address.
+ */
+export function watchAddress(location: Pick<Location, "protocol" | "hostname" | "port"> = window.location): {
+  /** Digits for the watch's Server address editor, when the default editor fits. */
+  ip: string | null;
+  /** The full address, for Other address. */
+  origin: string;
+} {
+  const origin = `${location.protocol}//${location.hostname}${location.port === "" ? "" : `:${location.port}`}`;
+  const ipv4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(location.hostname);
+  return { ip: ipv4 && location.protocol === "http:" && location.port === "" ? location.hostname : null, origin };
+}
+
+export function WatchSteps({ pairing }: { pairing: { code: string; expiresAt: string } | null }) {
+  const address = watchAddress();
+  const nameOnly = !/^\d{1,3}(\.\d{1,3}){3}$/.test(window.location.hostname);
+  return (
+    <ol className="steps watch-steps" aria-live="polite">
+      <li>
+        Install SyncAndRun on the watch, then open <span className="mono">Music → SyncAndRun → Settings</span>.
+      </li>
+      <li>
+        {address.ip !== null ? (
+          <>
+            Choose <span className="mono">Server address</span> and enter{" "}
+            <strong className="mono phosphor">{address.ip}</strong>.
+          </>
+        ) : (
+          <>
+            Choose <span className="mono">Other address</span> and enter{" "}
+            <strong className="mono phosphor">{address.origin}</strong>.
+          </>
+        )}
+        {nameOnly && (
+          <span className="meta">
+            {" "}
+            Watches often cannot look up computer names; if pairing fails, open this page by the computer&apos;s IP
+            address instead and use the address shown then.
+          </span>
+        )}
+      </li>
+      <li>
+        Choose <span className="mono">Pair watch</span> and enter the code below. The watch pairs and starts
+        syncing over Wi-Fi on its own.
+        {pairing !== null && (
+          <div className="panel crt" style={{ margin: "0.75rem 0 0" }}>
+            <p className="readout-label">Pairing code</p>
+            <strong className="pairing-code phosphor">{pairing.code}</strong>
+            <p className="meta mono">Expires {formatDate(pairing.expiresAt)}</p>
+          </div>
+        )}
+      </li>
+    </ol>
   );
 }
