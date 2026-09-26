@@ -1,0 +1,6 @@
+# Opt-in HTTP for browser setup and watch sync on a trusted home LAN. Replace
+# the LAN address and upstream. Restrict clients with the host firewall too.
+http://192.168.1.20 {
+    bind 192.168.1.20
+    reverse_proxy 127.0.0.1:3000
+}

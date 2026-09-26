@@ -3,7 +3,7 @@
     <string id="settingsCompanion_title">Companion</string>
     <string id="settingsCompanion_description">Optional shortcut for entering the companion address and pairing code. Both can also be entered directly on the watch.</string>
     <string id="CompanionUrl">Companion URL</string>
-    <string id="CompanionUrl_prompt">The address of your companion. HTTPS is recommended; HTTP, IPv4 addresses, and ports are supported. Enter an origin with no path, for example http://192.168.1.20:3000</string>
+    <string id="CompanionUrl_prompt">The address of your companion. HTTPS is the default. Home-LAN HTTP needs operator opt-in. Enter an origin with no path, for example http://192.168.1.20</string>
     <string id="CompanionUrl_error">Enter an http:// or https:// origin with no path, query, credentials, or trailing slash.</string>
     <string id="PairingCode">Pairing code</string>
     <string id="PairingCode_prompt">Six digits from the companion's Watch page. Single use, expires in ten minutes, and clears itself once claimed. You can also enter it on the watch under Settings, Pair watch.</string>
@@ -56,6 +56,9 @@
     <string id="OriginEditor_cancel">CANCEL</string>
     <string id="OriginEditor_useHttp">USE HTTP</string>
     <string id="OriginEditor_useHttps">USE HTTPS</string>
+    <string id="OriginEditor_lanHttp">LAN HTTP</string>
+    <string id="OriginEditor_lanTitle">Home LAN IP</string>
+    <string id="OriginEditor_lanHint">HTTP on home Wi-Fi</string>
     <string id="OriginEditor_choose">Up/Down choose; Select</string>
     <string id="OriginEditor_back">Back deletes; empty exits</string>
     <string id="OriginEditor_advanced">Advanced editor</string>

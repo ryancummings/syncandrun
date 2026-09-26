@@ -122,6 +122,9 @@ export function CompanionSettings({
           pair from <span className="mono">Settings → Pair watch</span> on the watch itself.
         </p>
         <CopyField label="Companion address" value={settings?.companionUrl ?? null} announce={announce} />
+        {settings?.companionUrl.startsWith("http://") && (
+          <Notice tone="error">Home-LAN HTTP is unencrypted. Keep this address on your trusted Wi-Fi; setup links, browser sessions, watch credentials, and music can be read by others on that network.</Notice>
+        )}
         <ol className="steps">
           <li>
             Open Garmin Connect on your phone, then your watch → <span className="mono">Music</span> →{" "}
@@ -129,7 +132,7 @@ export function CompanionSettings({
             wording moves between Connect releases; Garmin Express on a computer reaches the same screen.
           </li>
           <li>
-            Put the address above in <span className="mono">Companion HTTPS URL</span> and save. Connect pushes the
+            Put the address above in <span className="mono">Companion URL</span> and save. Connect pushes the
             setting to the watch over Bluetooth, which is not instant.
           </li>
           <li>

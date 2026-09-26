@@ -28,6 +28,11 @@ module SyncAndRun {
 						METHOD => method(:onEditCompanionAdvanced),
 					},
 					{
+						LABEL => WatchUi.loadResource(Rez.Strings.OriginEditor_lanTitle),
+						SUBLABEL => WatchUi.loadResource(Rez.Strings.OriginEditor_lanHint),
+						METHOD => method(:onEditLanIp),
+					},
+					{
 						LABEL => WatchUi.loadResource(Rez.Strings.CompanionTest_label),
 						SUBLABEL => method(:connectionStatus),
 						METHOD => method(:onTestCompanion),
@@ -83,7 +88,13 @@ module SyncAndRun {
 			function onEditCompanionAdvanced() {
 				var origin = SyncAndRun.CompanionOrigin.current();
 				if (!(origin instanceof Lang.String)) { origin = "https://"; }
-				var view = new SyncAndRun.CompanionOriginEditor(origin);
+				var view = new SyncAndRun.CompanionOriginEditor(origin, false);
+				WatchUi.pushView(view, new SyncAndRun.CompanionOriginEditorDelegate(view),
+					WatchUi.SLIDE_IMMEDIATE);
+			}
+
+			function onEditLanIp() {
+				var view = new SyncAndRun.CompanionOriginEditor(SyncAndRun.CompanionOrigin.current(), true);
 				WatchUi.pushView(view, new SyncAndRun.CompanionOriginEditorDelegate(view),
 					WatchUi.SLIDE_IMMEDIATE);
 			}

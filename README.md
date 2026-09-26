@@ -6,9 +6,9 @@ Sync existing Plex music playlists to a Garmin Forerunner 955 / Solar, then list
 
 ## Deploy
 
-Follow [the deployment guide](docs/DEPLOYMENT.md) for Linux amd64 or arm64 with Docker Compose. It covers a domain with Caddy and an optional Tailscale Funnel route that needs no domain purchase or router changes. Tunnel audio compatibility remains subject to physical-watch testing.
+Follow [the deployment guide](docs/DEPLOYMENT.md) for Linux amd64 or arm64 with Docker Compose. It covers public and home-LAN HTTPS domains, an opt-in home-LAN HTTP address, and optional Tailscale Funnel. The chosen route needs physical-watch testing, including sustained audio transfer.
 
-The setup helper generates a private encryption secret. The service binds to loopback behind HTTPS. An operator-created, single-use setup link assigns the installation owner; later management requires that owner's Plex account.
+The setup helper generates a private encryption secret. The service binds to loopback behind the chosen proxy. An operator-created, single-use setup link assigns the installation owner; later management requires that owner's Plex account.
 
 Each installation serves its owner’s one Plex account, server, and music library, and can pair multiple watches belonging to that owner. [Agent deployment instructions](docs/AGENT_DEPLOYMENT.md) cover preparation, checks, recovery, and handoff without maintainer-private tools.
 
@@ -41,7 +41,7 @@ docs/       Deployment, development, architecture, protocol, validation
 
 Plex credentials stay in the companion and are encrypted using the operator secret. The watch holds a revocable companion credential. Audio streams through the companion without a persistent audio cache. Protect the secret and database backups together. Read [SECURITY.md](SECURITY.md) and [PRIVACY.md](PRIVACY.md) before exposing an installation.
 
-Use trusted HTTPS for deployment. The watch's HTTP option is for development and exposes credentials and media in transit. SyncAndRun includes no analytics, advertising, or telemetry. Third-party Plex, Garmin, and optional tunnel services have their own data handling.
+Use trusted HTTPS by default. An operator can explicitly opt into HTTP on a private home-LAN IP; that exposes setup links, browser sessions, watch credentials, and media in transit on the LAN. SyncAndRun includes no analytics, advertising, or telemetry. Third-party Plex, Garmin, and optional tunnel services have their own data handling.
 
 ## License
 

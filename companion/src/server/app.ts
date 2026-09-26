@@ -39,7 +39,9 @@ export function buildApp(
   });
   registerBrowserUiRoutes(app);
   const liveSync = browserDependencies?.liveSync ?? new LiveSyncTracker();
-  const plexSetup = browserDependencies?.plexSetup ?? new PlexSetupService(database.connection, config.secret);
+  const plexSetup = browserDependencies?.plexSetup ?? new PlexSetupService(database.connection, config.secret, {
+    allowLanHttp: config.baseUrl.protocol === "http:"
+  });
   const devices = new DeviceRepository(database.connection, config.secret);
   registerWatchRoutes(
     app,

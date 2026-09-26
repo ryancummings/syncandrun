@@ -21,6 +21,7 @@ module SyncAndRun {
             var separators = 0;
             var digits = 0;
             var octet = 0;
+            var leadingZero = false;
             for (var idx = 0; idx < host.length(); ++idx) {
                 var character = host.substring(idx, idx + 1);
                 if (character.equals(".")) {
@@ -28,14 +29,28 @@ module SyncAndRun {
                     separators += 1;
                     digits = 0;
                     octet = 0;
+                    leadingZero = false;
                 } else {
                     var digit = "0123456789".find(character);
-                    if (digit == null) { return false; }
+                    if ((digit == null) || (digits >= 3) || (digits == 1 && leadingZero)) { return false; }
+                    if (digits == 0) { leadingZero = digit == 0; }
                     octet = (octet * 10) + digit;
                     digits += 1;
                 }
             }
             return (separators == 3) && (digits > 0) && (octet <= 255);
+        }
+
+        function validPrivateLanIpv4(host) {
+            if (!validCompanionIpv4(host)) { return false; }
+            var firstDot = host.find(".");
+            var first = host.substring(0, firstDot).toNumber();
+            if (first == 10) { return true; }
+            var rest = host.substring(firstDot + 1, null);
+            var secondDot = rest.find(".");
+            var second = rest.substring(0, secondDot).toNumber();
+            return (first == 192 && second == 168)
+                || (first == 172 && second >= 16 && second <= 31);
         }
 
         function validCompanionHost(host) {

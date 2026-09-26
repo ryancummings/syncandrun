@@ -187,12 +187,12 @@ export function Setup({ onReady }: { onReady: (csrf: string) => void }) {
       <div className="readout-grid" style={{ margin: "1.5rem 0" }}>
         <Readout label="Endpoint" value={window.location.host} />
         <Readout label="Transport" value={secure ? "HTTPS" : "HTTP"} />
-        <Readout label="Watch pairing" value={secure ? "Available" : "Blocked"} />
+        <Readout label="Transport security" value={secure ? "Encrypted" : "Unencrypted LAN"} />
       </div>
       {!secure && (
         <Notice tone="error">
-          A publicly trusted HTTPS endpoint is required before a watch can pair. Setup can continue, but pairing will
-          not work over plain HTTP.
+          Local HTTP requires an explicit private-LAN deployment opt-in. Setup links, browser sessions, watch credentials, and media
+          can be read by others on this network. Use this address only on a home LAN you control.
         </Notice>
       )}
       <Notice>First setup requires a private setup link from the host. After setup, only the installation owner can sign in.</Notice>

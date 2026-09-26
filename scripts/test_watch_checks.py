@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
-"""Test Make's failure propagation with fake tools; this does not test a watch."""
+"""Test Make's failure propagation with fake tools; this does not test a watch.
+
+Connect IQ SDK 9.2.0 monkeydo exits 1 after both passing and failing test runs,
+so the fakes treat 1 as ordinary and any other status as a crash.
+"""
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
+
+
+TRUE = shutil.which("true")
 
 
 class WatchCheckFailurePropagation(unittest.TestCase):
@@ -31,13 +39,14 @@ if name == os.environ.get('VERIFY_TEST_FAILED_PROFILE'):
     sys.exit(1)
 print('PASSED (passed=1, failed=0, errors=0)')
 if os.environ.get('VERIFY_TEST_CRASH') == '1':
-    sys.exit(1)
+    sys.exit(2)
+sys.exit(1)
 """)
             for tool in (root / "bin").iterdir():
                 tool.chmod(0o755)
             env = dict(os.environ, PATH=f"{root / 'bin'}:{os.environ['PATH']}")
             command = ["make", "watch-memory-profile", f"CIQ_HOME={root}",
-                       "MONKEYC=/bin/true", f"GARMIN_KEY={root / 'developer.der'}",
+                       f"MONKEYC={TRUE}", f"GARMIN_KEY={root / 'developer.der'}",
                        f"WATCH_MEMORY_OUTPUT={root / 'profile.prg'}"]
             crashed = subprocess.run(command, cwd=Path(__file__).resolve().parent.parent,
                                      env=dict(env, VERIFY_TEST_CRASH="1"),
@@ -68,12 +77,13 @@ if os.environ.get('VERIFY_TEST_CRASH') == '1':
             for tool in (root / "bin").iterdir():
                 tool.chmod(0o755)
             command = ["make", "watch-test", f"CIQ_HOME={root}",
-                       "MONKEYC=/bin/true", f"GARMIN_KEY={root / 'developer.der'}",
+                       f"MONKEYC={TRUE}", f"GARMIN_KEY={root / 'developer.der'}",
                        f"WATCH_TEST_OUTPUT={root / 'tests.prg'}"]
             for passed, failed, errors, status, accepted in (
                     (1, 0, 0, 0, True), (12, 0, 0, 0, True),
-                    (0, 0, 0, 0, False), (1, 1, 0, 0, False),
-                    (1, 0, 1, 0, False), (1, 0, 0, 1, False)):
+                    (35, 0, 0, 1, True), (0, 0, 0, 0, False),
+                    (1, 1, 0, 0, False), (1, 0, 1, 0, False),
+                    (35, 1, 0, 1, False), (1, 0, 0, 2, False)):
                 with self.subTest(passed=passed, failed=failed, errors=errors, status=status):
                     environment = dict(os.environ,
                         PATH=f"{root / 'bin'}:{os.environ['PATH']}",

@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
@@ -16,13 +17,35 @@ deployment = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(deployment)
 
 
+class SetupGeneratorTests(unittest.TestCase):
+    def test_private_lan_http_requires_explicit_opt_in(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "companion.env"
+            command = [sys.executable, str(Path(__file__).with_name("setup-deployment.py")),
+                       "--project", "test-instance", "--output", str(output)]
+            for origin, opt_in in (("http://192.168.1.20", False),
+                                   ("http://8.8.8.8", True),
+                                   ("https://music.example.test", True)):
+                result = subprocess.run(command + ["--origin", origin]
+                                        + (["--allow-lan-http"] if opt_in else []),
+                                        capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(output.exists())
+            result = subprocess.run(command + ["--origin", "http://192.168.1.20", "--allow-lan-http"],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            values = deployment.read_environment(output)
+            self.assertEqual(values["SYNCANDRUN_BASE_URL"], "http://192.168.1.20")
+            self.assertEqual(values["SYNCANDRUN_ALLOW_LAN_HTTP"], "true")
+
+
 class DeploymentTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.args = argparse.Namespace(project="test-instance", origin="https://music.example.test",
-                                       port=34318, upgrade_after_backup=False)
+                                       port=34318, upgrade_after_backup=False, allow_lan_http=False)
         self.revision = "a" * 40
         self.cached = False
         self.collisions = ""
@@ -67,6 +90,7 @@ class DeploymentTests(unittest.TestCase):
             path = Path(args[args.index("--output") + 1])
             path.write_text(f"COMPOSE_PROJECT_NAME={self.args.project}\n"
                             f"SYNCANDRUN_BASE_URL={self.args.origin}\n"
+                            f"SYNCANDRUN_ALLOW_LAN_HTTP={'true' if self.args.allow_lan_http else 'false'}\n"
                             f"SYNCANDRUN_PORT={self.args.port}\n"
                             "SYNCANDRUN_BIND_ADDRESS=127.0.0.1\n"
                             f"SYNCANDRUN_SECRET={'fixture-secret-' * 4}\n")
@@ -86,6 +110,16 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(sum(call[:2] == ("docker", "build") for call in self.calls), 1)
         self.assertEqual(json.loads((self.root / "deployment.json").read_text())["image_id"], "sha256:fixture")
         self.assertTrue(any("--no-build" in call and "never" in call for call in self.calls))
+
+    def test_private_lan_http_requires_and_preserves_explicit_opt_in(self):
+        self.args.origin = "http://192.168.1.20"
+        self.args.allow_lan_http = True
+        self.deploy()
+        self.assertTrue(any("--allow-lan-http" in call for call in self.calls))
+        self.assertIn("SYNCANDRUN_ALLOW_LAN_HTTP=true", (self.root / "companion.env").read_text())
+        self.args.allow_lan_http = False
+        with self.assertRaisesRegex(RuntimeError, "Requested identity differs"):
+            self.deploy()
 
     def test_existing_project_is_not_adopted(self):
         self.collisions = "unrelated-container"

@@ -1,6 +1,6 @@
 # Preview validation
 
-This source preview is not a stable hardware-qualified release. Automated checks cannot prove offline Bluetooth playback, behavior during an activity, battery use, or the watch's compatibility with a particular tunnel certificate.
+This source preview is not a stable hardware-qualified release. Automated checks cannot prove offline Bluetooth playback, behavior during an activity, battery use, or the watch's compatibility with a particular network route.
 
 ## Automated gate
 
@@ -25,7 +25,7 @@ For a public deployment, additionally verify that a visitor without a setup link
 
 All items below require a new result tied to the preview commit and deployment. Historical development results are not evidence for this build. Record firmware, source commit, artifact SHA-256, deployment method, result, and date without private metadata.
 
-1. Install on a Forerunner 955 / Solar, enter the HTTPS companion origin, and pair with the short-lived watch code.
+1. Install on a Forerunner 955 / Solar, enter the configured companion origin, and pair with the short-lived watch code.
 2. Synchronize two playlists with a shared track and verify order, deduplication, and all three bitrate profiles.
 3. Repeat unchanged synchronization and confirm audio reuse.
 4. Interrupt a transfer, restart, and confirm that synchronization resumes without losing completed audio.
@@ -34,6 +34,6 @@ All items below require a new result tied to the preview commit and deployment. 
 7. Disable watch networking and remove the phone, then play audio through Bluetooth headphones.
 8. Record a 30-minute Run while using pause, next, previous, shuffle, and repeat; record battery use and failures.
 9. Restart the watch and companion, verify persistence, then revoke the watch and confirm that new synchronization is denied.
-10. Repeat pairing, artwork retrieval, long audio downloads, and interrupted synchronization through the chosen HTTPS tunnel.
+10. On the watch's intended network, verify DNS resolution when the origin uses a name and repeat pairing, artwork retrieval, long audio downloads, and interrupted synchronization through the exact deployed route. For a home-only route, use home Wi-Fi and verify that the endpoint is not publicly reachable; for public ingress, test from outside the LAN.
 
-Tailscale Funnel is an optional preview path until the last item passes on hardware. Do not claim a stable release or broader device compatibility from simulator results.
+Tailscale Funnel is optional. Do not claim route compatibility, a stable release, or broader device compatibility from simulator results.

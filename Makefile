@@ -29,7 +29,7 @@ watch-test:
 			sleep 1; \
 		done; \
 	}
-	@set -e; watch_test_output="$$("$(CIQ_HOME)/bin/monkeydo" "$(WATCH_TEST_OUTPUT)" "$(DEVICE)" -t 2>&1)"; \
+	@set -e; watch_test_output="$$("$(CIQ_HOME)/bin/monkeydo" "$(WATCH_TEST_OUTPUT)" "$(DEVICE)" -t 2>&1)" || [ $$? -eq 1 ]; \
 		printf '%s\n' "$$watch_test_output"; \
 		printf '%s\n' "$$watch_test_output" | grep -qE '^PASSED \(passed=[1-9][0-9]*, failed=0, errors=0\)$$'
 
@@ -46,11 +46,11 @@ watch-memory-profile:
 			sleep 1; \
 		done; \
 	}
-	@set -e; manifest_output="$$("$(CIQ_HOME)/bin/monkeydo" "$(WATCH_MEMORY_OUTPUT)" "$(DEVICE)" -t MemoryProfileTests.manifestTraversal 2>&1)"; \
-		audio_output="$$("$(CIQ_HOME)/bin/monkeydo" "$(WATCH_MEMORY_OUTPUT)" "$(DEVICE)" -t MemoryProfileTests.audioDownloadCompletion 2>&1)"; \
-		startup_output="$$("$(CIQ_HOME)/bin/monkeydo" "$(WATCH_MEMORY_OUTPUT)" "$(DEVICE)" -t MemoryProfileTests.playbackStartup 2>&1)"; \
-		reused_output="$$("$(CIQ_HOME)/bin/monkeydo" "$(WATCH_MEMORY_OUTPUT)" "$(DEVICE)" -t MemoryProfileTests.reusedAudioPlanning 2>&1)"; \
-		reconcile_output="$$("$(CIQ_HOME)/bin/monkeydo" "$(WATCH_MEMORY_OUTPUT)" "$(DEVICE)" -t MemoryProfileTests.reusedAudioReconciliation 2>&1)"; \
+	@set -e; manifest_output="$$("$(CIQ_HOME)/bin/monkeydo" "$(WATCH_MEMORY_OUTPUT)" "$(DEVICE)" -t MemoryProfileTests.manifestTraversal 2>&1)" || [ $$? -eq 1 ]; \
+		audio_output="$$("$(CIQ_HOME)/bin/monkeydo" "$(WATCH_MEMORY_OUTPUT)" "$(DEVICE)" -t MemoryProfileTests.audioDownloadCompletion 2>&1)" || [ $$? -eq 1 ]; \
+		startup_output="$$("$(CIQ_HOME)/bin/monkeydo" "$(WATCH_MEMORY_OUTPUT)" "$(DEVICE)" -t MemoryProfileTests.playbackStartup 2>&1)" || [ $$? -eq 1 ]; \
+		reused_output="$$("$(CIQ_HOME)/bin/monkeydo" "$(WATCH_MEMORY_OUTPUT)" "$(DEVICE)" -t MemoryProfileTests.reusedAudioPlanning 2>&1)" || [ $$? -eq 1 ]; \
+		reconcile_output="$$("$(CIQ_HOME)/bin/monkeydo" "$(WATCH_MEMORY_OUTPUT)" "$(DEVICE)" -t MemoryProfileTests.reusedAudioReconciliation 2>&1)" || [ $$? -eq 1 ]; \
 		printf '%s\n' "$$manifest_output" "$$audio_output" "$$startup_output" "$$reused_output" "$$reconcile_output"; \
 		printf '%s\n' "$$manifest_output" | grep -q 'MEMORY_PROFILE manifest-traversal-500-tracks'; \
 		printf '%s\n' "$$audio_output" | grep -q 'MEMORY_PROFILE audio-download-completion-500-tracks'; \

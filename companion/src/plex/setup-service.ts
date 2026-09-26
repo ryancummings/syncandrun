@@ -34,6 +34,7 @@ interface SessionRow {
 }
 
 export interface PlexSetupServiceOptions {
+  allowLanHttp?: boolean;
   plexOrigin?: URL;
   authOrigin?: URL;
   fetch?: Fetch;
@@ -310,7 +311,7 @@ export class PlexSetupService {
   }
 
   #discoveryClient(): PlexDiscoveryClient {
-    const { authOrigin: _authOrigin, ...options } = this.#options;
+    const { authOrigin: _authOrigin, allowLanHttp: _allowLanHttp, ...options } = this.#options;
     return new PlexDiscoveryClient({ clientIdentifier: this.#clientIdentifier, ...options });
   }
 }
