@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import { calculateManifestRevision } from "../protocol/manifest.js";
+import { playlistSyncState } from "./playlist-sync-state.js";
 import { BrowserSessionRepository } from "./browser-session-repository.js";
 import {
   DeviceRepository,
@@ -44,6 +45,10 @@ export class BrowserManagementService {
 
   listDevices(): BrowserDevice[] {
     return this.#devices.listDevices();
+  }
+
+  playlistSyncState(): Record<string, boolean> {
+    return playlistSyncState(this.database);
   }
 
   revokeDevice(deviceId: string, now = new Date()): boolean {
@@ -100,6 +105,7 @@ export class BrowserManagementService {
     this.database.transaction(() => {
       this.database.prepare("DELETE FROM pairing_codes").run();
       this.database.prepare("DELETE FROM playlist_snapshots").run();
+      this.database.prepare("DELETE FROM device_applied_playlists").run();
       this.database.prepare("DELETE FROM track_metadata").run();
       this.database.prepare("DELETE FROM plex_connection").run();
       if (deleteDevices) this.database.prepare("DELETE FROM devices").run();

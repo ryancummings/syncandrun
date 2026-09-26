@@ -128,6 +128,7 @@ export interface DeviceSyncStatus {
 export interface SyncStatus {
   plan: SyncPlan;
   devices: DeviceSyncStatus[];
+  playlistStates: Record<string, boolean>;
   generatedAt: string;
 }
 

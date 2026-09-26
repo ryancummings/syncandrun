@@ -36,6 +36,7 @@ export interface DeviceSyncStatus {
 export interface SyncStatus {
   plan: SyncPlan;
   devices: DeviceSyncStatus[];
+  playlistStates: Record<string, boolean>;
   generatedAt: string;
 }
 
@@ -43,11 +44,13 @@ export function buildSyncStatus(
   plan: SyncPlan,
   devices: BrowserDevice[],
   live: LiveSyncSnapshot[],
-  now = new Date()
+  now = new Date(),
+  playlistStates: Record<string, boolean> = {}
 ): SyncStatus {
   const liveByDevice = new Map(live.map((session) => [session.deviceId, session]));
   return {
     plan,
+    playlistStates,
     generatedAt: now.toISOString(),
     devices: devices
       .filter((device) => device.revokedAt === null)

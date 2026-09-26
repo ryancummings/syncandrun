@@ -1,6 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type Database from "better-sqlite3";
 import { calculateContentFingerprint } from "../protocol/manifest.js";
+import { recordAppliedPlaylists } from "./playlist-sync-state.js";
 import {
   playlistPageSchema,
   syncResultRequestSchema,
@@ -182,6 +183,7 @@ export class WatchManifestRepository {
         );
       if (result.status === "applied") {
         this.database.prepare("UPDATE devices SET applied_revision = ? WHERE id = ?").run(result.revision, deviceId);
+        recordAppliedPlaylists(this.database, deviceId, result.revision);
       }
       return true;
     })();

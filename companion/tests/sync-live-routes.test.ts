@@ -74,6 +74,7 @@ async function createTestApp() {
   return {
     app,
     database,
+    plexLibrary,
     authorization: `Bearer ${claim.deviceToken}`,
     cookie: `syncandrun_session=${session.token}`,
     csrf: session.csrfToken
@@ -81,6 +82,74 @@ async function createTestApp() {
 }
 
 describe("sync status routes", () => {
+  it("keeps previously applied playlists synced when another is selected", async () => {
+    const { app, database, plexLibrary, authorization, cookie } = await createTestApp();
+    await plexLibrary.selectPlaylists(["plex:playlist:10"]);
+    const appliedRevision = database.connection.prepare("SELECT manifest_revision FROM settings").pluck().get() as string;
+    const applied = await app.inject({
+      method: "POST",
+      url: "/api/v1/watch/sync-result",
+      headers: { authorization },
+      payload: {
+        protocolVersion: 1,
+        revision: appliedRevision,
+        status: "applied",
+        counts: { downloaded: 0, reused: 0, deleted: 0, failed: 0 },
+        errorCodes: []
+      }
+    });
+    expect(applied.statusCode).toBe(200);
+    // Simulate an existing installation upgraded after the watch had synced:
+    // migration 11 starts with no per-playlist rows.
+    database.connection.prepare("DELETE FROM device_applied_playlists").run();
+    await plexLibrary.selectPlaylists(["plex:playlist:10", "plex:playlist:20"]);
+    const status = (await app.inject({ method: "GET", url: "/api/v1/sync/status", headers: { cookie } })).json<SyncStatus>();
+    expect(status.devices[0]?.upToDate).toBe(false);
+    expect(status.playlistStates).toEqual({ "plex:playlist:10": true, "plex:playlist:20": false });
+
+    const devices = new DeviceRepository(database.connection, secret);
+    const pairing = await devices.createPairingCode();
+    const second = await devices.claimPairingCode(pairing.code, {
+      deviceId: "watch:second",
+      deviceName: "Second watch"
+    });
+    if (second.status !== "claimed") throw new Error("Expected second watch to pair");
+    const twoWatches = (await app.inject({ method: "GET", url: "/api/v1/sync/status", headers: { cookie } })).json<SyncStatus>();
+    expect(twoWatches.playlistStates).toEqual({ "plex:playlist:10": false, "plex:playlist:20": false });
+
+    const currentRevision = status.plan.manifestRevision;
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/watch/sync-result",
+      headers: { authorization },
+      payload: {
+        protocolVersion: 1,
+        revision: currentRevision,
+        status: "applied",
+        counts: { downloaded: 0, reused: 0, deleted: 0, failed: 0 },
+        errorCodes: []
+      }
+    });
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/watch/sync-result",
+      headers: { authorization: `Bearer ${second.deviceToken}` },
+      payload: {
+        protocolVersion: 1,
+        revision: currentRevision,
+        status: "applied",
+        counts: { downloaded: 0, reused: 0, deleted: 0, failed: 0 },
+        errorCodes: []
+      }
+    });
+    const synced = (await app.inject({ method: "GET", url: "/api/v1/sync/status", headers: { cookie } })).json<SyncStatus>();
+    expect(synced.playlistStates).toEqual({ "plex:playlist:10": true, "plex:playlist:20": true });
+
+    plexLibrary.setTranscodeProfile("high");
+    const changedProfile = (await app.inject({ method: "GET", url: "/api/v1/sync/status", headers: { cookie } })).json<SyncStatus>();
+    expect(changedProfile.playlistStates).toEqual({ "plex:playlist:10": false, "plex:playlist:20": false });
+    await app.close();
+  });
   it("requires a browser session", async () => {
     const { app } = await createTestApp();
     const response = await app.inject({ method: "GET", url: "/api/v1/sync/status" });

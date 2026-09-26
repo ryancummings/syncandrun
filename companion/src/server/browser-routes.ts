@@ -322,7 +322,9 @@ export function registerBrowserRoutes<Logger extends FastifyBaseLogger>(
     buildSyncStatus(
       dependencies.syncPlan.get(),
       dependencies.management.listDevices(),
-      dependencies.liveSync.snapshots()
+      dependencies.liveSync.snapshots(),
+      new Date(),
+      dependencies.management.playlistSyncState()
     );
 
   app.get("/api/v1/sync/status", async (request, reply) => {

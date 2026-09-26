@@ -7,6 +7,7 @@ import {
   type ManifestPlaylistInput
 } from "../protocol/manifest.js";
 import { revisionSchema, transcodeProfileSchema } from "../protocol/schemas.js";
+import { preserveAppliedPlaylists } from "../persistence/playlist-sync-state.js";
 import {
   PlexMediaClient,
   PlexPlaylistTooLargeError,
@@ -129,9 +130,12 @@ export class PlexLibraryService {
       selectedPlaylistIds: selectedIds,
       playlists: snapshots
     });
-    this.#database
-      .prepare("UPDATE settings SET transcode_profile = ?, manifest_revision = ?, updated_at = ? WHERE id = 1")
-      .run(profile, revision, now.toISOString());
+    this.#database.transaction(() => {
+      preserveAppliedPlaylists(this.#database);
+      this.#database
+        .prepare("UPDATE settings SET transcode_profile = ?, manifest_revision = ?, updated_at = ? WHERE id = 1")
+        .run(profile, revision, now.toISOString());
+    })();
     return revision;
   }
 
@@ -175,6 +179,7 @@ export class PlexLibraryService {
     const timestamp = now.toISOString();
 
     this.#database.transaction(() => {
+      preserveAppliedPlaylists(this.#database);
       this.#database.prepare("DELETE FROM playlist_snapshots").run();
       this.#database.prepare("DELETE FROM track_metadata").run();
       const insertTrack = this.#database.prepare(

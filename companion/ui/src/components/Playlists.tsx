@@ -58,7 +58,7 @@ export function Playlists({
   const expectedRevision = savedRevision ?? manifestRevision;
   const fullySynced = !dirty && expectedRevision !== null && status !== null
     && status.plan.manifestRevision === expectedRevision && status.devices.length > 0
-    && status.devices.every((device) => device.upToDate);
+    && [...selected].every((id) => status.playlistStates[id] === true);
 
   // Let quick checkbox changes settle, then serialize writes. A change made
   // during a request remains in selected and is saved after that request ends.
@@ -134,6 +134,9 @@ export function Playlists({
             {playlists.map((playlist, index) => {
               const isSelected = selected.has(playlist.id);
               const locked = !playlist.selectable && !isSelected;
+              const rowStatus = !saved.has(playlist.id)
+                ? saveFailed ? "Not saved" : "Saving"
+                : status?.playlistStates[playlist.id] === true ? "Synced" : "Pending sync";
               return (
                 <label
                   key={playlist.id}
@@ -160,7 +163,7 @@ export function Playlists({
                   </span>
                   <span className="worklist-status">
                     {isSelected && <span className="tag tag-accent">
-                      {saveFailed ? "Not saved" : dirty ? "Saving" : fullySynced ? "Synced" : "Pending sync"}
+                      {rowStatus}
                     </span>}
                   </span>
                   <span className="worklist-actions worklist-check">

@@ -366,6 +366,7 @@ export class DeviceRepository {
              revoked_at = NULL`
         )
         .run(device.deviceId, device.deviceName, tokenHash, claimedAt);
+      this.database.prepare("DELETE FROM device_applied_playlists WHERE device_id = ?").run(device.deviceId);
 
       const installation = this.database
         .prepare("SELECT plex_client_identifier FROM installation WHERE id = 1")
