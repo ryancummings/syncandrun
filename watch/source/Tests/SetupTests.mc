@@ -13,6 +13,9 @@ module SetupTests {
         for (var idx = 0; idx < KEYS.size(); ++idx) { values.add(Application.Storage.getValue(KEYS[idx])); }
         values.add(Application.Properties.getValue("companion_url"));
         values.add(Application.Properties.getValue("pairing_code"));
+        values.add(Application.Properties.getValue(SyncAndRun.Report.PAIRING));
+        values.add(Application.Properties.getValue(SyncAndRun.Report.LAST_SYNC));
+        values.add(Application.Properties.getValue("debug"));
         return values;
     }
 
@@ -23,6 +26,9 @@ module SetupTests {
         }
         Application.Properties.setValue("companion_url", values[KEYS.size()] == null ? "" : values[KEYS.size()]);
         Application.Properties.setValue("pairing_code", values[KEYS.size() + 1] == null ? "" : values[KEYS.size() + 1]);
+        Application.Properties.setValue(SyncAndRun.Report.PAIRING, values[KEYS.size() + 2]);
+        Application.Properties.setValue(SyncAndRun.Report.LAST_SYNC, values[KEYS.size() + 3]);
+        Application.Properties.setValue("debug", values[KEYS.size() + 4]);
     }
 
     (:test)
@@ -45,6 +51,38 @@ module SetupTests {
             Application.Storage.setValue(SyncAndRun.State.DEVICE_TOKEN, "fixture-device-token");
             Test.assert(SyncAndRun.Setup.isReady());
             Test.assert(SyncAndRun.Menu.Playback.layout() > 0);
+        } finally {
+            restore(previous);
+        }
+        return true;
+    }
+
+    (:test)
+    function resetClearsStoredAndSettingsSetupState(logger) {
+        var previous = snapshot();
+        try {
+            Application.Storage.setValue(SyncAndRun.CompanionOrigin.STORAGE_KEY, "http://192.0.2.20");
+            Application.Storage.setValue(SyncAndRun.State.DEVICE_TOKEN, "fixture-device-token");
+            Application.Storage.setValue(SyncAndRun.PAIRING_CODE_KEY, "123456");
+            Application.Properties.setValue("companion_url", "http://192.0.2.21");
+            Application.Properties.setValue("pairing_code", "654321");
+            Application.Properties.setValue(SyncAndRun.Report.PAIRING, "Paired");
+            Application.Properties.setValue(SyncAndRun.Report.LAST_SYNC, "2026-01-02 03:04");
+            Application.Properties.setValue("debug", true);
+            Test.assertEqual(SyncAndRun.Setup.READY, SyncAndRun.Setup.stage());
+
+            (new SyncAndRun.Menu.Storage()).clearAppData();
+
+            Test.assert(Application.Storage.getValue(SyncAndRun.CompanionOrigin.STORAGE_KEY) == null);
+            Test.assert(Application.Storage.getValue(SyncAndRun.State.DEVICE_TOKEN) == null);
+            Test.assert(Application.Storage.getValue(SyncAndRun.PAIRING_CODE_KEY) == null);
+            Test.assertEqual("", Application.Properties.getValue("companion_url"));
+            Test.assertEqual("", Application.Properties.getValue("pairing_code"));
+            Test.assertEqual("Not paired", Application.Properties.getValue(SyncAndRun.Report.PAIRING));
+            Test.assertEqual("Never", Application.Properties.getValue(SyncAndRun.Report.LAST_SYNC));
+            Test.assertEqual(true, Application.Properties.getValue("debug"));
+            Test.assertEqual(SyncAndRun.Setup.NEEDS_ADDRESS, SyncAndRun.Setup.stage());
+            Test.assertEqual("Step 1 of 2: address", SyncAndRun.Setup.stepLabel());
         } finally {
             restore(previous);
         }
