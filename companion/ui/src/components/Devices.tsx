@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   errorMessage,
@@ -102,6 +102,13 @@ export function Devices({
     }
   }, [announce, csrf, refreshStatus]);
 
+  // A newly paired watch has spent the code on screen.
+  const pairedCount = useRef(active.length);
+  useEffect(() => {
+    if (active.length > pairedCount.current) setPairing(null);
+    pairedCount.current = active.length;
+  }, [active.length]);
+
   // The first visit with no watch goes straight to a usable code.
   const firstWatch = loaded && active.length === 0;
   useEffect(() => {
@@ -123,122 +130,131 @@ export function Devices({
     }
   }
 
-  return (
-    <>
-      <section className="panel">
-        <div className="label-row">
-          <SectionLabel>Live transfer</SectionLabel>
-          <span className="tag">
-            <StatusDot tone={stream === "live" ? "live" : stream === "polling" ? "warn" : "idle"} />
-            {stream === "live" ? "Streaming" : stream === "polling" ? "Polling" : "Connecting"}
-          </span>
+  const statusPanel = (
+    <section className="panel">
+      <div className="label-row">
+        <SectionLabel>Live transfer</SectionLabel>
+        <span className="tag">
+          <StatusDot tone={stream === "live" ? "live" : stream === "polling" ? "warn" : "idle"} />
+          {stream === "live" ? "Streaming" : stream === "polling" ? "Polling" : "Connecting"}
+        </span>
+      </div>
+      <div className="panel-head">
+        <div>
+          <h1 className="display display-lg">Sync status</h1>
+          <p className="meta">
+            Measured by the companion as it serves the watch — no watch-side reporting delay.
+          </p>
         </div>
-        <div className="panel-head">
-          <div>
-            <h1 className="display display-lg">Sync status</h1>
-            <p className="meta">
-              Measured by the companion as it serves the watch — no watch-side reporting delay.
-            </p>
-          </div>
+      </div>
+
+      {status !== null && <PlanSummary plan={status.plan} liveCount={liveCount} />}
+
+      {active.length === 0 && <p className="empty">Pair a watch to see sync activity here.</p>}
+      {active.map((device) => {
+        const entry = statusByDevice.get(device.id);
+        return entry === undefined ? null : (
+          <LiveCard
+            key={device.id}
+            device={device}
+            entry={entry}
+            plan={status?.plan ?? null}
+            receivedAt={receivedAt}
+          />
+        );
+      })}
+    </section>
+  );
+
+  const pairingPanel = (
+    <section className="panel">
+      <div className="panel-head">
+        <div>
+          <SectionLabel>Garmin connection</SectionLabel>
+          <h2 className="display display-lg">{active.length === 0 ? "Pair your watch" : "Paired watches"}</h2>
+          <p className="meta">
+            {active.length === 0
+              ? "Three steps on the watch, with it on the same Wi-Fi as this computer."
+              : "To add another watch, create a code and follow the same steps on it."}
+          </p>
         </div>
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void createCode()}>
+          {pairing === null ? "Create pairing code" : "New code"}
+        </button>
+      </div>
 
-        {status !== null && <PlanSummary plan={status.plan} liveCount={liveCount} />}
+      {error !== null && <Notice tone="error">{error}</Notice>}
 
-        {active.length === 0 && <p className="empty">Pair a watch to see sync activity here.</p>}
-        {active.map((device) => {
-          const entry = statusByDevice.get(device.id);
-          return entry === undefined ? null : (
-            <LiveCard
+      {(pairing !== null || active.length === 0) && <WatchSteps pairing={pairing} />}
+
+      {active.length === 0 && <p className="empty">No watches are paired yet.</p>}
+      {active.length > 0 && (
+        <div className="worklist">
+          {active.map((device, index) => (
+            <DeviceRow
               key={device.id}
+              index={index}
               device={device}
-              entry={entry}
-              plan={status?.plan ?? null}
-              receivedAt={receivedAt}
+              entry={statusByDevice.get(device.id)}
+              busy={busy}
+              onRename={(name) =>
+                mutate(
+                  () =>
+                    api(`/api/v1/devices/${encodeURIComponent(device.id)}`, {
+                      method: "PATCH",
+                      csrf,
+                      body: { displayName: name }
+                    }),
+                  name === null ? "Watch name reset." : `Watch renamed to ${name}.`,
+                  "The watch could not be renamed."
+                )
+              }
+              onRevoke={() =>
+                mutate(
+                  () => api(`/api/v1/devices/${encodeURIComponent(device.id)}`, { method: "DELETE", csrf }),
+                  "Watch removed.",
+                  "The watch could not be removed."
+                )
+              }
             />
-          );
-        })}
-      </section>
-
-      <section className="panel">
-        <div className="panel-head">
-          <div>
-            <SectionLabel>Garmin connection</SectionLabel>
-            <h2 className="display display-lg">{active.length === 0 ? "Pair your watch" : "Paired watches"}</h2>
-            <p className="meta">
-              {active.length === 0
-                ? "Three steps on the watch, with it on the same Wi-Fi as this computer."
-                : "To add another watch, create a code and follow the same steps on it."}
-            </p>
-          </div>
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void createCode()}>
-            {pairing === null ? "Create pairing code" : "New code"}
-          </button>
+          ))}
         </div>
+      )}
 
-        {error !== null && <Notice tone="error">{error}</Notice>}
-
-        {(pairing !== null || active.length === 0) && <WatchSteps pairing={pairing} />}
-
-        {active.length === 0 && <p className="empty">No watches are paired yet.</p>}
-        {active.length > 0 && (
+      {removed.length > 0 && (
+        <>
+          <div className="divider" />
+          <SectionLabel>Removed watches</SectionLabel>
           <div className="worklist">
-            {active.map((device, index) => (
+            {removed.map((device, index) => (
               <DeviceRow
                 key={device.id}
                 index={index}
                 device={device}
-                entry={statusByDevice.get(device.id)}
+                entry={undefined}
                 busy={busy}
-                onRename={(name) =>
+                onForget={() =>
                   mutate(
                     () =>
-                      api(`/api/v1/devices/${encodeURIComponent(device.id)}`, {
-                        method: "PATCH",
-                        csrf,
-                        body: { displayName: name }
-                      }),
-                    name === null ? "Watch name reset." : `Watch renamed to ${name}.`,
-                    "The watch could not be renamed."
-                  )
-                }
-                onRevoke={() =>
-                  mutate(
-                    () => api(`/api/v1/devices/${encodeURIComponent(device.id)}`, { method: "DELETE", csrf }),
-                    "Watch removed.",
-                    "The watch could not be removed."
+                      api(`/api/v1/devices/${encodeURIComponent(device.id)}/forget`, { method: "POST", csrf }),
+                    "Watch record deleted.",
+                    "The watch record could not be deleted."
                   )
                 }
               />
             ))}
           </div>
-        )}
+        </>
+      )}
+    </section>
+  );
 
-        {removed.length > 0 && (
-          <>
-            <div className="divider" />
-            <SectionLabel>Removed watches</SectionLabel>
-            <div className="worklist">
-              {removed.map((device, index) => (
-                <DeviceRow
-                  key={device.id}
-                  index={index}
-                  device={device}
-                  entry={undefined}
-                  busy={busy}
-                  onForget={() =>
-                    mutate(
-                      () =>
-                        api(`/api/v1/devices/${encodeURIComponent(device.id)}/forget`, { method: "POST", csrf }),
-                      "Watch record deleted.",
-                      "The watch record could not be deleted."
-                    )
-                  }
-                />
-              ))}
-            </div>
-          </>
-        )}
-      </section>
+  // Someone setting up their first watch needs the steps before an empty
+  // status panel.
+  return (
+    <>
+      {active.length === 0 ? pairingPanel : statusPanel}
+      {active.length === 0 ? statusPanel : pairingPanel}
     </>
   );
 }

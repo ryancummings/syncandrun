@@ -134,7 +134,7 @@ test("completes setup, playlist selection, pairing, naming, live status, and del
   await expect(page.getByText("Removed watches")).toBeVisible();
   await page.getByRole("button", { name: "Delete record" }).click();
   await page.getByRole("button", { name: "Confirm deletion" }).click();
-  await expect(page.getByText("No watches are paired yet.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pair your watch" })).toBeVisible();
 
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Delete all local data" }).click();
