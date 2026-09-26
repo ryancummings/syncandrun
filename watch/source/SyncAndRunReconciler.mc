@@ -86,12 +86,12 @@ module SyncAndRun {
             d_metadataTracks = 0;
             d_metadataTotalTracks = 0;
             d_lastPercentage = 0;
-            if (!d_client.validOrigin()) { finishWithMessage("Set the server in Settings > Server address."); return; }
+            if (!d_client.validOrigin()) { finishWithMessage("Not set up. Choose Set up watch."); return; }
             notifyStatus("Preparing", 0, 0, 0, 0, 0);
             if (!(State.token() instanceof Lang.String)) {
                 var code = pairingCode();
                 if (code == null) {
-                    finishWithMessage("Pair this watch in Settings > Pair watch.");
+                    finishWithMessage("Not paired. Choose Set up watch.");
                     return;
                 }
                 notifyStatus("Pairing", 0, 0, 1, 0, 0);
@@ -581,7 +581,9 @@ module SyncAndRun {
         }
 
         function finishWithMessage(message) {
-            SyncStatus.update("Stopped", 0, 0, d_lastPercentage, null, d_counts);
+            // The reason is the most useful thing the Sync now item can show.
+            SyncStatus.update(message instanceof Lang.String ? message : "Stopped",
+                0, 0, d_lastPercentage, null, d_counts);
             d_notifyComplete.invoke(message);
         }
 

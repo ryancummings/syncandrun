@@ -408,7 +408,7 @@ module BoundedStorageTests {
     (:test)
     function digitPickerBuildsASixDigitCode(logger) {
         Application.Storage.deleteValue(SyncAndRun.PAIRING_CODE_KEY);
-        var picker = new SyncAndRun.PairingPicker();
+        var picker = new SyncAndRun.PairingPicker(false);
         Test.assertEqual("000000", picker.code());
 
         // Each wheel is independent and wraps in both directions.
@@ -435,7 +435,7 @@ module BoundedStorageTests {
 
         // A resumed picker restores a previously entered code.
         Application.Storage.setValue(SyncAndRun.PAIRING_CODE_KEY, "135790");
-        Test.assertEqual("135790", (new SyncAndRun.PairingPicker()).code());
+        Test.assertEqual("135790", (new SyncAndRun.PairingPicker(false)).code());
         Application.Storage.deleteValue(SyncAndRun.PAIRING_CODE_KEY);
         return true;
     }

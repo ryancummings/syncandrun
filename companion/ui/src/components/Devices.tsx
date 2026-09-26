@@ -615,14 +615,15 @@ function DeviceDetail({ device, history }: { device: Device; history: SyncHistor
  * source: inside Docker the companion cannot see the host's LAN address.
  */
 export function watchAddress(location: Pick<Location, "protocol" | "hostname" | "port"> = window.location): {
-  /** Digits for the watch's Server address editor, when the default editor fits. */
+  /** What to enter in the watch's Server address picker (IPv4 and optional port), when it fits. */
   ip: string | null;
-  /** The full address, for Other address. */
+  /** The full address, for Settings > Advanced > Other address. */
   origin: string;
 } {
   const origin = `${location.protocol}//${location.hostname}${location.port === "" ? "" : `:${location.port}`}`;
   const ipv4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(location.hostname);
-  return { ip: ipv4 && location.protocol === "http:" && location.port === "" ? location.hostname : null, origin };
+  const ip = `${location.hostname}${location.port === "" ? "" : `:${location.port}`}`;
+  return { ip: ipv4 && location.protocol === "http:" ? ip : null, origin };
 }
 
 export function WatchSteps({ pairing }: { pairing: { code: string; expiresAt: string } | null }) {
@@ -631,18 +632,21 @@ export function WatchSteps({ pairing }: { pairing: { code: string; expiresAt: st
   return (
     <ol className="steps watch-steps" aria-live="polite">
       <li>
-        Install SyncAndRun on the watch, then open <span className="mono">Music → SyncAndRun → Settings</span>.
+        Install SyncAndRun on the watch, open it from Music, and choose <span className="mono">Set up watch</span>.
+        If the watch shows <span className="mono">No media</span>, hold <span className="mono">UP (Menu)</span> first.
       </li>
       <li>
         {address.ip !== null ? (
           <>
-            Choose <span className="mono">Server address</span> and enter{" "}
-            <strong className="mono phosphor">{address.ip}</strong>.
+            Enter the server address <strong className="mono phosphor">{address.ip}</strong>. The watch
+            continues to the pairing code on its own.
           </>
         ) : (
           <>
-            Choose <span className="mono">Other address</span> and enter{" "}
-            <strong className="mono phosphor">{address.origin}</strong>.
+            This address needs the full form: back out of setup, open{" "}
+            <span className="mono">Settings → Advanced → Other address</span>, and enter{" "}
+            <strong className="mono phosphor">{address.origin}</strong>. Then choose{" "}
+            <span className="mono">Set up watch</span> again.
           </>
         )}
         {nameOnly && (
@@ -654,8 +658,7 @@ export function WatchSteps({ pairing }: { pairing: { code: string; expiresAt: st
         )}
       </li>
       <li>
-        Choose <span className="mono">Pair watch</span> and enter the code below. The watch pairs and starts
-        syncing over Wi-Fi on its own.
+        Enter the code below. The watch pairs and starts syncing over Wi-Fi on its own.
         {pairing !== null && (
           <div className="panel crt" style={{ margin: "0.75rem 0 0" }}>
             <p className="readout-label">Pairing code</p>

@@ -39,7 +39,7 @@ test("completes setup, playlist selection, pairing, naming, live status, and del
   await page.getByRole("button", { name: "Watch", exact: true }).click();
   // With no watch paired, the page opens on a ready code and the exact address.
   await expect(page.getByRole("heading", { name: "Pair your watch" })).toBeVisible();
-  await expect(page.locator(".watch-steps").getByText("http://127.0.0.1:34117")).toBeVisible();
+  await expect(page.locator(".watch-steps").getByText("127.0.0.1:34117")).toBeVisible();
   const code = (await page.locator(".pairing-code").innerText()).trim();
   expect(code).toMatch(/^[0-9]{6}$/);
   const deviceToken = await page.evaluate(async (pairingCode) => {
