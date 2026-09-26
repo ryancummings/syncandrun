@@ -20,11 +20,11 @@ afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
-async function createTestApp(baseUrl = "https://music.example.test") {
+async function createTestApp(baseUrl: string | null = "https://music.example.test") {
   const dataDir = await mkdtemp(join(tmpdir(), "syncandrun-browser-routes-"));
   temporaryDirectories.push(dataDir);
   const config: RuntimeConfig = {
-    baseUrl: new URL(baseUrl),
+    ...(baseUrl === null ? {} : { baseUrl: new URL(baseUrl) }),
     secret,
     dataDir,
     port: 3000,
@@ -40,7 +40,6 @@ async function createTestApp(baseUrl = "https://music.example.test") {
   const plexSetup = new PlexSetupService(database.connection, secret, {
     plexOrigin: server.origin,
     authOrigin: new URL("https://app.plex.example.test"),
-    allowLanHttp: config.baseUrl.protocol === "http:",
     fetch: server.fetch
   });
   const browserSessions = new BrowserSessionRepository(database.connection, secret);
@@ -94,7 +93,10 @@ describe("browser Plex setup routes", () => {
           name: "Fixture Server",
           owned: true,
           presence: true,
-          connections: [{ uri: server.pmsUri, local: false, relay: false }]
+          connections: [
+          { uri: "http://private.example.test:32400", local: true, relay: false },
+          { uri: server.pmsUri, local: false, relay: false }
+        ]
         }
       ]
     });
@@ -225,20 +227,29 @@ describe("browser Plex setup routes", () => {
     await app.close();
   });
 
-  it("supports an opted-in private-IP HTTP browser session without a Secure cookie", async () => {
-    const { app, server } = await createTestApp("http://192.168.1.20");
-    const started = await app.inject({ method: "POST", url: "/api/v1/setup/plex/pin" });
+  it("answers on the address it was reached at, over HTTP, without a Secure cookie", async () => {
+    const { app, server } = await createTestApp(null);
+    const host = "192.168.1.20:3000";
+    const started = await app.inject({ method: "POST", url: "/api/v1/setup/plex/pin", headers: { host } });
     expect(started.statusCode).toBe(200);
-    expect(started.json().authUrl).toContain("forwardUrl=http%3A%2F%2F192.168.1.20%2Fsetup%2Fplex%2Fcallback");
+    expect(started.json().authUrl).toContain("forwardUrl=http%3A%2F%2F192.168.1.20%3A3000%2Fsetup%2Fplex%2Fcallback");
     server.claimPin();
-    const claimed = await app.inject({ method: "GET", url: `/api/v1/setup/plex/pin/${started.json().sessionId}` });
+    const claimed = await app.inject({
+      method: "GET",
+      url: `/api/v1/setup/plex/pin/${started.json().sessionId}`,
+      headers: { host }
+    });
     expect(claimed.statusCode).toBe(200);
     const cookie = claimed.headers["set-cookie"];
     if (typeof cookie !== "string") throw new Error("Expected a browser session cookie");
     expect(cookie).toContain("HttpOnly");
     expect(cookie).not.toContain("Secure");
-    const settings = await app.inject({ method: "GET", url: "/api/v1/settings", headers: { cookie: cookie.split(";", 1)[0]! } });
-    expect(settings.json().companionUrl).toBe("http://192.168.1.20");
+    const settings = await app.inject({
+      method: "GET",
+      url: "/api/v1/settings",
+      headers: { host, cookie: cookie.split(";", 1)[0]! }
+    });
+    expect(settings.json().companionUrl).toBe("http://192.168.1.20:3000");
     const anonymous = await app.inject({ method: "GET", url: "/api/v1/settings" });
     expect(anonymous.statusCode).toBe(401);
     await app.close();

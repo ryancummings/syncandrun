@@ -1,19 +1,16 @@
 import { expect, test } from "@playwright/test";
 
-test("completes setup, playlist selection, pairing, naming, live status, and deletion", async ({ page, request }) => {
-  const invitation = await request.get("/__test/setup-link");
-  await page.goto((await invitation.json()).path);
-  await expect(page).toHaveURL(/\/$/);
+test("completes setup, playlist selection, pairing, naming, live status, and deletion", async ({ page }) => {
+  // A fresh installation needs no setup link: the first Plex account claims it.
+  await page.goto("/");
   const popupPromise = page.waitForEvent("popup");
-  await page.getByRole("button", { name: "Connect Plex" }).click();
+  await page.getByRole("button", { name: "Sign in with Plex" }).click();
   const popup = await popupPromise;
   await expect(popup.getByText("SyncAndRun fixture authorization complete.")).toBeVisible();
 
-  await expect(page.getByRole("heading", { name: "Choose a Plex server" })).toBeVisible();
-  await page.getByRole("button", { name: "Continue to music library" }).click();
-  await expect(page.getByRole("heading", { name: "Choose a music library" })).toBeVisible();
-  await expect(page.getByLabel("Plex music library")).toHaveValue("2");
-  await page.getByRole("button", { name: "Finish setup" }).click();
+  // One reachable server with one music library: no questions. The fixture's
+  // LAN connection is unreachable, so this also proves the fallback to the
+  // next connection.
 
   await expect(page.getByRole("heading", { name: "Plex playlists" })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 720 });
@@ -31,7 +28,7 @@ test("completes setup, playlist selection, pairing, naming, live status, and del
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   // The settings console mixes state it only reports with state it can change,
   // and the watch address is the one value the operator must retype elsewhere.
-  await expect(page.getByText("https://music.example.test")).toBeVisible();
+  await expect(page.getByText("http://127.0.0.1:34117")).toBeVisible();
   await expect(page.getByRole("button", { name: "Copy" })).toBeVisible();
   await expect(page.getByText("Read-only").first()).toBeVisible();
   await expect(page.getByText("Editable")).toBeVisible();
@@ -40,7 +37,9 @@ test("completes setup, playlist selection, pairing, naming, live status, and del
   await expect(page.getByText("Audio quality saved.")).toBeAttached();
 
   await page.getByRole("button", { name: "Watch", exact: true }).click();
-  await page.getByRole("button", { name: "Create pairing code" }).click();
+  // With no watch paired, the page opens on a ready code and the exact address.
+  await expect(page.getByRole("heading", { name: "Pair your watch" })).toBeVisible();
+  await expect(page.locator(".watch-steps").getByText("127.0.0.1:34117")).toBeVisible();
   const code = (await page.locator(".pairing-code").innerText()).trim();
   expect(code).toMatch(/^[0-9]{6}$/);
   const deviceToken = await page.evaluate(async (pairingCode) => {
@@ -135,12 +134,12 @@ test("completes setup, playlist selection, pairing, naming, live status, and del
   await expect(page.getByText("Removed watches")).toBeVisible();
   await page.getByRole("button", { name: "Delete record" }).click();
   await page.getByRole("button", { name: "Confirm deletion" }).click();
-  await expect(page.getByText("No watches are paired yet.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pair your watch" })).toBeVisible();
 
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Delete all local data" }).click();
   await page.getByRole("button", { name: "Confirm deletion" }).click();
-  await expect(page.getByRole("button", { name: "Connect Plex" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign in with Plex" })).toBeVisible();
 });
 
 test("switches between the console and printout themes and remembers the choice", async ({ page }) => {

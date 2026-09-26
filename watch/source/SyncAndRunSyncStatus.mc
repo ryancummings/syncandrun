@@ -64,7 +64,7 @@ module SyncAndRun {
             if ((status instanceof Lang.Dictionary) && (status["label"] instanceof Lang.String)) {
                 return status["label"];
             }
-            return "Ready";
+            return "Not synced yet";
         }
 
         function format(phase, current, total, etaSeconds) {

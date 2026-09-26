@@ -16,6 +16,8 @@ module SyncAndRun {
 		
 			private var d_menu;
 			private var d_created = false; // menu not created yet
+			private var d_count = 0;		// items currently in the view
+			private var d_layoutKey = null;	// see rebuildIfLayoutChanged
 	
 			/* menu should have the following members
 			 * var title 				- containing the title of the menu
@@ -62,6 +64,7 @@ module SyncAndRun {
 				var item = d_menu.getItem(idx);
 				while (item != null) {
 					addItem(item);
+					d_count += 1;
 
 					// load next item
 					idx += 1;
@@ -70,6 +73,22 @@ module SyncAndRun {
 
 				// mark as created
 		    	d_created = true;
+				if (d_menu has :layoutKey) { d_layoutKey = d_menu.layoutKey(); }
+			}
+
+			// Menus whose items depend on state (the home menu) expose
+			// layoutKey(). updateMenu() can only relabel existing items, so a
+			// changed key reloads the items and recreates the view's list.
+			private function rebuildIfLayoutChanged() {
+				if (!(d_menu has :layoutKey) || (d_menu.layoutKey() == d_layoutKey)) { return false; }
+				d_menu.load();
+				while (d_count > 0) {
+					d_count -= 1;
+					deleteItem(d_count);
+				}
+				createMenu();
+				setFocus(0);
+				return true;
 			}
 		    
 		    function onShow() {
@@ -81,6 +100,7 @@ module SyncAndRun {
 				}
 
 				// update otherwise
+				if (rebuildIfLayoutChanged()) { return; }
 				updateMenu();
 		    }
 

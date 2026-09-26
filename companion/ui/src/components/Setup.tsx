@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import { api, errorMessage, type PlexConnection, type PlexLibrary, type PlexServer } from "../api";
 import { Notice, SectionLabel } from "./primitives";
 
-/** Backs off from an eager first check to a steady poll while the operator signs in. */
+/** Backs off from an eager first check to a steady poll while the owner signs in. */
 const pollIntervalMs = 1_500;
 
 export function Setup({ onReady }: { onReady: (csrf: string) => void }) {
@@ -14,11 +14,12 @@ export function Setup({ onReady }: { onReady: (csrf: string) => void }) {
   const [authUrl, setAuthUrl] = useState<string | null>(null);
   const [csrf, setCsrf] = useState<string | null>(null);
   const [servers, setServers] = useState<PlexServer[]>([]);
-  const [serverChoice, setServerChoice] = useState("0:0");
+  const [serverChoice, setServerChoice] = useState("");
   const [selectedServer, setSelectedServer] = useState<PlexServer | null>(null);
   const [selectedConnection, setSelectedConnection] = useState<PlexConnection | null>(null);
   const [libraries, setLibraries] = useState<PlexLibrary[]>([]);
   const [libraryId, setLibraryId] = useState("");
+  // Operators can still hand out setup links; they are optional.
   const invitation = useRef(new URLSearchParams(window.location.hash.slice(1)).get("setup") ?? undefined);
   useEffect(() => {
     if (invitation.current) window.history.replaceState(null, "", window.location.pathname + window.location.search);
@@ -38,7 +39,7 @@ export function Setup({ onReady }: { onReady: (csrf: string) => void }) {
       invitation.current = undefined;
       setAuthUrl(started.authUrl);
       window.open(started.authUrl, "plex-auth", "noopener");
-      setStatus("Finish signing in to Plex in the new window. This page continues automatically.");
+      setStatus("Sign in to Plex in the window that opened. This page continues on its own.");
       const deadline = Date.parse(started.expiresAt);
       while (mounted.current && Date.now() < deadline) {
         await new Promise((resolve) => window.setTimeout(resolve, pollIntervalMs));
@@ -47,17 +48,30 @@ export function Setup({ onReady }: { onReady: (csrf: string) => void }) {
           `/api/v1/setup/plex/pin/${encodeURIComponent(started.sessionId)}`
         );
         if ((result.status === "claimed" || result.status === "completed") && result.csrfToken) {
+          setStatus("Signed in. Finding your Plex servers…");
           const discovered = await api<{ servers: PlexServer[] }>("/api/v1/setup/plex/servers");
           if (!mounted.current) return;
           setCsrf(result.csrfToken);
           setServers(discovered.servers);
+          setServerChoice(discovered.servers[0]?.id ?? "");
           setStep("server");
+          if (discovered.servers.length === 1 && discovered.servers[0]) {
+            setStatus(`Connecting to ${discovered.servers[0].name}…`);
+            await openServer(discovered.servers[0], result.csrfToken);
+            return;
+          }
+          if (discovered.servers.length === 0) {
+            setError(
+              "No Plex servers were found on this account. Check that Plex Media Server is running and signed in to the same Plex account."
+            );
+          }
+          setStatus(null);
           setBusy(false);
           return;
         }
-        if (result.status === "expired") throw new Error("The Plex sign-in expired. Start again.");
+        if (result.status === "expired") throw new Error("The Plex sign-in timed out. Try again.");
       }
-      if (mounted.current) throw new Error("The Plex sign-in expired. Start again.");
+      if (mounted.current) throw new Error("The Plex sign-in timed out. Try again.");
     } catch (cause) {
       if (!mounted.current) return;
       setError(errorMessage(cause, "Plex sign-in failed."));
@@ -66,83 +80,114 @@ export function Setup({ onReady }: { onReady: (csrf: string) => void }) {
     }
   }
 
-  async function chooseServer(event: FormEvent) {
-    event.preventDefault();
-    if (!csrf) return;
+  /**
+   * Tries the server's connections from most to least direct and keeps the
+   * first that answers, so nobody has to know which Plex address works. A
+   * single music library finishes setup without another question.
+   */
+  async function openServer(server: PlexServer, token: string) {
     setBusy(true);
     setError(null);
-    try {
-      const [serverIndex = -1, connectionIndex = -1] = serverChoice.split(":").map(Number);
-      const server = servers[serverIndex];
-      const connection = server?.connections[connectionIndex];
-      if (!server || !connection) throw new Error("Choose a Plex server connection.");
-      const result = await api<{ libraries: PlexLibrary[] }>("/api/v1/setup/plex/libraries", {
-        method: "POST",
-        csrf,
-        body: { serverId: server.id, connectionUri: connection.uri }
-      });
+    for (const connection of orderedConnections(server)) {
+      let found: PlexLibrary[];
+      try {
+        found = (await api<{ libraries: PlexLibrary[] }>("/api/v1/setup/plex/libraries", {
+          method: "POST",
+          csrf: token,
+          body: { serverId: server.id, connectionUri: connection.uri }
+        })).libraries;
+      } catch {
+        continue;
+      }
+      if (!mounted.current) return;
+      if (found.length === 0) {
+        setError(`${server.name} has no music library. Add one in Plex, then try again.`);
+        setStatus(null);
+        setStep("server");
+        setBusy(false);
+        return;
+      }
       setSelectedServer(server);
       setSelectedConnection(connection);
-      setLibraries(result.libraries);
-      setLibraryId(result.libraries[0]?.id ?? "");
+      setLibraries(found);
+      setLibraryId(found[0]?.id ?? "");
+      if (found.length === 1 && found[0]) {
+        await finish(server, connection, found[0].id, token);
+        return;
+      }
+      setStatus(null);
       setStep("library");
-    } catch (cause) {
-      setError(errorMessage(cause, "Plex server discovery failed."));
-    } finally {
       setBusy(false);
+      return;
     }
+    if (!mounted.current) return;
+    setError(
+      `SyncAndRun could not reach ${server.name}. Check that Plex Media Server is running and reachable from the computer running SyncAndRun.`
+    );
+    setStatus(null);
+    setStep("server");
+    setBusy(false);
   }
 
-  async function chooseLibrary(event: FormEvent) {
-    event.preventDefault();
-    if (!csrf || !selectedServer || !selectedConnection || !libraryId) return;
+  async function finish(server: PlexServer, connection: PlexConnection, library: string, token: string) {
     setBusy(true);
     setError(null);
     try {
       await api("/api/v1/setup/plex/complete", {
         method: "POST",
-        csrf,
-        body: {
-          serverId: selectedServer.id,
-          connectionUri: selectedConnection.uri,
-          librarySectionId: libraryId
-        }
+        csrf: token,
+        body: { serverId: server.id, connectionUri: connection.uri, librarySectionId: library }
       });
-      onReady(csrf);
+      onReady(token);
     } catch (cause) {
+      if (!mounted.current) return;
       setError(errorMessage(cause, "Plex setup could not be completed."));
+      setStatus(null);
       setBusy(false);
     }
+  }
+
+  async function chooseServer(event: FormEvent) {
+    event.preventDefault();
+    const server = servers.find((candidate) => candidate.id === serverChoice);
+    if (!csrf || !server) return;
+    setStatus(`Connecting to ${server.name}…`);
+    await openServer(server, csrf);
+  }
+
+  async function chooseLibrary(event: FormEvent) {
+    event.preventDefault();
+    if (!csrf || !selectedServer || !selectedConnection || !libraryId) return;
+    await finish(selectedServer, selectedConnection, libraryId, csrf);
   }
 
   if (step === "server") {
     return (
       <section className="panel bracket-frame">
         <SectionLabel>Setup · step 2 of 3</SectionLabel>
-        <h1 className="display display-lg">Choose a Plex server</h1>
-        <p className="lede">Only trusted HTTPS connections are offered to the watch companion.</p>
-        {error !== null && <div className="divider" />}
+        <h1 className="display display-lg">Choose your Plex server</h1>
+        <p className="lede">Pick the server that holds your music. SyncAndRun finds the best way to reach it.</p>
+        {status !== null && <Notice>{status}</Notice>}
         {error !== null && <Notice tone="error">{error}</Notice>}
-        <form className="stack" onSubmit={chooseServer} style={{ marginTop: "1.25rem" }}>
-          <div className="field">
-            <label htmlFor="server-choice">Server and HTTPS connection</label>
-            <select id="server-choice" value={serverChoice} onChange={(event) => setServerChoice(event.target.value)}>
-              {servers.flatMap((server, serverIndex) =>
-                server.connections.map((connection, connectionIndex) => (
-                  <option key={`${server.id}:${connection.uri}`} value={`${serverIndex}:${connectionIndex}`}>
+        {servers.length > 0 && (
+          <form className="stack" onSubmit={chooseServer} style={{ marginTop: "1.25rem" }}>
+            <div className="field">
+              <label htmlFor="server-choice">Plex server</label>
+              <select id="server-choice" value={serverChoice} onChange={(event) => setServerChoice(event.target.value)}>
+                {servers.map((server) => (
+                  <option key={server.id} value={server.id}>
                     {server.name}
-                    {connection.relay ? " · Relay" : ""}
                   </option>
-                ))
-              )}
-            </select>
-          </div>
-          <div className="actions">
-            <button className="btn btn-primary" disabled={busy}>
-              Continue to music library
-            </button>
-          </div>
-        </form>
+                ))}
+              </select>
+            </div>
+            <div className="actions">
+              <button className="btn btn-primary" disabled={busy}>
+                {busy ? "Connecting…" : "Continue"}
+              </button>
+            </div>
+          </form>
+        )}
       </section>
     );
   }
@@ -152,7 +197,10 @@ export function Setup({ onReady }: { onReady: (csrf: string) => void }) {
       <section className="panel bracket-frame">
         <SectionLabel>Setup · step 3 of 3</SectionLabel>
         <h1 className="display display-lg">Choose a music library</h1>
-        <p className="lede">SyncAndRun reads audio playlists from one library. Plex stays the playlist editor.</p>
+        <p className="lede">
+          {selectedServer?.name ?? "This server"} has more than one music library. SyncAndRun uses playlists from the one
+          you pick.
+        </p>
         {error !== null && <Notice tone="error">{error}</Notice>}
         <form className="stack" onSubmit={chooseLibrary} style={{ marginTop: "1.25rem" }}>
           <div className="field">
@@ -175,32 +223,19 @@ export function Setup({ onReady }: { onReady: (csrf: string) => void }) {
     );
   }
 
-  const secure = window.location.protocol === "https:";
   return (
     <section className="panel bracket-frame">
-      <SectionLabel>Setup · step 1 of 3 · private by design</SectionLabel>
+      <SectionLabel>Setup · step 1 of 3</SectionLabel>
       <h1 className="display display-xl">Your Plex music. Offline on your Garmin.</h1>
       <p className="lede" style={{ marginTop: "1rem" }}>
-        Connect one Plex server, choose existing audio playlists, and keep them playable when your phone and every
-        network are gone.
+        Sign in with Plex, pick the playlists you want, then pair your watch. The Plex account that signs in first owns
+        this SyncAndRun; only that account can manage it afterwards.
       </p>
-      <div className="readout-grid" style={{ margin: "1.5rem 0" }}>
-        <Readout label="Endpoint" value={window.location.host} />
-        <Readout label="Transport" value={secure ? "HTTPS" : "HTTP"} />
-        <Readout label="Transport security" value={secure ? "Encrypted" : "Unencrypted LAN"} />
-      </div>
-      {!secure && (
-        <Notice tone="error">
-          Local HTTP requires an explicit private-LAN deployment opt-in. Setup links, browser sessions, watch credentials, and media
-          can be read by others on this network. Use this address only on a home LAN you control.
-        </Notice>
-      )}
-      <Notice>First setup requires a private setup link from the host. After setup, only the installation owner can sign in.</Notice>
       {status !== null && <Notice>{status}</Notice>}
       {error !== null && <Notice tone="error">{error}</Notice>}
       <div className="actions" style={{ marginTop: "1.25rem" }}>
         <button className="btn btn-primary" disabled={busy} onClick={() => void connectPlex()}>
-          {busy ? "Waiting for Plex…" : "Connect Plex"}
+          {busy ? "Waiting for Plex…" : "Sign in with Plex"}
         </button>
         {authUrl !== null && (
           <a className="btn btn-ghost" href={authUrl} target="_blank" rel="noopener noreferrer">
@@ -212,13 +247,8 @@ export function Setup({ onReady }: { onReady: (csrf: string) => void }) {
   );
 }
 
-function Readout({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="readout">
-      <p className="readout-label">{label}</p>
-      <p className="readout-value" style={{ fontSize: "0.95rem", overflowWrap: "anywhere" }}>
-        {value}
-      </p>
-    </div>
-  );
+/** Direct connections first, then remote ones, relays last. */
+function orderedConnections(server: PlexServer): PlexConnection[] {
+  const rank = (connection: PlexConnection) => (connection.relay ? 2 : connection.local ? 0 : 1);
+  return [...server.connections].sort((left, right) => rank(left) - rank(right));
 }

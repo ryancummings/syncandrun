@@ -145,6 +145,7 @@ export function App() {
                 void loadSettings();
                 refreshStatus();
               }}
+              onPairWatch={() => setScreen("watch")}
             />
           )}
           {ready && csrf !== null && screen === "watch" && (

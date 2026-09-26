@@ -16,31 +16,35 @@ module SyncAndRun {
 				if ($.debug) {
 					System.println("Menu.Settings::load()");
 				}
+				// Setup order: where the server is, then pairing, then a check.
+				// Everything for unusual installations or support is one level
+				// down, so the everyday list fits on one screen.
 				return MenuBase.setItems([
 					{
-						LABEL => WatchUi.loadResource(Rez.Strings.CompanionServer_label),
+						LABEL => WatchUi.loadResource(Rez.Strings.OriginEditor_title),
 						SUBLABEL => method(:companionServer),
-						METHOD => method(:onEditCompanion),
-					},
-					{
-						LABEL => WatchUi.loadResource(Rez.Strings.OriginEditor_advanced),
-						SUBLABEL => WatchUi.loadResource(Rez.Strings.OriginEditor_advancedHint),
-						METHOD => method(:onEditCompanionAdvanced),
-					},
-					{
-						LABEL => WatchUi.loadResource(Rez.Strings.OriginEditor_lanTitle),
-						SUBLABEL => WatchUi.loadResource(Rez.Strings.OriginEditor_lanHint),
 						METHOD => method(:onEditLanIp),
+					},
+					{
+						LABEL => WatchUi.loadResource(Rez.Strings.PairWatch_label),
+						SUBLABEL => method(:pairingState),
+						METHOD => method(:onPairWatch),
 					},
 					{
 						LABEL => WatchUi.loadResource(Rez.Strings.CompanionTest_label),
 						SUBLABEL => method(:connectionStatus),
 						METHOD => method(:onTestCompanion),
 					},
+					new Menu.Advanced(),
+				]);
+			}
+
+			function advancedItems() {
+				return [
 					{
-						LABEL => WatchUi.loadResource(Rez.Strings.PairWatch_label),
-						SUBLABEL => method(:pairingState),
-						METHOD => method(:onPairWatch),
+						LABEL => WatchUi.loadResource(Rez.Strings.OtherAddress_label),
+						SUBLABEL => WatchUi.loadResource(Rez.Strings.OtherAddress_hint),
+						METHOD => method(:onEditCompanion),
 					},
 					{
 						LABEL => WatchUi.loadResource(Rez.Strings.Profile_label),
@@ -62,7 +66,7 @@ module SyncAndRun {
 						SUBLABEL => WatchUi.loadResource(Rez.Strings.confSync_MoreInfo_RemoveAll_sublabel),
 						METHOD => method(:onReset),
 					},
-				]);
+				];
 			}
 
 			function connectionStatus() {
@@ -93,11 +97,7 @@ module SyncAndRun {
 					WatchUi.SLIDE_IMMEDIATE);
 			}
 
-			function onEditLanIp() {
-				var view = new SyncAndRun.CompanionOriginEditor(SyncAndRun.CompanionOrigin.current(), true);
-				WatchUi.pushView(view, new SyncAndRun.CompanionOriginEditorDelegate(view),
-					WatchUi.SLIDE_IMMEDIATE);
-			}
+			function onEditLanIp() { SyncAndRun.Setup.openAddress(false); }
 
 			function onTestCompanion() {
 				if (!(new SyncAndRun.Client()).validOrigin()) {
@@ -113,10 +113,7 @@ module SyncAndRun {
 				return SyncAndRun.pairingCode() == null ? "Not paired" : "Code entered";
 			}
 
-			function onPairWatch() {
-				var view = new SyncAndRun.PairingPicker();
-				WatchUi.pushView(view, new SyncAndRun.PairingPickerDelegate(view), WatchUi.SLIDE_IMMEDIATE);
-			}
+			function onPairWatch() { SyncAndRun.Setup.openPairing(false); }
 
 			function profile() {
 				var value = Application.Storage.getValue("syncandrun.profile");
@@ -128,6 +125,21 @@ module SyncAndRun {
 			}
 
 			function onReset() { (new Menu.Storage()).onRemoveAll(); }
+		}
+
+		// Other address, profile, version, license, and reset: for HTTPS or
+		// named installations and for support, not for everyday setup.
+		class Advanced extends MenuBase {
+
+			function initialize() {
+				MenuBase.initialize(WatchUi.loadResource(Rez.Strings.Advanced_label), false);
+			}
+
+			// A separate Settings instance owns the item callbacks, so this menu
+			// holds no reference back to the Settings menu that contains it.
+			function load() { return MenuBase.setItems((new Settings()).advancedItems()); }
+
+			function sublabel() { return WatchUi.loadResource(Rez.Strings.Advanced_hint); }
 		}
 	}
 }

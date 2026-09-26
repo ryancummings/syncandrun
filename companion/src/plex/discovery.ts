@@ -104,7 +104,7 @@ export class PlexDiscoveryClient {
         presence: resource.presence,
         accessToken: resource.accessToken,
         connections: resource.connections.flatMap((connection) => {
-          const uri = normalizeHttpsOrigin(connection.uri);
+          const uri = normalizeConnectionOrigin(connection.uri);
           return uri === undefined ? [] : [{ uri, local: connection.local, relay: connection.relay }];
         })
       }))
@@ -161,11 +161,12 @@ export class PlexDiscoveryClient {
   }
 }
 
-function normalizeHttpsOrigin(value: string): string | undefined {
+/** Plex's LAN-only `http://` connections count: SyncAndRun usually runs next to Plex. */
+function normalizeConnectionOrigin(value: string): string | undefined {
   try {
     const url = new URL(value);
     if (
-      url.protocol !== "https:" ||
+      (url.protocol !== "https:" && url.protocol !== "http:") ||
       url.username !== "" ||
       url.password !== "" ||
       url.search !== "" ||

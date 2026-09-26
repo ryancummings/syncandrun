@@ -19,7 +19,7 @@ tree, and generated build artifacts. Unrelated fetched branches are outside this
 release gate; inspect all local refs separately with
 `gitleaks git --no-banner --redact --log-opts=--all .` when auditing archives.
 
-For a public deployment, additionally verify that a visitor without a setup link cannot claim an empty installation, another Plex account cannot obtain management access, a setup link expires and cannot be reused, owner disconnect does not remove ownership, and multiple watches belonging to the owner retain separate credentials and synchronization state.
+For a public deployment, additionally verify that the owner claimed the installation before it was exposed, another Plex account cannot obtain management access, owner disconnect does not remove ownership, and multiple watches belonging to the owner retain separate credentials and synchronization state.
 
 ## Physical acceptance — awaiting the watch owner
 

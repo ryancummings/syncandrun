@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { api, errorMessage, type Profile, type Settings, type SyncStatus } from "../api";
 import { formatBytes, formatDate, formatRemaining, formatRevision } from "../format";
 import { ConfirmAction, CopyField, ModeTag, Notice, Readout, SectionLabel } from "./primitives";
+import { watchAddress } from "./Devices";
 
 const profiles: Array<{ value: Profile; label: string; perHourMb: number }> = [
   { value: "compact", label: "Compact · 64 kbps", perHourMb: 29 },
@@ -118,28 +119,10 @@ export function CompanionSettings({
         </div>
         <h2 className="display display-sm">Companion address</h2>
         <p className="meta" style={{ margin: "0.5rem 0 1rem" }}>
-          The watch cannot discover this companion. Type this address into the watch application's settings, then
-          pair from <span className="mono">Settings → Pair watch</span> on the watch itself.
+          The address the watch uses to reach this companion. The <span className="mono">Watch</span> tab walks through
+          entering it and pairing.
         </p>
-        <CopyField label="Companion address" value={settings?.companionUrl ?? null} announce={announce} />
-        {settings?.companionUrl.startsWith("http://") && (
-          <Notice tone="error">Home-LAN HTTP is unencrypted. Keep this address on your trusted Wi-Fi; setup links, browser sessions, watch credentials, and music can be read by others on that network.</Notice>
-        )}
-        <ol className="steps">
-          <li>
-            Open Garmin Connect on your phone, then your watch → <span className="mono">Music</span> →{" "}
-            <span className="mono">Music Providers</span> → <span className="mono">SyncAndRun</span> → settings. Menu
-            wording moves between Connect releases; Garmin Express on a computer reaches the same screen.
-          </li>
-          <li>
-            Put the address above in <span className="mono">Companion URL</span> and save. Connect pushes the
-            setting to the watch over Bluetooth, which is not instant.
-          </li>
-          <li>
-            Start a sync on the watch. If it reports that it cannot reach the companion, the setting has not landed
-            yet — reopen the screen and confirm the value stuck.
-          </li>
-        </ol>
+        <CopyField label="Companion address" value={watchAddress().origin} announce={announce} />
       </section>
 
       <section className="panel">
