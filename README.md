@@ -8,6 +8,8 @@ Sync existing Plex music playlists to a Garmin Forerunner 955 / Solar, then list
 
 On a computer on your home network that is always on, with Docker installed:
 
+For a personal desktop installation on macOS, Windows, or Linux, see [the desktop guide](docs/DESKTOP.md). It packages the same companion and management UI, serving a chosen private IPv4 address on port 31415.
+
 ```sh
 git clone https://github.com/ryancummings/syncandrun.git
 cd syncandrun

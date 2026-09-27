@@ -4,6 +4,8 @@ This is a preview. Automated tests do not establish physical-watch compatibility
 
 Each installation is for one Plex owner on hardware they control. It supports multiple watches belonging to that owner. Hosting for other people is outside the product scope.
 
+This guide covers Docker. The [desktop guide](DESKTOP.md) covers the macOS, Windows, and Linux app, which uses the same companion and browser interface at a chosen private IPv4 address on port 31415.
+
 ## Quick start on a home network
 
 ```sh

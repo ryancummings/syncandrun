@@ -1,0 +1,46 @@
+{
+  "name": "syncandrun-desktop",
+  "version": "0.1.0",
+  "description": "Personal Plex to Garmin companion service",
+  "author": { "name": "SyncAndRun contributors", "email": "ryancummings@users.noreply.github.com" },
+  "homepage": "https://github.com/ryancummings/syncandrun",
+  "private": true,
+  "type": "module",
+  "main": "main.mjs",
+  "scripts": {
+    "stage": "node scripts/stage.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "pack:linux": "pnpm stage && electron-builder --linux AppImage deb --publish never",
+    "pack:mac": "pnpm stage && electron-builder --mac dmg zip --publish never",
+    "pack:win": "pnpm stage && electron-builder --win nsis portable --publish never"
+  },
+  "dependencies": {
+    "better-sqlite3": "12.2.0",
+    "fastify": "5.12.2",
+    "pino": "9.14.0",
+    "zod": "4.1.5"
+  },
+  "devDependencies": {
+    "electron": "41.10.3",
+    "electron-builder": "26.17.0"
+  },
+  "build": {
+    "appId": "icu.rads.syncandrun",
+    "productName": "SyncAndRun Companion",
+    "executableName": "syncandrun-companion",
+    "asar": true,
+    "npmRebuild": false,
+    "asarUnpack": ["**/*.node"],
+    "directories": { "output": "release" },
+    "files": ["main.mjs", "network.mjs", "bootstrap.html", "bootstrap.js", "bootstrap-preload.cjs", "icon.png", "companion/dist/**/*", "package.json"],
+    "extraResources": [
+      { "from": "../LICENSE", "to": "LICENSE" },
+      { "from": "../NOTICE.md", "to": "NOTICE.md" }
+    ],
+    "mac": { "target": ["dmg", "zip"], "category": "public.app-category.music", "hardenedRuntime": false, "identity": null },
+    "win": { "target": ["nsis", "portable"] },
+    "linux": { "target": ["AppImage", "deb"], "category": "AudioVideo" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true },
+    "publish": null
+  }
+}
