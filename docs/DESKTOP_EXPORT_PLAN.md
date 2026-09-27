@@ -77,6 +77,15 @@ published design uses a Rust daemon and Tauri UI with Garmin MTP support and
 Jellyfin/Subsonic sources. It does not list Plex support. Review its behavior
 and licensing before considering any reuse; no HifiMule code is included here.
 
+## Owner's Mac export inspection
+
+A read-only inspection of the owner's local export found two portable layouts:
+playlist folders that contain MP3s and an M3U8 each, and a shared-tracks folder
+with separate M3U8 playlist files. Every M3U8 entry resolved to a local MP3.
+The MP3s had title, artist, and album tags. No track or playlist names were
+recorded. Confirm which layout was copied to the watch and whether watch order
+matched Plex before choosing the default MTP layout.
+
 ## Source notes
 
 - [Garmin personal music installation](https://support.garmin.com/sv-SE/?faq=1ZDlVH09XB1169yYD5FIWA): Windows local folders and libraries; macOS Music/iTunes; Express transfer steps.
