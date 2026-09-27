@@ -19,6 +19,8 @@ developer_key*
 
 # Garmin and general build output
 build/
+desktop/companion/
+desktop/release/
 bin/
 *.prg
 *.iq

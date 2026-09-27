@@ -107,7 +107,7 @@ function parseBaseOrigin(value: string, allowLanHttp: boolean): URL {
   }
   if (!isPrivateLanHttpUrl(url) || url.username !== "" || url.password !== "" || url.search !== ""
       || url.hash !== "" || (url.pathname !== "" && url.pathname !== "/")) {
-    throw new Error("SYNCANDRUN_BASE_URL must be a private IPv4 HTTP origin on port 80 without credentials, path, query, or fragment when LAN HTTP is enabled");
+    throw new Error("SYNCANDRUN_BASE_URL must be a private IPv4 HTTP origin with an optional unprivileged port and without credentials, path, query, or fragment when LAN HTTP is enabled");
   }
   return new URL(url.origin);
 }

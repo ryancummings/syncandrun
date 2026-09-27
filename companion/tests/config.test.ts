@@ -105,8 +105,10 @@ describe("runtime configuration", () => {
     const environment = { SYNCANDRUN_SECRET: "a".repeat(32), SYNCANDRUN_ALLOW_LAN_HTTP: "true" };
     expect(loadConfig({ ...environment, SYNCANDRUN_BASE_URL: "http://192.168.1.20" }).baseUrl.origin)
       .toBe("http://192.168.1.20");
+    expect(loadConfig({ ...environment, SYNCANDRUN_BASE_URL: "http://192.168.1.20:31415" }).baseUrl.origin)
+      .toBe("http://192.168.1.20:31415");
     for (const origin of ["http://8.8.8.8", "http://127.0.0.1", "http://example.test",
-      "http://192.168.1.20:3000", "https://music.example.test"]) {
+      "http://192.168.1.20:443", "https://music.example.test"]) {
       expect(() => loadConfig({ ...environment, SYNCANDRUN_BASE_URL: origin })).toThrow("SYNCANDRUN_BASE_URL");
     }
     expect(() => loadConfig({ SYNCANDRUN_SECRET: environment.SYNCANDRUN_SECRET,

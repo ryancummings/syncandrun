@@ -8,6 +8,8 @@ Sync existing Plex music playlists to a Garmin Forerunner 955 / Solar, then list
 
 Follow [the deployment guide](docs/DEPLOYMENT.md) for Linux amd64 or arm64 with Docker Compose. It covers public and home-LAN HTTPS domains, an opt-in home-LAN HTTP address, and optional Tailscale Funnel. The chosen route needs physical-watch testing, including sustained audio transfer.
 
+For a personal desktop installation on macOS, Windows, or Linux, see [the desktop guide](docs/DESKTOP.md). It packages the same companion and management UI, with an explicit private-LAN HTTP choice and a persistent per-user profile.
+
 The setup helper generates a private encryption secret. The service binds to loopback behind the chosen proxy. An operator-created, single-use setup link assigns the installation owner; later management requires that owner's Plex account.
 
 Each installation serves its owner’s one Plex account, server, and music library, and can pair multiple watches belonging to that owner. [Agent deployment instructions](docs/AGENT_DEPLOYMENT.md) cover preparation, checks, recovery, and handoff without maintainer-private tools.

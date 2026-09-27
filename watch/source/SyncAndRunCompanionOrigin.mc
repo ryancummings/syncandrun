@@ -103,6 +103,7 @@ module SyncAndRun {
                 if ((port.find(":") != null) || !validCompanionPort(port)) { return null; }
             }
             if (!validCompanionHost(host)) { return null; }
+            if (scheme.equals("http://") && !validPrivateLanIpv4(host)) { return null; }
             return scheme + authority;
         }
 

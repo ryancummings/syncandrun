@@ -5,7 +5,7 @@ using Toybox.WatchUi;
 module SyncAndRun {
 
 	const ORIGIN_EDITOR_CHARACTERS = "abcdefghijklmnopqrstuvwxyz0123456789.-:";
-	const ORIGIN_EDITOR_LAN_CHARACTERS = "0123456789.";
+	const ORIGIN_EDITOR_LAN_CHARACTERS = "0123456789.:";
 	const ORIGIN_EDITOR_SAVE = 1;
 	const ORIGIN_EDITOR_CANCEL = 2;
 	const ORIGIN_EDITOR_NO_ACTION = 0;
@@ -34,8 +34,11 @@ module SyncAndRun {
 			var candidate = value.toLower();
 			if (d_lanMode) {
 				if ((candidate.length() >= 7) && candidate.substring(0, 7).equals("http://")) {
-					var host = candidate.substring(7, null);
-					if (CompanionOrigin.validCompanionIpv4(host)) { d_authority = host; }
+					var authority = candidate.substring(7, null);
+					if (CompanionOrigin.normalize(candidate) instanceof Lang.String
+						&& CompanionOrigin.validPrivateLanIpv4(authority.substring(0, authority.find(":")))) {
+						d_authority = authority;
+					}
 				}
 				return;
 			}

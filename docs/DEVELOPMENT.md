@@ -13,6 +13,17 @@ make companion-build companion-test companion-e2e contract-test NODE22=node
 
 On Linux, Playwright can require system packages: run `corepack pnpm --dir companion exec playwright install --with-deps chromium` on a machine where you can install them. Node 22 is required for the native SQLite module. Reinstall dependencies under Node 22 if they were built under another Node version.
 
+## Desktop packages
+
+With Node 22 and the workspace dependencies installed, build the companion and then the desktop package on each native host:
+
+```sh
+corepack pnpm --dir companion build
+corepack pnpm --dir desktop pack:linux # or pack:mac / pack:win on that OS
+```
+
+The package commands stage the built companion into `desktop/companion/dist` and write artifacts to `desktop/release`. Review [desktop installation and recovery](DESKTOP.md). Native SQLite must be packaged for Electron on each target architecture. Cross-built binaries alone do not count as native launch verification. Use a fresh OS user profile or set `SYNCANDRUN_DESKTOP_TEST_PROFILE` to an absolute private temporary directory for UI smoke tests; never point a test at a production profile. Run `corepack pnpm --dir desktop test` for the LAN gateway checks.
+
 ## Local browser development with fake Plex
 
 ```sh

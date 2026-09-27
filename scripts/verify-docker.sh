@@ -69,6 +69,8 @@ test "${status:-}" = healthy
 curl --fail --silent "http://127.0.0.1:$verify_port/health/live" | grep -q '"status":"ok"'
 curl --fail --silent "http://127.0.0.1:$verify_port/health/ready" | grep -q '"status":"ok"'
 curl --fail --silent "http://127.0.0.1:$verify_port/" | grep -q '<title>SyncAndRun'
+test "$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:$verify_port/api/v1/settings")" = 401
+test "$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:$verify_port/api/v1/watch/config")" = 401
 headers=$(curl --fail --silent --dump-header - --output /dev/null "http://127.0.0.1:$verify_port/")
 printf '%s' "$headers" | grep -qi '^Content-Security-Policy:'
 printf '%s' "$headers" | grep -qi '^Referrer-Policy: no-referrer'

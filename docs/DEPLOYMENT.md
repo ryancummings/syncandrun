@@ -4,6 +4,8 @@ This is a preview. Automated tests do not establish physical-watch compatibility
 
 Each installation is for one Plex owner on hardware they control. It supports multiple watches belonging to that owner. Hosting for other people is outside the product scope.
 
+This guide covers Docker. The [desktop guide](DESKTOP.md) covers the macOS, Windows, and Linux app, which uses the same companion and browser interface at a chosen private IPv4 address on port 31415.
+
 ## Requirements
 
 For an always-on deployment, use a Linux amd64 or arm64 host with Docker Engine and the Compose v2 plugin, Git, Python 3, and enough persistent storage. For local persistent development, macOS Docker Desktop is also supported by the helper below. Build on the target architecture. Plex Media Server must be reachable from the container and able to serve/transcode the owner's music. `localhost` inside a container is the container, not the Plex host: use Plex's reachable LAN address or DNS name. Keep Plex authentication enabled.

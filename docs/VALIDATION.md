@@ -14,6 +14,8 @@ and stopped-service backup/restore. The cross-architecture stage requires Docker
 Buildx and CPU emulation; missing prerequisites leave that stage unverified and
 cause the command to fail even when the native stage passed.
 
+For desktop packages, additionally build on each native OS, launch with an isolated empty user profile, inspect a screenshot of the first-run and management windows, verify `/health/ready` and anonymous 401 from another LAN device, then restart and verify persistence. Record OS, architecture, artifact hash, and whether the app was actually launched. A package cross-built for Windows on Linux is not a native Windows run. Test a real Plex connection only with the owner's authorization and without printing credentials or library data. The desktop app's HTTP route uses a private IP and port 31415; test that the exact watch origin is reachable on the intended LAN and is not publicly forwarded.
+
 Secret scanning covers history reachable from the current `HEAD`, the working
 tree, and generated build artifacts. Unrelated fetched branches are outside this
 release gate; inspect all local refs separately with

@@ -453,7 +453,7 @@ module BoundedStorageTests {
 
         Test.assertEqual("https://music.example.test", SyncAndRun.CompanionOrigin.normalize("Music.Example.Test"));
         Test.assertEqual("https://music.example.test", SyncAndRun.CompanionOrigin.normalize("HTTPS://MUSIC.EXAMPLE.TEST"));
-        Test.assertEqual("http://music.example.test", SyncAndRun.CompanionOrigin.normalize("HTTP://MUSIC.EXAMPLE.TEST"));
+        Test.assert(SyncAndRun.CompanionOrigin.normalize("HTTP://MUSIC.EXAMPLE.TEST") == null);
         Test.assertEqual("https://192.168.1.20", SyncAndRun.CompanionOrigin.normalize("192.168.1.20"));
         Test.assertEqual("http://192.168.1.20:3000", SyncAndRun.CompanionOrigin.normalize("http://192.168.1.20:3000"));
         Test.assert(SyncAndRun.CompanionOrigin.validPrivateLanIpv4("10.4.13.21"));
@@ -580,13 +580,14 @@ module BoundedStorageTests {
         editor.adjust(1);
         Test.assertEqual("SAVE", editor.selectedLabel());
 
-        // The home-LAN entry starts on HTTP and offers only digits and dots.
+        // The home-LAN entry starts on HTTP and offers digits, dots, and a port separator.
         editor = new SyncAndRun.CompanionOriginEditor("https://music.example.test", true);
         Test.assertEqual("http://", editor.candidate());
         Test.assert(editor.selectCharacter("1"));
         Test.assertEqual(SyncAndRun.ORIGIN_EDITOR_NO_ACTION, editor.activate());
         Test.assert(!editor.selectCharacter("a"));
-        Test.assert(!editor.appendCharacter(":"));
+        Test.assert(editor.appendCharacter(":"));
+        Test.assert(editor.removeCharacter());
         Test.assert(editor.appendCharacter("0"));
         Test.assert(editor.appendCharacter("."));
         Test.assertEqual("http://10.", editor.candidate());
@@ -596,6 +597,8 @@ module BoundedStorageTests {
         Test.assertEqual("http://", editor.scheme());
         editor = new SyncAndRun.CompanionOriginEditor("http://192.168.1.20", true);
         Test.assertEqual("192.168.1.20", editor.authority());
+        editor = new SyncAndRun.CompanionOriginEditor("http://192.168.1.20:31415", true);
+        Test.assertEqual("192.168.1.20:31415", editor.authority());
         return true;
     }
 }

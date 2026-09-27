@@ -9,3 +9,7 @@ regexes = [
   '''different-operator-secret-at-least-32''',
   '''sanitized-plex-token-value''',
 ]
+
+[[allowlists]]
+description = "Electron asar byte boundaries create false positives; staged source and extracted files scan clean."
+paths = ['''^desktop/release/[^/]+/resources/app\.asar$''']
