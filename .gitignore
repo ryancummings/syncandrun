@@ -43,3 +43,6 @@ data/
 setup-link*.txt
 __pycache__/
 *.pyc
+
+# Rust build output
+/target/

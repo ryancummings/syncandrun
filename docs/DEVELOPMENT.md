@@ -1,5 +1,9 @@
 # Development
 
+For the Linux Rust app and CLI, follow [the native development guide](RUST.md).
+
+## Retained Electron build
+
 Use Node.js 22 and Corepack. The repository pins pnpm. Install dependencies and run the checks from the root:
 
 ```sh

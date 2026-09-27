@@ -1,5 +1,32 @@
 # Validation
 
+## Rust Linux implementation
+
+The native Rust workspace builds on Ubuntu 24.04 x86_64 with Rust 1.98.1 and
+GPUI 0.2.2. Fourteen synthetic core tests pass, including all historical migration
+SQL, bidirectional Node/Rust credential encryption, owner enforcement, native
+profile locking, backup recovery, Plex pagination and identity checks, redirect
+rejection, MTP repeats/order, shared-file XML, ID3 handling, cancellation, and
+failed-export isolation. `cargo fmt`, workspace tests, and strict Clippy pass.
+
+The CLI smoke script exercises discovery, refresh, estimates, all three export
+layouts, and backup restoration using a temporary profile and a fake local Plex
+server. The native GPUI binary has launched under Xvfb/Openbox with software
+Vulkan. Its synthetic smoke test changed bitrate and playlist selection, chose
+an output directory through the GTK desktop portal, and created an export. The
+resulting window was visually inspected. This is a native development-binary
+launch, not a packaged installer test.
+
+Real Plex browser authorization, a physical GPU/Wayland session, and playback
+of Rust-generated output on a Garmin watch have not been tested. The fake MP3
+stream verifies file handling; it is not playable-audio evidence. Historical
+watch results below apply to the Electron exporter. Recheck the physical
+acceptance steps before describing the Rust exporter as watch-validated.
+
+Reproduce automated and native launch checks using [the Rust guide](RUST.md).
+
+## Historical Electron and physical-device evidence
+
 Automated checks cover TypeScript, Plex sign-in and ownership, playlist snapshots, desktop UI flow, MP3 export layout, and failed-export isolation. Build and launch the native package on each target operating system before describing it as supported. Use an empty isolated profile for launch checks and record the source commit, artifact hash, OS, and result.
 
 The Linux package has built and launched with a ready loopback service. Native macOS and Windows package launches remain unverified. A previous two-folder export copied with OpenMTP appeared as playlists on a personal Forerunner 955. On Linux, the 320 kbps export copied 20 MP3s through GVfs MTP and every file matched the source byte for byte. The watch discarded an extended M3U8 file with an `#EXTM3U` header; a plain relative-path M3U8 survived, was rewritten by the watch to device paths, appeared under its exported title, and played a track. This confirms one Linux playlist transfer and playback at 320 kbps. It does not verify every track, playlist order, other bitrates, or the Music/iTunes and Express routes.
