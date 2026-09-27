@@ -95,12 +95,27 @@ module SetupTests {
         var previous = Application.Storage.getValue(key);
         var resultKey = SyncAndRun.CompanionConnectionTest.RESULT_KEY;
         var previousResult = Application.Storage.getValue(resultKey);
+        var noticeKey = SyncAndRun.CompanionConnectionTest.NOTICE_KEY;
+        var previousNotice = Application.Storage.getValue(noticeKey);
         try {
             Application.Storage.setValue(key, true);
+            Test.assert(SyncAndRun.CompanionConnectionTest.requested());
             Test.assert(SyncAndRun.CompanionConnectionTest.takeRequest());
+            Test.assert(!SyncAndRun.CompanionConnectionTest.requested());
             Test.assert(!SyncAndRun.CompanionConnectionTest.takeRequest());
             SyncAndRun.CompanionConnectionTest.saveResult("Ready on Wi-Fi");
             Test.assertEqual("Ready on Wi-Fi", (new SyncAndRun.Menu.Settings()).connectionStatus());
+            Test.assertEqual("Ready on Wi-Fi", SyncAndRun.CompanionConnectionTest.pendingNotice());
+            var view = Application.getApp().getPlaybackConfigurationView();
+            Test.assert(view[0] instanceof TextView);
+            // The result remains available until the owner acknowledges it,
+            // even if Garmin constructs a playback view while exiting sync.
+            Test.assertEqual("Ready on Wi-Fi", SyncAndRun.CompanionConnectionTest.pendingNotice());
+            SyncAndRun.CompanionConnectionTest.acknowledgeNotice();
+            Test.assert(SyncAndRun.CompanionConnectionTest.pendingNotice() == null);
+            Test.assertEqual("Ready on Wi-Fi", (new SyncAndRun.Menu.Settings()).connectionStatus());
+            var normalView = Application.getApp().getPlaybackConfigurationView();
+            Test.assert(normalView[0] instanceof SyncAndRun.Menu.MenuView);
             SyncAndRun.CompanionConnectionTest.clearResult();
             Test.assert(SyncAndRun.CompanionConnectionTest.result() == null);
         } finally {
@@ -108,6 +123,8 @@ module SetupTests {
             else { Application.Storage.setValue(key, previous); }
             if (previousResult == null) { Application.Storage.deleteValue(resultKey); }
             else { Application.Storage.setValue(resultKey, previousResult); }
+            if (previousNotice == null) { Application.Storage.deleteValue(noticeKey); }
+            else { Application.Storage.setValue(noticeKey, previousNotice); }
         }
         return true;
     }

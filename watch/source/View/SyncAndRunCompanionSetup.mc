@@ -59,23 +59,52 @@ module SyncAndRun {
 	module CompanionConnectionTest {
 		const REQUEST_KEY = "syncandrun.connection_check_requested";
 		const RESULT_KEY = "syncandrun.connection_check_result";
+		const NOTICE_KEY = "syncandrun.connection_check_notice";
 
 		function start() {
 			Application.Storage.deleteValue(RESULT_KEY);
+			Application.Storage.deleteValue(NOTICE_KEY);
 			Application.Storage.setValue(REQUEST_KEY, true);
 			Menu.Playback.onSyncNow();
 		}
 
 		function result() { return Application.Storage.getValue(RESULT_KEY); }
 
-		function saveResult(value) { Application.Storage.setValue(RESULT_KEY, value); }
+		function saveResult(value) {
+			Application.Storage.setValue(RESULT_KEY, value);
+			Application.Storage.setValue(NOTICE_KEY, value);
+		}
 
-		function clearResult() { Application.Storage.deleteValue(RESULT_KEY); }
+		function pendingNotice() { return Application.Storage.getValue(NOTICE_KEY); }
+
+		function acknowledgeNotice() { Application.Storage.deleteValue(NOTICE_KEY); }
+
+		function clearResult() {
+			Application.Storage.deleteValue(RESULT_KEY);
+			acknowledgeNotice();
+		}
+
+		function requested() { return Application.Storage.getValue(REQUEST_KEY) == true; }
 
 		function takeRequest() {
-			var requested = Application.Storage.getValue(REQUEST_KEY) == true;
+			var wasRequested = requested();
 			Application.Storage.deleteValue(REQUEST_KEY);
-			return requested;
+			return wasRequested;
 		}
+	}
+
+	class ConnectionResultDelegate extends WatchUi.BehaviorDelegate {
+		function initialize() { BehaviorDelegate.initialize(); }
+
+		function continueToMenu() {
+			CompanionConnectionTest.acknowledgeNotice();
+			var menu = new Menu.Playback();
+			menu.load();
+			WatchUi.switchToView(new Menu.MenuView(menu), menu.delegate(), WatchUi.SLIDE_IMMEDIATE);
+		}
+
+		function onSelect() { continueToMenu(); return true; }
+
+		function onBack() { continueToMenu(); return true; }
 	}
 }

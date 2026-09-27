@@ -1,5 +1,6 @@
 using Toybox.Application;
 using Toybox.WatchUi;
+using Toybox.Lang;
 using SyncAndRun.Menu;
 
 var debug = false;
@@ -60,6 +61,11 @@ class SyncAndRunApp extends Application.AudioContentProviderApp {
 
     // Get the initial view for configuring playback
     function getPlaybackConfigurationView() {
+        var checkResult = SyncAndRun.CompanionConnectionTest.pendingNotice();
+        if (checkResult instanceof Lang.String) {
+            return [new TextView("Connection check\n" + checkResult + "\n\nPress START"),
+                new SyncAndRun.ConnectionResultDelegate()];
+        }
         var menu = new Menu.Playback();
         menu.load();    // menu needs to be loaded when MenuLoader is not used
     	return [ new Menu.MenuView(menu), menu.delegate() ];

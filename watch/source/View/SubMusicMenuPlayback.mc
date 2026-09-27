@@ -85,7 +85,10 @@ module SyncAndRun {
 				// playback session belongs to SyncAndRun.
 				Media.stopPlayback();
 				if (Communications has :startSync2) {
-					Communications.startSync2({ :message => SyncAndRun.SyncStatus.startMessage() });
+					var message = SyncAndRun.CompanionConnectionTest.requested()
+						? "Checking Wi-Fi; reopen app for result"
+						: SyncAndRun.SyncStatus.startMessage();
+					Communications.startSync2({ :message => message });
 				} else {
 					Communications.startSync();
 				}
