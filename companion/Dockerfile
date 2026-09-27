@@ -3,6 +3,7 @@ FROM node:22-bookworm-slim AS build
 ENV COREPACK_HOME=/corepack
 ENV PATH=$COREPACK_HOME:$PATH
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY companion/package.json companion/package.json
@@ -18,6 +19,7 @@ FROM node:22-bookworm-slim AS production-dependencies
 ENV COREPACK_HOME=/corepack
 ENV PATH=$COREPACK_HOME:$PATH
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY companion/package.json companion/package.json
 RUN corepack enable && corepack pnpm install --prod --frozen-lockfile
