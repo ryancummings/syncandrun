@@ -7,6 +7,7 @@ import { CompanionSettings } from "./components/Settings";
 import { Setup } from "./components/Setup";
 import { Notice, StatusDot } from "./components/primitives";
 import { useSyncStatus } from "./useSyncStatus";
+import { DesktopApp } from "./DesktopApp";
 
 type Screen = "playlists" | "watch" | "settings";
 type Theme = "dark" | "light";
@@ -24,6 +25,10 @@ function readTheme(): Theme {
 }
 
 export function App() {
+  return window.syncandrunDesktop ? <DesktopApp /> : <WebApp />;
+}
+
+function WebApp() {
   const [mode, setMode] = useState<"loading" | "setup" | "ready">("loading");
   const [csrf, setCsrf] = useState<string | null>(null);
   const [screen, setScreen] = useState<Screen>("playlists");

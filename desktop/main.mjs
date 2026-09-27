@@ -1,11 +1,13 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from "electron";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import { chmod, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createGateway, privateLanAddresses } from "./network.mjs";
+import { exportMusic, readExportPlan } from "./export.mjs";
 import { OwnerRepository } from "./companion/dist/persistence/owner-repository.js";
+import { PlexSetupService } from "./companion/dist/plex/setup-service.js";
+import { PlexMediaProxy } from "./companion/dist/plex/media-proxy.js";
 import { loadConfig } from "./companion/dist/config.js";
 import { createRuntime } from "./companion/dist/runtime.js";
 
@@ -18,51 +20,19 @@ if (isolatedProfile) {
   app.setPath("userData", isolatedProfile);
 }
 let companion;
-let gateway;
 let window;
-let tray;
 let configuredAddress;
 let quitting = false;
 let serviceOperation;
-let bootstrapping = true;
 let shutdownComplete = false;
 let shutdownPending = false;
+let exportDestination;
+let exportRunning = false;
+let lastExportPath;
 
 function profilePaths() {
   const root = app.getPath("userData");
   return { root, config: join(root, "desktop.json"), secret: join(root, "secret"), data: join(root, "data") };
-}
-
-async function selectAddress(addresses, current) {
-  if (addresses.length === 0) throw new Error("No private IPv4 LAN interface is available. Connect to the home LAN and retry.");
-  if (current && addresses.includes(current)) return current;
-  return await new Promise((resolve) => {
-    const selector = new BrowserWindow({
-      title: "SyncAndRun first run", width: 680, height: 590,
-      resizable: false, webPreferences: {
-        sandbox: true, contextIsolation: true, nodeIntegration: false,
-        preload: join(packageDirectory, "bootstrap-preload.cjs")
-      }
-    });
-    let completed = false;
-    const finish = (address) => {
-      if (completed) return;
-      completed = true;
-      ipcMain.removeListener("syncandrun:select-address", onChoice);
-      selector.destroy();
-      resolve(address);
-    };
-    const onChoice = (event, index) => {
-      if (event.sender !== selector.webContents || !Number.isInteger(index)) return;
-      finish(addresses[index]);
-    };
-    ipcMain.on("syncandrun:select-address", onChoice);
-    selector.on("closed", () => finish(undefined));
-    selector.webContents.on("did-finish-load", () => selector.webContents.send("syncandrun:addresses", {
-      addresses: addresses.map((address) => `${address}:${LAN_PORT}`), changed: Boolean(current)
-    }));
-    void selector.loadFile(join(packageDirectory, "bootstrap.html")).catch(() => finish(undefined));
-  });
 }
 
 async function readState() {
@@ -76,8 +46,7 @@ async function readState() {
       throw new Error("The saved desktop configuration is unsupported. Restore the matching app version or backup.");
     }
   }
-  const address = await selectAddress(privateLanAddresses(), saved?.address);
-  if (!address) return undefined;
+  const address = "127.0.0.1";
   if (!existsSync(paths.secret)) {
     await writeFile(paths.secret, randomBytes(48).toString("base64url"), { mode: 0o600, flag: "wx" });
   }
@@ -85,16 +54,6 @@ async function readState() {
   await mkdir(paths.data, { recursive: true, mode: 0o700 });
   const secret = await readFile(paths.secret, "utf8");
   return { paths, address, secret, changed: saved?.address !== address };
-}
-
-async function listen(server, address, port) {
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(port, address, () => {
-      server.removeListener("error", reject);
-      resolve();
-    });
-  });
 }
 
 async function startService(state) {
@@ -111,10 +70,7 @@ async function startService(state) {
   });
   companion = await createRuntime(config);
   try {
-    await companion.app.listen({ host: "127.0.0.1", port: 0 });
-    const localPort = companion.app.server.address().port;
-    gateway = createGateway(localPort);
-    await listen(gateway, state.address, LAN_PORT);
+    await companion.app.listen({ host: "127.0.0.1", port: LAN_PORT });
     if (state.changed) {
       await writeFile(state.paths.config, JSON.stringify({ version: 1, address: state.address, port: LAN_PORT }) + "\n", { mode: 0o600 });
       await chmod(state.paths.config, 0o600);
@@ -122,9 +78,6 @@ async function startService(state) {
     configuredAddress = state.address;
     return origin;
   } catch (error) {
-    gateway?.closeAllConnections();
-    gateway?.close();
-    gateway = undefined;
     await companion.app.close();
     companion = undefined;
     throw error;
@@ -132,12 +85,6 @@ async function startService(state) {
 }
 
 async function stopService() {
-  if (gateway) {
-    const closing = new Promise((resolve) => gateway.close(resolve));
-    gateway.closeAllConnections();
-    await closing;
-    gateway = undefined;
-  }
   if (companion) {
     const closing = companion.app.close();
     companion.app.server.closeAllConnections();
@@ -161,8 +108,9 @@ async function openManagement() {
     return;
   }
   window = new BrowserWindow({
-    title: "SyncAndRun Companion", width: 1140, height: 820, minWidth: 800, minHeight: 600,
-    webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false }
+    title: "SyncAndRun", width: 1180, height: 820, minWidth: 780, minHeight: 600,
+    webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false,
+      preload: join(packageDirectory, "export-preload.cjs") }
   });
   const origin = `http://${configuredAddress}:${LAN_PORT}`;
   window.webContents.setWindowOpenHandler(({ url }) => {
@@ -172,35 +120,54 @@ async function openManagement() {
   window.webContents.on("will-navigate", (event, url) => {
     if (!url.startsWith(`${origin}/`)) event.preventDefault();
   });
-  window.on("close", (event) => {
-    if (!quitting && tray) { event.preventDefault(); window.hide(); }
-  });
   await window.loadURL(await managementUrl());
 }
 
-function linuxAutostartPath() {
-  return join(process.env.XDG_CONFIG_HOME || join(app.getPath("home"), ".config"), "autostart", "syncandrun-companion.desktop");
+function isManagementSender(event) {
+  return window && !window.isDestroyed() && event.sender === window.webContents;
 }
 
-async function setStartup(enabled) {
-  if (process.platform !== "linux") {
-    app.setLoginItemSettings({ openAtLogin: enabled });
-    return;
-  }
-  const path = linuxAutostartPath();
-  if (!enabled) {
-    const { rm } = await import("node:fs/promises");
-    await rm(path, { force: true });
-    return;
-  }
-  const executable = process.execPath.replaceAll('"', '\\"');
-  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-  await writeFile(path, `[Desktop Entry]\nType=Application\nName=SyncAndRun Companion\nExec="${executable}"\nTerminal=false\nCategories=AudioVideo;\n`, { mode: 0o600 });
-}
+ipcMain.handle("syncandrun:choose-export-folder", async (event) => {
+  if (!isManagementSender(event)) throw new Error("Invalid window.");
+  const choice = await dialog.showOpenDialog(window, {
+    title: "Choose where to save music",
+    properties: ["openDirectory", "createDirectory"]
+  });
+  if (choice.canceled || !choice.filePaths[0]) return null;
+  exportDestination = choice.filePaths[0];
+  return exportDestination;
+});
 
-function startupEnabled() {
-  return process.platform === "linux" ? existsSync(linuxAutostartPath()) : app.getLoginItemSettings().openAtLogin;
-}
+ipcMain.handle("syncandrun:export-music", async (event, options) => {
+  if (!isManagementSender(event)) throw new Error("Invalid window.");
+  if (!companion || !exportDestination || exportRunning) throw new Error("Choose a folder and try again.");
+  exportRunning = true;
+  try {
+    const plan = readExportPlan(companion.database.connection, options?.playlistIds);
+    const setup = new PlexSetupService(companion.database.connection, companion.config.secret);
+    const proxy = new PlexMediaProxy(companion.database.connection, setup);
+    let result;
+    try {
+      result = await exportMusic({
+        plan, bitrate: options?.bitrate, route: options?.route, destination: exportDestination,
+        openAudio: (trackId, bitrate) => proxy.openAudio(trackId, "desktop-export", undefined, bitrate),
+        onProgress: (progress) => {
+          if (!event.sender.isDestroyed()) event.sender.send("syncandrun:export-progress", progress);
+        }
+      });
+    } catch (error) {
+      if (error.exportPath) throw new Error(`Export stopped. Partial files are in ${error.exportPath}. ${error.message}`);
+      throw error;
+    }
+    lastExportPath = result.path;
+    return result;
+  } finally { exportRunning = false; }
+});
+
+ipcMain.handle("syncandrun:show-export-folder", async (event, path) => {
+  if (!isManagementSender(event) || path !== lastExportPath) throw new Error("Invalid export folder.");
+  await shell.openPath(path);
+});
 
 async function backup() {
   if (serviceOperation || quitting) return;
@@ -230,48 +197,15 @@ async function backupService() {
   }
 }
 
-function installMenus(origin) {
-  const icon = nativeImage.createFromPath(join(packageDirectory, "icon.png"));
-  if (!tray) {
-    try { tray = new Tray(icon); } catch { /* Desktop without a tray: the window close action quits. */ }
-  }
-  tray?.setToolTip("SyncAndRun Companion");
-  const menu = () => Menu.buildFromTemplate([
-    { label: "Open management", click: () => void openManagement() },
-    { label: "Open in browser", click: () => void shell.openExternal(origin) },
-    { label: "Start at login", type: "checkbox", checked: startupEnabled(), click: (item) => void setStartup(item.checked).catch(async (error) => {
-      await dialog.showMessageBox({ type: "error", message: "Could not change login setting", detail: String(error) });
-      installMenus(origin);
-    }) },
-    { label: "Back up data and secret", click: () => void backup() },
-    { label: "Restart service", click: () => void restartService() },
-    { type: "separator" },
-    { label: "Quit SyncAndRun", click: () => app.quit() }
-  ]);
-  tray?.setContextMenu(menu());
-  if (tray && tray.listenerCount("double-click") === 0) tray.on("double-click", () => void openManagement());
-  Menu.setApplicationMenu(menu());
-}
-
-async function restartService() {
-  if (serviceOperation || quitting) return;
-  serviceOperation = restartServiceLocked();
-  try { await serviceOperation; } finally { serviceOperation = undefined; }
-}
-
-async function restartServiceLocked() {
-  try {
-    await stopService();
-    if (quitting) return;
-    const state = await readState();
-    if (!state) { app.quit(); return; }
-    if (quitting) return;
-    const origin = await startService(state);
-    installMenus(origin);
-    if (window && !window.isDestroyed()) await window.loadURL(await managementUrl());
-  } catch (error) {
-    await dialog.showMessageBox({ type: "error", message: "Service restart failed", detail: String(error) });
-  }
+function installMenus() {
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    { label: "SyncAndRun", submenu: [
+      { label: "Open SyncAndRun", click: () => void openManagement() },
+      { label: "Back up app data", click: () => void backup() },
+      { type: "separator" },
+      { label: "Quit SyncAndRun", role: "quit" }
+    ] }
+  ]));
 }
 
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -285,25 +219,24 @@ else {
     event.preventDefault();
     if (shutdownPending) return;
     shutdownPending = true;
-    window?.destroy();
     void Promise.resolve(serviceOperation).catch(() => undefined).then(() => stopService()).catch(() => {
-      process.stderr.write("Companion shutdown failed.\n");
+      process.stderr.write("SyncAndRun shutdown failed.\n");
     }).finally(() => {
       shutdownComplete = true;
-      app.quit();
+      window?.destroy();
+      app.exit(0);
     });
   });
-  app.on("window-all-closed", () => { if (!tray && !bootstrapping) app.quit(); });
+  app.on("window-all-closed", () => { if (!quitting) app.quit(); });
   app.on("activate", () => void openManagement());
   void app.whenReady().then(async () => {
     try {
       const state = await readState();
       if (!state) app.quit();
       else {
-        const origin = await startService(state);
-        installMenus(origin);
+        await startService(state);
+        installMenus();
         await openManagement();
-        bootstrapping = false;
       }
     } catch (error) {
       await dialog.showMessageBox({ type: "error", message: "SyncAndRun could not start", detail: String(error) });

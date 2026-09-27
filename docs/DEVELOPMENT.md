@@ -1,6 +1,23 @@
 # Development
 
-## Companion prerequisites
+## Desktop export prerequisites
+
+Use Node.js 22 and Corepack. Run `corepack pnpm install --frozen-lockfile`,
+`corepack pnpm --dir companion build`, and `corepack pnpm --dir desktop test`.
+Package on the target OS with `corepack pnpm --dir desktop pack:mac`,
+`pack:win`, or `pack:linux`. `better-sqlite3` 13 uses a native binary that must
+open in the packaged Electron runtime; a successful TypeScript build alone is
+not a desktop launch check. For UI development, the fake Plex server described
+below provides synthetic playlists. It cannot validate playable MP3 output.
+
+The desktop app binds only to `127.0.0.1:31415`. An isolated native smoke run
+can set `SYNCANDRUN_DESKTOP_TEST_PROFILE` to a new absolute temporary path.
+Verify `/health/ready` while it runs and do not use a real profile for tests.
+Garmin Express and MTP transfer still need target-OS and physical-watch checks.
+
+## Legacy companion and watch development
+
+### Companion prerequisites
 
 Install Git, Python 3 (for deployment and verification-script tests), Node.js 22, and Corepack. Docker with the Compose plugin is required for deployment verification, but not companion development. Run the commands below from the repository root. The repository pins pnpm in `package.json`. Tests use a fake Plex service and synthetic credentials, so a real Plex account is not needed.
 
@@ -22,7 +39,7 @@ corepack pnpm --dir companion build
 corepack pnpm --dir desktop pack:linux # or pack:mac / pack:win on that OS
 ```
 
-The package commands stage the built companion into `desktop/companion/dist` and write artifacts to `desktop/release`. Review [desktop installation and recovery](DESKTOP.md). Native SQLite must be packaged for Electron on each target architecture. Cross-built binaries alone do not count as native launch verification. Use a fresh OS user profile or set `SYNCANDRUN_DESKTOP_TEST_PROFILE` to an absolute private temporary directory for UI smoke tests; never point a test at a production profile. Run `corepack pnpm --dir desktop test` for the LAN gateway checks.
+The package commands stage the built companion into `desktop/companion/dist` and write artifacts to `desktop/release`. Review [desktop installation and recovery](DESKTOP.md). Native SQLite must be packaged for Electron on each target architecture. Cross-built binaries alone do not count as native launch verification. Use a fresh OS user profile or set `SYNCANDRUN_DESKTOP_TEST_PROFILE` to an absolute private temporary directory for UI smoke tests; never point a test at a production profile. Run `corepack pnpm --dir desktop test` for export layout checks.
 
 ## Local browser development with fake Plex
 

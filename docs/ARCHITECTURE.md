@@ -1,5 +1,28 @@
 # Architecture
 
+## Desktop export (current direction)
+
+The Electron window presents the selected option A library screen. Its preload
+allows only folder selection, export, progress, and opening the finished folder.
+The renderer does not send arbitrary output paths. The app's Fastify service
+binds to loopback for Plex sign-in and playlist selection; it has no LAN gateway
+or watch pairing path in the desktop UI. The existing encrypted Plex connection
+and SQLite playlist snapshots are reused.
+
+`desktop/export.mjs` reads only saved playlist snapshots. It asks Plex for MP3
+streams at the selected bitrate, writes ID3v2.3 tags, checks the MP3 header,
+and creates a new dated output folder. A failed run leaves an `.incomplete`
+folder and cannot overwrite a previous complete export. MTP output has a folder
+and relative M3U8 per playlist. Express and Music output share track files;
+Music also gets a playlist XML file. No Plex token is written into output.
+
+The current low-level export is JavaScript in Electron's main process. Rust is
+the preferred direction for a later native export/MTP engine; the existing
+desktop package lets the first export workflow be tested now. See
+[desktop export plan](DESKTOP_EXPORT_PLAN.md) and [validation](VALIDATION.md).
+
+## Legacy watch sync architecture
+
 The Garmin watch and the companion have separate responsibilities. The companion manages Plex authentication and playlist selection. The watch synchronizes audio and plays its cached copies through Garmin's native player.
 
 ```mermaid

@@ -1,7 +1,7 @@
 {
   "name": "syncandrun-desktop",
   "version": "0.1.0",
-  "description": "Personal Plex to Garmin companion service",
+  "description": "Create local music folders for Garmin watches from Plex playlists",
   "author": { "name": "SyncAndRun contributors", "email": "ryancummings@users.noreply.github.com" },
   "homepage": "https://github.com/ryancummings/syncandrun",
   "private": true,
@@ -15,7 +15,7 @@
     "pack:win": "pnpm stage && electron-builder --win nsis portable --publish never"
   },
   "dependencies": {
-    "better-sqlite3": "12.2.0",
+    "better-sqlite3": "13.0.3",
     "fastify": "5.12.2",
     "pino": "9.14.0",
     "zod": "4.1.5"
@@ -26,13 +26,13 @@
   },
   "build": {
     "appId": "icu.rads.syncandrun",
-    "productName": "SyncAndRun Companion",
-    "executableName": "syncandrun-companion",
+    "productName": "SyncAndRun",
+    "executableName": "syncandrun",
     "asar": true,
-    "npmRebuild": false,
+    "npmRebuild": true,
     "asarUnpack": ["**/*.node"],
     "directories": { "output": "release" },
-    "files": ["main.mjs", "network.mjs", "bootstrap.html", "bootstrap.js", "bootstrap-preload.cjs", "icon.png", "companion/dist/**/*", "package.json"],
+    "files": ["main.mjs", "export.mjs", "export-preload.cjs", "icon.png", "companion/dist/**/*", "package.json"],
     "extraResources": [
       { "from": "../LICENSE", "to": "LICENSE" },
       { "from": "../NOTICE.md", "to": "NOTICE.md" }

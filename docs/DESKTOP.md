@@ -1,23 +1,46 @@
-# Desktop companion preview
+# Desktop preview
 
-The desktop app packages the same Node companion and built React management UI as Docker. It is one personal installation for one Plex owner; paired watches retain separate credentials and sync state. Plex can run on this computer, a NAS, or another reachable owner-controlled host. Its HTTPS connection must be discoverable and reachable from the desktop computer. Plex authentication stays enabled.
+SyncAndRun runs on the computer where you want to save music. It connects to
+your Plex server, converts chosen playlists to MP3, and writes a new folder in
+the place you choose. It listens only on `127.0.0.1` while open. There is no
+watch pairing, LAN address setup, or background sync in the desktop flow.
 
-## Install and first run
+## Build and start
 
-Build from a reviewed source commit with Node 22 and pnpm. Use `pnpm --dir companion build`, then `pnpm --dir desktop pack:mac` on macOS, `pack:win` on Windows, or `pack:linux` on Linux. The installers and portable artifacts are in `desktop/release/`. These preview packages are unsigned; macOS Gatekeeper and Windows SmartScreen may require the owner to explicitly allow an installation. Do not bypass warnings for an untrusted artifact. Keep the GPL and bundled font license notices from the source distribution.
+Build the companion and package on the same operating system as the target:
 
-On first launch, choose one private IPv4 address in the first-run window. This is an explicit choice to use HTTP on a trusted home LAN. The app listens only on that address at port 31415; the Node companion stays on loopback behind its local gateway. Allow inbound TCP 31415 in the host firewall only from the owner's home LAN or watch and browser devices. Do not forward a router port, enable public ingress, or use a guest/shared network. **Any device able to observe this HTTP traffic may intercept setup links, browser session cookies, watch credentials, and media.** A trusted HTTPS reverse proxy remains the safer route if it is available.
+```sh
+corepack pnpm install --frozen-lockfile
+corepack pnpm --dir companion build
+corepack pnpm --dir desktop pack:linux # or pack:mac / pack:win
+```
 
-Give this computer a static DHCP lease or fixed address. The watch and browser use the displayed `http://PRIVATE-IP:31415` origin, including the port. Changing that origin requires watch re-pairing, although already cached audio remains on the watch. Keep the desktop app running for watch sync. Closing its window hides it to the tray; **Quit SyncAndRun** stops the service. If a Linux desktop has no tray, closing the window quits instead. The tray menu offers **Start at login**, which is off by default. A sleeping computer or inactive desktop login session cannot serve the watch. Linux desktop session autostart uses a per-user `.desktop` file.
+Find the package in `desktop/release`. Packages are unsigned previews and are
+not published. The first launch asks you to sign in with Plex and choose one
+music library. Plex may run on this computer or another host you control.
 
-The first window opens a private, short-lived owner setup invitation. Connect the owner's Plex account, choose a server and music library, and select playlists. The setup invitation is generated locally and never copied to the watch. Subsequent management requires the same Plex owner. If the invitation expires before use, quit and reopen the app to issue a fresh one. Do not share invitation URLs or screenshots containing them.
+On the main screen, check the playlists you want, choose the transfer method
+and MP3 quality, then choose a local save folder. **Create music folder** writes
+a new dated folder. SyncAndRun keeps incomplete output in a folder ending in
+`.incomplete` and shows its path if an export stops. It does not overwrite an
+earlier complete export.
 
-## Data, upgrades, and recovery
+For MTP, copy the playlist folders inside the new export folder into your
+watch's Music folder. The playlist files use relative paths. On Windows,
+Garmin Express can scan the saved local folder under Music > My Music. On macOS,
+add the Tracks folder to Music before importing `Import playlists.xml`, then
+use Garmin Express. The same XML route is available through iTunes on Windows.
+Garmin Express is not available on Linux.
 
-Data lives in Electron's `syncandrun-desktop` per-user application data directory, outside the installer: `desktop.json`, `secret`, and `data/syncandrun.sqlite` (plus SQLite sidecars while running). The usual parent is `~/.config` on Linux, `~/Library/Application Support` on macOS, or `%APPDATA%` on Windows. The secret has private file permissions where supported and encrypts the stored Plex credential. The database can include private library metadata. Protect the application account and backups. Do not move the database without the matching secret.
+## Local data
 
-Use **Back up data and secret** in the tray menu before every update. It stops the service, copies a consistent database, secret, and desktop configuration into a new private timestamped folder, then restarts. Check that the backup completed and keep a copy of the old installer. Install the new version over the old app, then check readiness, owner login, and watch sync. Schema migrations are forward-only; rolling back requires quitting the app and restoring the matching pre-upgrade backup with the old installer. Never run two app versions against the same profile.
+The app profile contains the encrypted Plex credential, a local secret, and
+the playlist database. Electron stores it in the user's app data directory
+(typically `~/.config`, `~/Library/Application Support`, or `%APPDATA%`). The
+app menu's **Back up app data** action copies the profile to a folder you
+choose. Keep that backup private, and keep its secret with its database.
 
-If startup fails, read the error dialog. Common causes are a changed LAN address, another process using port 31415, missing network permission, or a damaged profile. Restore connectivity or free the port and use **Restart service** or relaunch. On macOS, approve Local Network access if prompted. On Windows and Linux, allow only the chosen private interface/subnet in the firewall. If the saved address disappeared, the app asks for another private address; then update the watch origin and re-pair. To restore a backup, quit the app, preserve the current profile separately, replace the profile with the entire matching backup, install its recorded app version, and relaunch. Verify owner login before relying on the restored instance. Avoid deleting the old profile until the restore is proven.
-
-The browser UI also works at the same LAN origin. The app has no built-in auto-update service and does not install a background system daemon. App upgrades never intentionally replace the user profile. Physical-watch pairing, audio download, and offline playback remain separate acceptance checks; a desktop window or simulator screenshot does not prove them.
+The app does not install a daemon or auto updater. Closing the window quits.
+It does not write Plex credentials to an export. It does not know your watch's
+free space until direct device access is added, so check space before copying.
+See [validation](VALIDATION.md) for the remaining physical-watch checks.

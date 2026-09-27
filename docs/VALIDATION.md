@@ -1,4 +1,30 @@
-# Preview validation
+# Desktop export validation
+
+The new desktop flow has passed TypeScript checks, export structure tests with
+fake Plex metadata, a browser screenshot check with fake Plex, and a native
+Linux package build and launch. The package answered its loopback readiness
+check. These checks do not prove that a real Plex server returns playable audio
+at every offered bitrate or that a Garmin watch recognizes the new files.
+
+Before calling the desktop app ready, verify on the owner's Forerunner 955:
+
+1. Export two selected playlists from a real Plex library at 192 kbps. Copy
+   their folders into the watch's Music folder with OpenMTP. Confirm names,
+   track order, tags, playback, and repeat entries.
+2. Repeat at 320 kbps and confirm playback. Garmin's format documentation lists
+   MP3 but gives no maximum bitrate for this watch in the cited material.
+3. Check a failed/interrupted export, an export with shared tracks, and a watch
+   with too little free space. Confirm previous complete folders remain usable.
+4. On macOS, add the exported Tracks folder to Music, then import the playlist
+   XML and check that Garmin Express sees and sends both playlists.
+5. On Windows, check Garmin Express's local-folder scanner and the optional
+   iTunes import route. On Linux, check an MTP copy with the target device.
+
+Record the source commit, app and OS versions, Garmin model and firmware,
+transfer method, and result without posting private music metadata. Do not
+claim compatibility for a transfer route that has only automated evidence.
+
+## Previous watch-app validation plan
 
 This source preview is not a stable hardware-qualified release. Automated checks cannot prove offline Bluetooth playback, behavior during an activity, battery use, or the watch's compatibility with a particular network route.
 

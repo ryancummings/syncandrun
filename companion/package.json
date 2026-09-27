@@ -17,7 +17,7 @@
     "ui:typecheck": "tsc --noEmit --project ui/tsconfig.json"
   },
   "dependencies": {
-    "better-sqlite3": "12.2.0",
+    "better-sqlite3": "13.0.3",
     "fastify": "5.12.2",
     "pino": "9.14.0",
     "react": "19.2.8",

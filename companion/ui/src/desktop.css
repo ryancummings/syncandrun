@@ -1,0 +1,63 @@
+.desktop { min-height: 100vh; background: #f7f9f7; color: #18332e; font: 15px/1.45 system-ui, -apple-system, sans-serif; }
+.desktop * { box-sizing: border-box; }
+.desktop button, .desktop select { font: inherit; }
+.desktop-top { height: 70px; padding: 0 max(28px, calc((100vw - 1180px)/2)); display: flex; align-items: center; justify-content: space-between; background: #15453c; color: #fff; }
+.desktop-brand { font-size: 23px; font-weight: 800; letter-spacing: -.7px; }
+.desktop-brand span { color: #8fddbc; }
+.desktop-source { font-size: 13px; color: #c7e4d8; }
+.desktop-main { max-width: 1180px; margin: auto; padding: 34px 28px 56px; }
+.desktop-heading h1, .desktop-setup h1 { margin: 0; font-size: 33px; letter-spacing: -.8px; line-height: 1.2; }
+.desktop-heading p, .desktop-setup > p { margin: 7px 0 0; color: #60736d; }
+.desktop-grid { display: grid; grid-template-columns: minmax(0, 1fr) 365px; gap: 24px; margin-top: 28px; align-items: start; }
+.desktop-card { background: #fff; border: 1px solid #dae4df; border-radius: 16px; box-shadow: 0 3px 16px #143f3408; overflow: hidden; }
+.desktop-card h2 { font-size: 17px; margin: 0; line-height: 1.3; }
+.desktop-card h2 span { color: #72837d; font-size: 13px; font-weight: 400; margin-left: 6px; }
+.desktop-card-head { min-height: 68px; padding: 19px 22px; display: flex; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 1px solid #e5ece8; }
+.desktop-link { border: 0; background: none; padding: 4px 0; color: #126d57; font-size: 13px !important; font-weight: 700 !important; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.desktop-link:disabled { opacity: .5; cursor: default; }
+.desktop-playlists { max-height: min(630px, calc(100vh - 270px)); overflow: auto; }
+.desktop-playlist { display: flex; align-items: center; gap: 15px; min-height: 74px; padding: 12px 22px; border-bottom: 1px solid #edf1ee; cursor: pointer; }
+.desktop-playlist:last-child { border-bottom: 0; }
+.desktop-playlist:hover { background: #f8fbf9; }
+.desktop-playlist input { width: 18px; height: 18px; flex: none; accent-color: #176e58; }
+.desktop .desktop-playlist input[type="checkbox"] { accent-color: #176e58; }
+.desktop-music-icon { width: 40px; height: 40px; border-radius: 9px; display: grid; place-items: center; background: #e7eee9; color: #3b8068; font-size: 20px; flex: none; }
+.desktop-playlist-text { display: flex; flex-direction: column; min-width: 0; }
+.desktop-playlist-text strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 650; }
+.desktop-playlist-text small { color: #6d7d77; font-size: 12px; margin-top: 3px; }
+.desktop-empty { padding: 28px 22px; color: #60736d; }
+.desktop-export { padding: 22px; }
+.desktop-export > h2 { margin-bottom: 23px; }
+.desktop-field { display: block; border: 0; padding: 0; margin: 0 0 21px; min-width: 0; color: #425c53; font-size: 13px; font-weight: 700; }
+.desktop-field legend { padding: 0; margin-bottom: 9px; }
+.desktop-field > span:first-child { display: block; margin-bottom: 9px; }
+.desktop-route-options { display: flex; flex-wrap: wrap; gap: 7px; }
+.desktop-route-options label { display: inline-flex; align-items: center; gap: 6px; padding: 9px 10px; border: 1px solid #d7e3dc; border-radius: 8px; color: #254a3d; font-size: 12px; cursor: pointer; }
+.desktop-route-options label:has(input:checked) { background: #e4f4eb; border-color: #6aae8d; }
+.desktop-route-options input { margin: 0; accent-color: #176e58; }
+.desktop-field select { display: block; width: 100%; margin-top: 9px; padding: 10px 11px; border: 1px solid #d7e3dc; border-radius: 8px; background: #fff; color: #18332e; }
+.desktop-folder { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid #d7e3dc; border-radius: 8px; background: #fff; padding: 10px 11px; cursor: pointer; color: #18332e; text-align: left; }
+.desktop-folder span:first-child { display: inline !important; margin: 0 !important; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; font-weight: 400; }
+.desktop-folder span:last-child { color: #126d57; font-weight: 700; flex: none; }
+.desktop-estimate { display: grid; grid-template-columns: 1fr auto; background: #f0f7f2; border-radius: 9px; padding: 13px 14px; font-size: 13px; }
+.desktop-estimate strong { font-size: 15px; }
+.desktop-estimate small { grid-column: 1 / -1; color: #60736d; margin-top: 3px; }
+.desktop-primary { width: 100%; margin-top: 17px; border: 0; border-radius: 9px; padding: 12px; background: #176e58; color: #fff; font-weight: 700 !important; cursor: pointer; }
+.desktop-primary:hover:not(:disabled) { background: #115843; }
+.desktop-primary:disabled { opacity: .5; cursor: default; }
+.desktop-next { color: #647b70; font-size: 12px; line-height: 1.5; margin: 13px 0 0; }
+.desktop-progress { color: #286c54; font-size: 12px; }
+.desktop-error { color: #a73232; background: #fff2f1; border-radius: 8px; padding: 10px; font-size: 12px; }
+.desktop-done { margin-top: 14px; border-radius: 9px; background: #e8f5ec; padding: 13px; font-size: 13px; }
+.desktop-done p { margin: 5px 0 8px; line-height: 1.45; }
+.desktop-setup { max-width: 660px; margin: auto; }
+.desktop-setup .panel { margin-top: 25px; padding: 28px; border: 1px solid #dae4df; border-radius: 16px; background: #fff; color: #18332e; box-shadow: 0 3px 16px #143f3408; }
+.desktop-setup .bracket-frame::before, .desktop-setup .bracket-frame::after { display: none; }
+.desktop-setup .display { font: 750 30px/1.2 system-ui, -apple-system, sans-serif; text-transform: none; letter-spacing: -.6px; color: #18332e; margin: 0; }
+.desktop-setup .lede { color: #60736d; margin-top: 8px !important; }
+.desktop-setup .btn-primary { background: #176e58; border-color: #176e58; color: #fff; border-radius: 9px; }
+.desktop-setup .btn-primary:hover:not(:disabled) { background: #115843; border-color: #115843; }
+.desktop-setup .btn-ghost { color: #126d57; border-color: #dae4df; border-radius: 9px; }
+.desktop-setup .field label { color: #425c53; }
+.desktop-setup .field select { color: #18332e; background: #fff; border-color: #d7e3dc; border-radius: 8px; }
+@media (max-width: 850px) { .desktop-grid { grid-template-columns: 1fr; } .desktop-playlists { max-height: 400px; } }

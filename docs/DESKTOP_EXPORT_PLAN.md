@@ -1,6 +1,8 @@
 # Desktop music export pivot
 
-Status: design pending UI selection and end-to-end device acceptance.
+Status: option A chosen and implemented in the desktop preview. Synthetic
+export and Linux package checks pass; physical-watch and Music/iTunes imports
+remain unverified.
 
 ## Product flow
 
@@ -61,13 +63,11 @@ show this only when the Express route is selected.
 
 ## Implementation direction
 
-Use Rust for the local export engine, file and tag validation, and future MTP
-access. A Tauri desktop shell can present the selected UI with native file
-dialogs and operating-system integration. The existing TypeScript companion has
-useful Plex authentication, discovery, library normalization, and transcode
-behavior; migrate that behavior into the desktop app with fake-Plex regression
-tests. The in-progress Electron companion branch should be reviewed before
-retirement so it does not lose useful platform packaging work.
+The first working path uses the inherited Electron desktop package and Plex
+services, with export in the main process and a native folder picker. This
+keeps local file access off the loopback HTTP API. Rust remains the preferred
+language for a later filesystem and MTP engine. A Tauri shell is a possible
+longer-term replacement after this flow is validated on target devices.
 
 Direct MTP search and sync, Jellyfin, and device free-space discovery are future
 features. The first release prepares files and shows an accurate handoff.

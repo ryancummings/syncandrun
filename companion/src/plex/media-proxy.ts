@@ -89,7 +89,7 @@ export class PlexMediaProxy {
     this.#clientIdentifier = installation.plex_client_identifier;
   }
 
-  async openAudio(trackId: string, deviceId: string, disconnected?: AbortSignal): Promise<PlexProxyStream> {
+  async openAudio(trackId: string, deviceId: string, disconnected?: AbortSignal, bitrateOverride?: 64 | 96 | 128 | 192 | 256 | 320): Promise<PlexProxyStream> {
     if (this.#activeAudioDevices.has(deviceId)) throw new PlexTranscodeBusyError();
     this.#activeAudioDevices.add(deviceId);
     try {
@@ -102,7 +102,7 @@ export class PlexMediaProxy {
       const url = buildAudioTranscodeUrl(
         connection.serverBaseUri,
         track.rating_key,
-        profileBitrates[settings.transcode_profile],
+        bitrateOverride ?? profileBitrates[settings.transcode_profile],
         randomUUID()
       );
       const pending = await this.#requestStream(url, connection, disconnected, this.#audioTimeoutMs, {
@@ -237,7 +237,7 @@ export class PlexMediaProxy {
 export function buildAudioTranscodeUrl(
   serverBaseUri: string,
   ratingKey: string,
-  bitrate: 64 | 96 | 128,
+  bitrate: 64 | 96 | 128 | 192 | 256 | 320,
   sessionId: string
 ): URL {
   const url = new URL("/music/:/transcode/universal/start.mp3", serverBaseUri);
