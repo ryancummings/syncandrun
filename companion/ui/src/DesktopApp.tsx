@@ -142,5 +142,5 @@ export function DesktopApp() {
 import { Setup } from "./components/Setup";
 
 function DesktopSetup({ onReady }: { onReady: (token: string) => void | Promise<void> }) {
-  return <div className="desktop-setup"><Setup desktop onReady={(token) => { void onReady(token); }} /></div>;
+  return <div className="desktop-setup"><Setup onReady={(token) => { void onReady(token); }} /></div>;
 }

@@ -47,7 +47,6 @@ const optionalString = z.preprocess((value) => value === "" ? undefined : value,
 
 const environmentSchema = z.object({
   SYNCANDRUN_BASE_URL: optionalString,
-  SYNCANDRUN_ARTWORK_BASE_URL: optionalString,
   SYNCANDRUN_SECRET: optionalString.refine((value) => value === undefined || Buffer.byteLength(value, "utf8") >= 32, {
     message: "must contain at least 32 bytes"
   }),
@@ -62,12 +61,9 @@ const environmentSchema = z.object({
 
 export interface RuntimeConfig {
   /**
-   * The address browsers and watches use, when the operator pins one. Without
-   * it the companion answers on whatever address a request arrived at, so a
-   * home installation works on its LAN IP with no configuration.
+   * The loopback address used by the desktop app for Plex sign-in callbacks.
    */
   baseUrl?: URL;
-  artworkBaseUrl?: URL;
   secret: string;
   dataDir: string;
   host: string;
@@ -75,29 +71,6 @@ export interface RuntimeConfig {
   logLevel: z.infer<typeof logLevelSchema>;
   /** `true`, `false`, or the proxies whose forwarded-for header is believed. */
   trustProxy: boolean | string[];
-}
-
-function parseHttpsOrigin(value: string, variable: "SYNCANDRUN_BASE_URL" | "SYNCANDRUN_ARTWORK_BASE_URL"): URL {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error(`${variable} must be a valid HTTPS origin`);
-  }
-  if (
-    url.protocol !== "https:" ||
-    url.port !== "" ||
-    url.username !== "" ||
-    url.password !== "" ||
-    url.search !== "" ||
-    url.hash !== "" ||
-    (url.pathname !== "" && url.pathname !== "/")
-  ) {
-    throw new Error(
-      `${variable} must be an HTTPS origin without credentials, path, query, fragment, or a nonstandard port`
-    );
-  }
-  return new URL(url.origin);
 }
 
 function parseBaseOrigin(value: string): URL {
@@ -145,14 +118,10 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Runtim
       .join("; ");
     throw new Error(`Invalid SyncAndRun configuration: ${details}`);
   }
-  const artworkBaseUrl = parsed.data.SYNCANDRUN_ARTWORK_BASE_URL === undefined
-    ? undefined
-    : parseHttpsOrigin(parsed.data.SYNCANDRUN_ARTWORK_BASE_URL, "SYNCANDRUN_ARTWORK_BASE_URL");
   const baseUrl = parsed.data.SYNCANDRUN_BASE_URL === undefined ? undefined : parseBaseOrigin(parsed.data.SYNCANDRUN_BASE_URL);
   const dataDir = resolve(parsed.data.SYNCANDRUN_DATA_DIR);
   return {
     ...(baseUrl === undefined ? {} : { baseUrl }),
-    ...(artworkBaseUrl === undefined ? {} : { artworkBaseUrl }),
     secret: parsed.data.SYNCANDRUN_SECRET ?? persistentSecret(dataDir),
     dataDir,
     host: parsed.data.SYNCANDRUN_HOST,

@@ -60,7 +60,6 @@ async function startService(state) {
   const origin = `http://${state.address}:${LAN_PORT}`;
   const config = loadConfig({
     SYNCANDRUN_BASE_URL: origin,
-    SYNCANDRUN_ALLOW_LAN_HTTP: "true",
     SYNCANDRUN_SECRET: state.secret,
     SYNCANDRUN_DATA_DIR: state.paths.data,
     SYNCANDRUN_HOST: "127.0.0.1",
@@ -150,7 +149,7 @@ ipcMain.handle("syncandrun:export-music", async (event, options) => {
     try {
       result = await exportMusic({
         plan, bitrate: options?.bitrate, route: options?.route, destination: exportDestination,
-        openAudio: (trackId, bitrate) => proxy.openAudio(trackId, "desktop-export", undefined, bitrate),
+        openAudio: (trackId, bitrate) => proxy.openAudio(trackId, bitrate),
         onProgress: (progress) => {
           if (!event.sender.isDestroyed()) event.sender.send("syncandrun:export-progress", progress);
         }

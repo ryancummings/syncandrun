@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { canonicalJson } from "../protocol/manifest.js";
+import { canonicalJson } from "./canonical-json.js";
 import type { StoredPlexConnection } from "./setup-service.js";
 import { PlexInvalidResponseError, PlexServiceUnavailableError } from "./auth.js";
 
 const pageSize = 100;
 export const maximumPlaylistTracks = 10_000;
-const product = "SyncAndRun for Garmin";
+const product = "SyncAndRun";
 const version = "1.0.0-dev.0";
 
 const playlistSchema = z.object({

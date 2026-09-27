@@ -1,6 +1,6 @@
-# SyncAndRun for Garmin notices
+# SyncAndRun notices
 
-SyncAndRun for Garmin is free software distributed under the GNU General Public
+SyncAndRun is free software distributed under the GNU General Public
 License, version 3. See `LICENSE` for the complete license.
 
 This project is derived from SubMusic by memen45 and contributors:
@@ -10,10 +10,10 @@ This project is derived from SubMusic by memen45 and contributors:
 - Upstream application name: SubMusic
 
 The inherited Git history and relevant source-level copyright notices are
-retained. Changes made for SyncAndRun for Garmin are also distributed under
+retained. Changes made for SyncAndRun are also distributed under
 GPL-3.0.
 
-The companion browser interface bundles subsetted web fonts distributed under
+The desktop interface bundles subsetted web fonts distributed under
 the SIL Open Font License, Version 1.1:
 
 - Archivo by The Archivo Project Authors —
@@ -21,6 +21,6 @@ the SIL Open Font License, Version 1.1:
 - IBM Plex Sans and IBM Plex Mono by IBM Corp. —
   `companion/ui/public/assets/fonts/LICENSE-IBM-Plex.txt`
 
-SyncAndRun for Garmin is an independent, unofficial project. It is not
+SyncAndRun is an independent, unofficial project. It is not
 affiliated with, endorsed by, or sponsored by Plex, Garmin, or the SubMusic
 maintainers. Plex and Garmin names are used only to describe interoperability.

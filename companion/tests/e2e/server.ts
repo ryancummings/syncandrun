@@ -6,25 +6,21 @@ import { type RuntimeConfig } from "../../src/config.js";
 import { BrowserManagementService } from "../../src/persistence/browser-management-service.js";
 import { BrowserSessionRepository } from "../../src/persistence/browser-session-repository.js";
 import { CompanionDatabase } from "../../src/persistence/database.js";
-import { DeviceRepository } from "../../src/persistence/device-repository.js";
 import { PlexLibraryService } from "../../src/plex/library-service.js";
-import { PlexMediaProxy } from "../../src/plex/media-proxy.js";
 import { PlexSetupService } from "../../src/plex/setup-service.js";
 import { buildApp } from "../../src/server/app.js";
 import { createFakePlexServer } from "../helpers/fake-plex.js";
 
 const secret = "operator-secret-with-at-least-32-bytes";
-const demo = process.argv.includes("--demo");
-const port = Number(demo ? (process.env.SYNCANDRUN_DEMO_PORT ?? 3000) : (process.env.SYNCANDRUN_E2E_PORT ?? 34117));
+const port = Number(process.env.SYNCANDRUN_E2E_PORT ?? 34117);
 const dataDir = await mkdtemp(join(tmpdir(), "syncandrun-playwright-"));
 const fake = await createFakePlexServer();
-if (!demo) fake.setPlaylistLeafCount("20", 10_001);
+fake.setPlaylistLeafCount("20", 10_001);
 const database = new CompanionDatabase(dataDir);
 database.migrate();
 
-// The demo can listen on the LAN so the Connect IQ simulator or a phone can
-// reach it; like a real home installation it has no configured address.
-const host = demo ? (process.env.SYNCANDRUN_DEMO_HOST ?? "127.0.0.1") : "127.0.0.1";
+// The synthetic server stays on loopback.
+const host = "127.0.0.1";
 const config: RuntimeConfig = {
   secret,
   dataDir,
@@ -39,7 +35,6 @@ const setup = new PlexSetupService(database.connection, secret, {
   fetch: fake.fetch
 });
 const sessions = new BrowserSessionRepository(database.connection, secret);
-const devices = new DeviceRepository(database.connection, secret);
 const app = buildApp(
   config,
   database,
@@ -47,21 +42,12 @@ const app = buildApp(
     plexSetup: setup,
     plexLibrary: new PlexLibraryService(database.connection, setup, { fetch: fake.fetch }),
     browserSessions: sessions,
-    management: new BrowserManagementService(database.connection, secret, devices, sessions)
-  },
-  // The fixture's Plex host only resolves through the injected fetch, so the
-  // media proxy needs it too; without this every audio transfer fails and the
-  // live-transfer view can never be exercised.
-  new PlexMediaProxy(database.connection, setup, { fetch: fake.fetch })
+    management: new BrowserManagementService(database.connection, secret, sessions)
+  }
 );
 
 // Test-only bootstrap endpoint; this file is excluded from the production build.
 app.get("/__test/setup-link", async () => ({ path: `/#setup=${new OwnerRepository(database.connection).issueInvitation()}` }));
-if (demo) {
-  app.get("/__demo/start", async (_request, reply) =>
-    reply.header("Cache-Control", "no-store").redirect(`/#setup=${new OwnerRepository(database.connection).issueInvitation()}`)
-  );
-}
 
 async function shutdown() {
   await app.close();
@@ -74,4 +60,3 @@ process.once("SIGINT", () => { void shutdown().finally(() => process.exit(0)); }
 process.once("SIGTERM", () => { void shutdown().finally(() => process.exit(0)); });
 
 await app.listen({ host, port });
-if (demo) console.log(`Fake-Plex demo ready at http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}/ (temporary data; resets on restart).`);

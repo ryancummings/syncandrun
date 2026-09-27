@@ -17,17 +17,13 @@ cloudflared-token
 *.der
 developer_key*
 
-# Garmin and general build output
+# Generated desktop output
 build/
 desktop/companion/
 desktop/release/
 bin/
-*.prg
-*.iq
-*.debug.xml
-*.settings.json
 
-# Companion persistence
+# Local profile data
 data/
 *.sqlite
 *.sqlite-shm

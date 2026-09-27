@@ -1,115 +1,20 @@
 # Development
 
-## Desktop export prerequisites
-
-Use Node.js 22 and Corepack. Run `corepack pnpm install --frozen-lockfile`,
-`corepack pnpm --dir companion build`, and `corepack pnpm --dir desktop test`.
-Package on the target OS with `corepack pnpm --dir desktop pack:mac`,
-`pack:win`, or `pack:linux`. `better-sqlite3` 13 uses a native binary that must
-open in the packaged Electron runtime; a successful TypeScript build alone is
-not a desktop launch check. For UI development, the fake Plex server described
-below provides synthetic playlists. It cannot validate playable MP3 output.
-
-The desktop app binds only to `127.0.0.1:31415`. An isolated native smoke run
-can set `SYNCANDRUN_DESKTOP_TEST_PROFILE` to a new absolute temporary path.
-Verify `/health/ready` while it runs and do not use a real profile for tests.
-Garmin Express and MTP transfer still need target-OS and physical-watch checks.
-
-## Legacy companion and watch development
-
-### Companion prerequisites
-
-Install Git, Python 3 (for deployment and verification-script tests), Node.js 22, and Corepack. Docker with the Compose plugin is required for deployment verification, but not companion development. Run the commands below from the repository root. The repository pins pnpm in `package.json`. Tests use a fake Plex service and synthetic credentials, so a real Plex account is not needed.
+Use Node.js 22 and Corepack. The repository pins pnpm. Install dependencies and run the checks from the root:
 
 ```sh
-corepack enable
 corepack pnpm install --frozen-lockfile
-corepack pnpm --dir companion exec playwright install chromium
-make companion-build companion-test companion-e2e contract-test NODE22=node
-```
-
-On Linux, Playwright can require system packages: run `corepack pnpm --dir companion exec playwright install --with-deps chromium` on a machine where you can install them. Node 22 is required for the native SQLite module. Reinstall dependencies under Node 22 if they were built under another Node version.
-
-## Desktop packages
-
-With Node 22 and the workspace dependencies installed, build the companion and then the desktop package on each native host:
-
-```sh
 corepack pnpm --dir companion build
-corepack pnpm --dir desktop pack:linux # or pack:mac / pack:win on that OS
+corepack pnpm --dir companion test
+corepack pnpm --dir companion exec playwright install chromium
+corepack pnpm --dir companion e2e
+corepack pnpm --dir desktop test
 ```
 
-The package commands stage the built companion into `desktop/companion/dist` and write artifacts to `desktop/release`. Review [desktop installation and recovery](DESKTOP.md). Native SQLite must be packaged for Electron on each target architecture. Cross-built binaries alone do not count as native launch verification. Use a fresh OS user profile or set `SYNCANDRUN_DESKTOP_TEST_PROFILE` to an absolute private temporary directory for UI smoke tests; never point a test at a production profile. Run `corepack pnpm --dir desktop test` for export layout checks.
+Playwright may need system packages on Linux; use `playwright install --with-deps chromium` where you can install them. Tests use fake Plex data and temporary profiles. Never point a test at a real Plex database or app profile.
 
-## Local browser development with fake Plex
+Package on the target operating system with `corepack pnpm --dir desktop pack:linux`, `pack:mac`, or `pack:win`. The package scripts stage `companion/dist` into the desktop bundle and write unsigned artifacts to `desktop/release`. `better-sqlite3` contains native code, so verify a packaged launch on each operating system. A TypeScript build or cross-build alone does not prove that the native module loads.
 
-```sh
-corepack pnpm --dir companion dev:demo
-```
+For an isolated launch, set `SYNCANDRUN_DESKTOP_TEST_PROFILE` to a new absolute private directory. Check `http://127.0.0.1:31415/health/ready` while the app is open. The runtime must not listen on another network interface. The profile contains secrets and is not a test fixture after real Plex sign-in.
 
-Once the readiness message appears, open `http://127.0.0.1:3000/__demo/start`. Click **Connect Plex**; the local fixture authorizes the popup without a Plex account. Return to the companion, select **Fixture Server**, select **Fixture Music**, and finish setup. Both sample playlists can be selected and saved. The settings and watch-management screens use the same application services as production.
-
-This command builds the browser UI and watches backend source changes. After editing UI files, stop and rerun the command to rebuild the assets served by Fastify. Each process start creates a fresh temporary database outside the repository; graceful shutdown removes it. Reopen `/__demo/start` after a restart to claim that fresh demo. Use `SYNCANDRUN_DEMO_PORT=3001 corepack pnpm --dir companion dev:demo` if port 3000 is occupied.
-
-The demo binds only to loopback and uses synthetic credentials, metadata, and placeholder media. Its setup routes exist only in the test harness, which is excluded from the production build. Keep it local. The example HTTPS watch address in Settings is a fixture, not a deployed endpoint, and the placeholder audio is not playable music. This workflow verifies browser development; real Plex transcoding and physical-watch playback require a real installation.
-
-## Development against real Plex
-
-For a persistent container that starts quickly on repeat runs, use the
-[repeatable local deployment command](DEPLOYMENT.md#repeatable-local-deployment).
-It supports Linux Docker Engine and a running Docker Desktop on macOS. Use the
-direct source process below when you need backend watch mode.
-
-Use [DEPLOYMENT.md](DEPLOYMENT.md) for the intended instance, chosen network route, environment setup, and owner invitation. Put your generated environment file in a private directory outside the repository, and add `SYNCANDRUN_DATA_DIR=/absolute/private/path/data` to it. The directory must be writable by your user; `/data` is the container default. Keep the existing secret with its database. Then run, substituting your private environment-file path:
-
-```sh
-make companion-ui NODE22=node
-node --env-file=/absolute/private/path/companion.env companion/node_modules/tsx/dist/cli.mjs watch companion/src/main.ts
-```
-
-Node parses this file without executing shell code. `make companion-dev NODE22=node` is equivalent when the variables are already exported, but does not automatically read `.env`. The API binds to `127.0.0.1` by default and must sit behind the proxy for your chosen route; it is not the local fake-Plex demo. Never run tests against its data directory or enable test authentication on a real installation. Rebuild the browser bundle and restart the API after UI changes.
-
-With that process running, create the owner invitation from a second terminal,
-using the same private environment file and a new private output filename:
-
-```sh
-node --env-file=/absolute/private/path/companion.env companion/node_modules/tsx/dist/cli.mjs companion/src/operator.ts setup-link --output /absolute/private/path/setup-link.txt
-```
-
-Open the saved link privately in your browser and complete Plex authentication.
-It expires after 30 minutes; delete the file after use. Do not paste its contents
-into logs or issue reports. `SYNCANDRUN_HOST` can explicitly select another IP
-address, but keep direct development on loopback behind the chosen proxy. The Docker image
-sets this variable to `0.0.0.0` inside its container so Compose's loopback-only
-published port can reach it; `SYNCANDRUN_BIND_ADDRESS` controls that host mapping.
-
-## Watch toolchain
-
-Install Garmin Connect IQ SDK 9.2.0, Java required by that SDK, and the `fr955` device definition using Garmin's SDK Manager. Obtain the SDK from [Garmin](https://developer.garmin.com/connect-iq/sdk/). Keep your developer signing key outside the repository. Do not use another person's private key.
-
-Set `CIQ_HOME` to the unpacked SDK directory and `GARMIN_KEY` to your DER signing key. These explicit paths work without the maintainer's local SDK layout.
-
-```sh
-export CIQ_HOME=/absolute/path/to/connectiq-sdk
-export GARMIN_KEY=/absolute/private/path/developer.der
-make watch-build DEVICE=fr955
-make watch-test DEVICE=fr955
-make watch-memory-profile DEVICE=fr955
-```
-
-The simulator requires a graphical desktop. If automatic simulator startup is unavailable on your platform, start the SDK simulator before running the test targets. A missing SDK, simulator, device definition, or key means the corresponding check was not run.
-
-The build writes `build/watch/SyncAndRun-fr955.prg`. For development sideloading, connect the watch by USB and copy the PRG to `GARMIN/APPS` using an MTP-capable file manager. Safely disconnect and restart the watch. This is a development build, not a Connect IQ Store package. Preserve the same local key for subsequent updates and back it up securely.
-
-## Verification
-
-```sh
-make lint contract-test companion-build companion-test companion-e2e NODE22=node
-make watch-test watch-memory-profile watch-build
-make docker-test
-make secret-scan
-```
-
-`make verify` combines these checks. Docker verification creates a unique disposable project, image tags, and automatic loopback port, and ignores deployment `.env`, Compose overrides, and profiles. It tests native startup, restart persistence, quiesced backup/restore, and the other CPU architecture through Buildx and Docker emulation. Install gitleaks for secret scanning.
-
-CI checks the companion and protocol, source hygiene, secrets, and container builds. The Garmin simulator and physical acceptance are separate local checks. Read [VALIDATION.md](VALIDATION.md) before making compatibility or release claims.
+The browser end-to-end test supplies a fake desktop bridge, signs in to synthetic Plex, and checks the create-files flow. It cannot validate playable transcoded audio. The desktop unit tests check file layout, tags, and failure isolation with synthetic streams. Physical device and Music/iTunes acceptance steps are in [VALIDATION.md](VALIDATION.md).

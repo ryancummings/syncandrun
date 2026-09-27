@@ -41,13 +41,7 @@ describe("browser UI", () => {
     const javascript = await app.inject({ method: "GET", url: "/assets/app.js" });
     expect(javascript.statusCode).toBe(200);
     expect(javascript.body).toContain("createRoot");
-    expect(javascript.body).toContain("Skip to content");
-
-    // The theme is applied before first paint by a same-origin script, because
-    // the policy forbids inline script.
-    const theme = await app.inject({ method: "GET", url: "/assets/theme.js" });
-    expect(theme.statusCode).toBe(200);
-    expect(page.body).toContain('src="/assets/theme.js"');
+    expect(javascript.body).toContain("Create music folder");
 
     const font = await app.inject({ method: "GET", url: "/assets/fonts/ibm-plex-mono-400-latin.woff2" });
     expect(font.statusCode).toBe(200);

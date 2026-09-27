@@ -1,26 +1,24 @@
 name: Bug report
-description: Report a reproducible problem using sanitized data.
+description: Report a reproducible SyncAndRun desktop problem
+title: "Bug: "
+labels: [bug]
 body:
-  - type: markdown
+  - type: textarea
+    id: problem
     attributes:
-      value: "Do not post credentials, setup links, databases, or private media. Use SECURITY.md for vulnerabilities."
-  - type: input
-    id: revision
-    attributes:
-      label: Source commit or version
+      label: What happened?
+      description: Describe the expected and actual result.
     validations:
       required: true
   - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Use synthetic names and data. Do not attach music, credentials, or a profile.
+    validations:
+      required: true
+  - type: input
     id: environment
     attributes:
       label: Environment
-      description: Host architecture, deployment method, and watch model/firmware if relevant.
-    validations:
-      required: true
-  - type: textarea
-    id: reproduction
-    attributes:
-      label: Reproduction and expected behavior
-      description: Use fake examples and sanitized logs.
-    validations:
-      required: true
+      description: App version or commit, operating system, transfer method, and watch model if relevant.

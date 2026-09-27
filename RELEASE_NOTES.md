@@ -1,15 +1,7 @@
-# Single-user source preview
+# Desktop export preview
 
-This source preview keeps the GPL-3.0 watch application and companion personal
-to one Plex owner, with support for multiple watches belonging to that owner.
-It removes the earlier guest-hosting guidance. Historical tags remain unchanged.
+SyncAndRun now creates local music folders and playlists from Plex in a desktop app. The former Connect IQ app, watch pairing/API, and self-hosted deployment are retired. Their code remains in Git history; database migrations remain for existing local profiles.
 
-Owner setup requires a short-lived, single-use operator setup link. Existing
-installations upgraded from development builds must be claimed through this
-procedure; previous browser sessions are invalidated. Review
-[deployment and recovery](docs/DEPLOYMENT.md) before upgrading.
+The desktop app offers MTP playlist folders, a Windows Garmin Express folder, and Music/iTunes playlist XML with shared tracks. MP3 quality ranges from 64 to 320 kbps. It uses a native folder picker and shows progress and transfer instructions. The package is an unsigned source preview, not a store release.
 
-The optional Tailscale Funnel route needs no user-owned domain or router
-access. Its Garmin audio compatibility and the current source's physical-watch
-acceptance remain unverified. This is not a stable hardware-qualified release
-or a Store submission. See [VALIDATION.md](docs/VALIDATION.md).
+Synthetic export, Plex, UI, and Linux native launch checks have passed. Native macOS and Windows launch, current-export watch playback, and Express/Music/iTunes transfers remain acceptance work. See [VALIDATION.md](docs/VALIDATION.md).

@@ -21,24 +21,6 @@ describe("SQLite migrations", () => {
     expect(database.connection.prepare("SELECT manifest_revision FROM settings WHERE id = 1").pluck().get()).toMatch(
       /^[a-f0-9]{64}$/
     );
-    const initialRevision = database.connection
-      .prepare("SELECT manifest_revision FROM settings WHERE id = 1")
-      .pluck()
-      .get() as string;
-    database.reconcileArtworkOrigin("https://art.example.test");
-    const publicRevision = database.connection
-      .prepare("SELECT manifest_revision FROM settings WHERE id = 1")
-      .pluck()
-      .get() as string;
-    expect(publicRevision).not.toBe(initialRevision);
-    database.reconcileArtworkOrigin("https://art.example.test");
-    expect(database.connection.prepare("SELECT manifest_revision FROM settings WHERE id = 1").pluck().get()).toBe(
-      publicRevision
-    );
-    database.reconcileArtworkOrigin();
-    expect(database.connection.prepare("SELECT manifest_revision FROM settings WHERE id = 1").pluck().get()).not.toBe(
-      publicRevision
-    );
     const tables = database.connection
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
       .all()

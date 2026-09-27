@@ -55,70 +55,36 @@ async function consume(stream: NodeJS.ReadableStream): Promise<Buffer> {
 }
 
 describe("Plex media proxy", () => {
-  it.each([
-    ["compact", "64"],
-    ["balanced", "96"],
-    ["high", "128"]
-  ] as const)("builds and streams the %s MP3 profile", async (profile, expectedBitrate) => {
-    const { database, server, proxy } = await createProxy();
-    database.connection.prepare("UPDATE settings SET transcode_profile = ? WHERE id = 1").run(profile);
-    const stream = await proxy.openAudio("plex:track:100", `watch:${profile}`);
+  it.each([64, 96, 128, 192, 256, 320] as const)("streams an MP3 at %s kbps", async (bitrate) => {
+    const { server, proxy } = await createProxy();
+    const stream = await proxy.openAudio("plex:track:100", bitrate);
     expect((await consume(stream.body)).subarray(0, 3).toString("utf8")).toBe("ID3");
     expect(server.lastAudioRequest()).toMatchObject({
-      query: {
-        path: "/library/metadata/100",
-        protocol: "http",
-        mediaIndex: "0",
-        partIndex: "0",
-        directPlay: "0",
-        directStream: "0",
-        directStreamAudio: "0",
-        audioChannelCount: "2",
-        musicBitrate: expectedBitrate
-      },
-      headers: {
-        token: server.fixtureToken,
-        clientProfile:
-          "add-transcode-target(type=musicProfile&context=streaming&protocol=http&container=mp3&audioCodec=mp3)"
-      }
-    });
-  });
-
-  it("streams watch-sized JPEG artwork", async () => {
-    const { server, proxy } = await createProxy();
-    const stream = await proxy.openArtwork("plex:track:100");
-    expect(await consume(stream.body)).toEqual(Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0xff, 0xd9]));
-    expect(server.lastArtworkRequest()).toMatchObject({
-      query: {
-        url: "/library/metadata/100/thumb/fixture",
-        format: "jpeg",
-        width: "80",
-        height: "80",
-        upscale: "0"
-      }
+      query: { path: "/library/metadata/100", musicBitrate: String(bitrate) },
+      headers: { token: server.fixtureToken }
     });
   });
 
   it("uses sanitized domain errors for missing tracks and failed transcodes", async () => {
     const { server, proxy } = await createProxy();
-    await expect(proxy.openAudio("plex:track:missing", "watch:missing")).rejects.toBeInstanceOf(
+    await expect(proxy.openAudio("plex:track:missing", 192)).rejects.toBeInstanceOf(
       PlexMediaNotFoundError
     );
     server.failTranscodeRequests(500);
-    await expect(proxy.openAudio("plex:track:100", "watch:failed")).rejects.toBeInstanceOf(
+    await expect(proxy.openAudio("plex:track:100", 192)).rejects.toBeInstanceOf(
       PlexTranscodeFailedError
     );
   });
 
-  it("allows only one active audio transcode per watch", async () => {
+  it("allows only one active audio transcode", async () => {
     const { proxy } = await createProxy();
-    const first = await proxy.openAudio("plex:track:100", "watch:one-at-a-time");
-    await expect(proxy.openAudio("plex:track:100", "watch:one-at-a-time")).rejects.toBeInstanceOf(
+    const first = await proxy.openAudio("plex:track:100", 192);
+    await expect(proxy.openAudio("plex:track:100", 192)).rejects.toBeInstanceOf(
       PlexTranscodeBusyError
     );
     first.body.destroy();
     await new Promise<void>((resolve) => first.body.once("close", resolve));
-    const next = await proxy.openAudio("plex:track:100", "watch:one-at-a-time");
+    const next = await proxy.openAudio("plex:track:100", 192);
     expect((await consume(next.body)).subarray(0, 3).toString("utf8")).toBe("ID3");
   });
 

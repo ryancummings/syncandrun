@@ -1,20 +1,9 @@
-# Companion
+# Local Plex service
 
-## Language
+This code is bundled into the desktop app. It serves Plex sign-in, playlist data, and UI assets on loopback while the app is open. It is not a separately deployed companion.
 
-**Installation owner**:
-The single user whose Plex connection, playlist choices, and paired watches belong to a companion installation.
-_Avoid_: Host administrator
+**Owner**: the first Plex account to sign in to a local profile. Later sign-ins must match it.
 
-**Paired watch**:
-A Garmin watch belonging to the installation owner, with its own revocable companion credential and synchronization state. One owner may pair multiple watches.
-_Avoid_: User
+**Playlist snapshot**: ordered track IDs and metadata saved before export. An export uses only selected snapshots.
 
-**Live sync**:
-A view of one watch's current synchronization, inferred from manifest requests, audio transfers, artwork requests, and sync results.
-_Avoid_: Download queue
-
-**Observed audio transfer**:
-Audio bytes that pass from the companion toward a watch during a live sync.
-A completed transfer does not prove that the watch committed the audio to its cache.
-_Avoid_: Applied revision
+**Historical migrations**: original schema steps kept so existing profiles open safely. Watch tables from the retired app are inert.

@@ -7,7 +7,6 @@ export async function createRuntime(config: RuntimeConfig = loadConfig()) {
   const database = new CompanionDatabase(config.dataDir);
   try {
     database.migrate();
-    database.reconcileArtworkOrigin(config.artworkBaseUrl);
     return { app: buildApp(config, database), database, config };
   } catch (error) {
     database.close();

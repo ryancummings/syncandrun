@@ -13,12 +13,10 @@ describe("runtime configuration", () => {
   it("loads validated values and defaults", () => {
     const config = loadConfig({
       SYNCANDRUN_BASE_URL: "https://music.example.test",
-      SYNCANDRUN_ARTWORK_BASE_URL: "https://art.example.test",
       SYNCANDRUN_SECRET: "a".repeat(32),
       SYNCANDRUN_DATA_DIR: "./data-test"
     });
     expect(config.baseUrl?.href).toBe("https://music.example.test/");
-    expect(config.artworkBaseUrl?.href).toBe("https://art.example.test/");
     expect(config.port).toBe(3000);
     expect(config.host).toBe("127.0.0.1");
     expect(config.logLevel).toBe("info");
@@ -67,26 +65,6 @@ describe("runtime configuration", () => {
         SYNCANDRUN_SECRET: "a".repeat(32),
         SYNCANDRUN_TRUST_PROXY: value
       })).toThrow(/SYNCANDRUN_TRUST_PROXY/);
-    }
-  );
-
-  it.each([undefined, ""])("keeps compatible single-origin artwork behavior for %s", (artworkBaseUrl) => {
-    const config = loadConfig({
-      SYNCANDRUN_BASE_URL: "https://music.example.test",
-      SYNCANDRUN_ARTWORK_BASE_URL: artworkBaseUrl,
-      SYNCANDRUN_SECRET: "a".repeat(32)
-    });
-    expect(config.artworkBaseUrl).toBeUndefined();
-  });
-
-  it.each(["http://art.example.test", "https://art.example.test/path", "https://art.example.test:8443"])(
-    "rejects an invalid artwork base URL: %s",
-    (artworkBaseUrl) => {
-      expect(() => loadConfig({
-        SYNCANDRUN_BASE_URL: "https://music.example.test",
-        SYNCANDRUN_ARTWORK_BASE_URL: artworkBaseUrl,
-        SYNCANDRUN_SECRET: "a".repeat(32)
-      })).toThrow("SYNCANDRUN_ARTWORK_BASE_URL");
     }
   );
 
