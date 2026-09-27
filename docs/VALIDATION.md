@@ -17,11 +17,18 @@ an output directory through the GTK desktop portal, and created an export. The
 resulting window was visually inspected. This is a native development-binary
 launch, not a packaged installer test.
 
-Real Plex browser authorization, a physical GPU/Wayland session, and playback
-of Rust-generated output on a Garmin watch have not been tested. The fake MP3
-stream verifies file handling; it is not playable-audio evidence. Historical
-watch results below apply to the Electron exporter. Recheck the physical
-acceptance steps before describing the Rust exporter as watch-validated.
+On 2026-09-27, the native development binary from commit `9267f86` also launched
+in a physical Linux Hyprland/Wayland session. The window was mapped and focused,
+and the user confirmed that it worked. The desktop binary SHA-256 was
+`d3d83c9ee18ed5a22fd8baafd24f8051dd52954762467f3cc9a3360b04dc001b`.
+This confirms the native launch and visible interface, not the complete export
+workflow with a real Plex library.
+
+Real Plex browser authorization and playback of Rust-generated output on a
+Garmin watch remain unverified. The fake MP3 stream verifies file handling,
+not playable audio. Historical watch results below apply to the Electron
+exporter. Recheck physical acceptance before describing Rust output as
+watch-validated.
 
 Reproduce automated and native launch checks using [the Rust guide](RUST.md).
 
