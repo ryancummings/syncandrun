@@ -1,5 +1,6 @@
 using Toybox.WatchUi;
 using Toybox.Graphics;
+using Toybox.Timer;
 
 module SyncAndRun {
 	module Menu {
@@ -18,6 +19,7 @@ module SyncAndRun {
 			private var d_created = false; // menu not created yet
 			private var d_count = 0;		// items currently in the view
 			private var d_layoutKey = null;	// see rebuildIfLayoutChanged
+			private var d_connectionNoticeTimer = null;
 	
 			/* menu should have the following members
 			 * var title 				- containing the title of the menu
@@ -96,15 +98,42 @@ module SyncAndRun {
 				// create if not created
 				if (!d_created) {
 					createMenu();
+					scheduleConnectionNotice();
 					return;
 				}
 
 				// update otherwise
-				if (rebuildIfLayoutChanged()) { return; }
-				updateMenu();
+				if (!rebuildIfLayoutChanged()) { updateMenu(); }
+				scheduleConnectionNotice();
 		    }
 
+			// Garmin can resume the existing Settings menu after Wi-Fi sync
+			// without asking the app for a new initial view. Wait until onShow
+			// finishes before pushing a result the owner must dismiss.
+			function connectionNoticeNeeded() {
+				return (d_menu instanceof Menu.Settings)
+					&& (SyncAndRun.CompanionConnectionTest.pendingNotice() instanceof Lang.String);
+			}
+
+			private function scheduleConnectionNotice() {
+				if (!connectionNoticeNeeded() || d_connectionNoticeTimer != null) { return; }
+				d_connectionNoticeTimer = new Timer.Timer();
+				d_connectionNoticeTimer.start(method(:showConnectionNotice), 100, false);
+			}
+
+			private function showConnectionNotice() as Void {
+				d_connectionNoticeTimer = null;
+				var result = SyncAndRun.CompanionConnectionTest.pendingNotice();
+				if (!(result instanceof Lang.String)) { return; }
+				WatchUi.pushView(new TextView(SyncAndRun.CompanionConnectionTest.noticeText(result)),
+					new SyncAndRun.ConnectionNoticeDelegate(), WatchUi.SLIDE_IMMEDIATE);
+			}
+
 			function onHide() {
+				if (d_connectionNoticeTimer != null) {
+					d_connectionNoticeTimer.stop();
+					d_connectionNoticeTimer = null;
+				}
 				if (!d_menu.loaded()) {
 					if ($.debug) {
 						System.println("MenuView::onHide -> will unload the menu " + d_menu.title());

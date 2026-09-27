@@ -108,11 +108,19 @@ module SetupTests {
             Test.assertEqual("Ready on Wi-Fi", SyncAndRun.CompanionConnectionTest.pendingNotice());
             var view = Application.getApp().getPlaybackConfigurationView();
             Test.assert(view[0] instanceof TextView);
+            var settingsMenu = new SyncAndRun.Menu.Settings();
+            settingsMenu.load();
+            var resumedSettings = new SyncAndRun.Menu.MenuView(settingsMenu);
+            Test.assert(resumedSettings.connectionNoticeNeeded());
+            var playbackMenu = new SyncAndRun.Menu.Playback();
+            playbackMenu.load();
+            Test.assert(!(new SyncAndRun.Menu.MenuView(playbackMenu)).connectionNoticeNeeded());
             // The result remains available until the owner acknowledges it,
             // even if Garmin constructs a playback view while exiting sync.
             Test.assertEqual("Ready on Wi-Fi", SyncAndRun.CompanionConnectionTest.pendingNotice());
             SyncAndRun.CompanionConnectionTest.acknowledgeNotice();
             Test.assert(SyncAndRun.CompanionConnectionTest.pendingNotice() == null);
+            Test.assert(!resumedSettings.connectionNoticeNeeded());
             Test.assertEqual("Ready on Wi-Fi", (new SyncAndRun.Menu.Settings()).connectionStatus());
             var normalView = Application.getApp().getPlaybackConfigurationView();
             Test.assert(normalView[0] instanceof SyncAndRun.Menu.MenuView);

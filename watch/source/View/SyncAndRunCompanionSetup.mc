@@ -77,6 +77,8 @@ module SyncAndRun {
 
 		function pendingNotice() { return Application.Storage.getValue(NOTICE_KEY); }
 
+		function noticeText(value) { return "Connection check\n" + value + "\n\nPress START/BACK"; }
+
 		function acknowledgeNotice() { Application.Storage.deleteValue(NOTICE_KEY); }
 
 		function clearResult() {
@@ -106,5 +108,18 @@ module SyncAndRun {
 		function onSelect() { continueToMenu(); return true; }
 
 		function onBack() { continueToMenu(); return true; }
+	}
+
+	class ConnectionNoticeDelegate extends WatchUi.BehaviorDelegate {
+		function initialize() { BehaviorDelegate.initialize(); }
+
+		function dismiss() {
+			CompanionConnectionTest.acknowledgeNotice();
+			WatchUi.popView(WatchUi.SLIDE_IMMEDIATE);
+		}
+
+		function onSelect() { dismiss(); return true; }
+
+		function onBack() { dismiss(); return true; }
 	}
 }

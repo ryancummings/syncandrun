@@ -63,7 +63,7 @@ class SyncAndRunApp extends Application.AudioContentProviderApp {
     function getPlaybackConfigurationView() {
         var checkResult = SyncAndRun.CompanionConnectionTest.pendingNotice();
         if (checkResult instanceof Lang.String) {
-            return [new TextView("Connection check\n" + checkResult + "\n\nPress START"),
+            return [new TextView(SyncAndRun.CompanionConnectionTest.noticeText(checkResult)),
                 new SyncAndRun.ConnectionResultDelegate()];
         }
         var menu = new Menu.Playback();
