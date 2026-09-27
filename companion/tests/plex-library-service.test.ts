@@ -64,7 +64,7 @@ describe("Plex library service", () => {
     expect((await service.listPlaylists()).every(({ selected }) => selected)).toBe(true);
   });
 
-  it("changes the manifest for selection and profile changes", async () => {
+  it("changes the snapshot revision when selection changes", async () => {
     const { database, service } = await createService();
     const both = await service.selectPlaylists(["plex:playlist:10", "plex:playlist:20"]);
     expect(database.connection.prepare("SELECT COUNT(*) FROM playlist_snapshots").pluck().get()).toBe(2);
@@ -83,8 +83,6 @@ describe("Plex library service", () => {
       database.connection.prepare("SELECT track_id FROM track_metadata ORDER BY track_id").pluck().all()
     ).toEqual(["plex:track:100", "plex:track:200"]);
 
-    const compact = service.setTranscodeProfile("compact");
-    expect(compact).not.toBe(one);
   });
 
   it("rejects oversized playlists before attempting a snapshot refresh", async () => {

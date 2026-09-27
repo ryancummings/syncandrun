@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import { BrowserManagementService } from "../src/persistence/browser-management-service.js";
 import { BrowserSessionRepository } from "../src/persistence/browser-session-repository.js";
 import { CompanionDatabase } from "../src/persistence/database.js";
-import { DeviceRepository } from "../src/persistence/device-repository.js";
 import { PlexSetupService } from "../src/plex/setup-service.js";
 import { createFakePlexServer, type FakePlexServer } from "./helpers/fake-plex.js";
 
@@ -40,28 +39,21 @@ async function createConfiguredManagement() {
   await setup.complete(started.sessionId, "fixture-machine-id", server.pmsUri, "2");
   const sessions = new BrowserSessionRepository(database.connection, secret);
   sessions.create(started.sessionId);
-  const devices = new DeviceRepository(database.connection, secret);
-  const pairing = await devices.createPairingCode();
-  await devices.claimPairingCode(pairing.code, { deviceId: "watch:fixture", deviceName: "Fixture Watch" });
-  return {
-    database,
-    management: new BrowserManagementService(database.connection, secret, devices, sessions)
-  };
+  return { database, management: new BrowserManagementService(database.connection, secret, sessions) };
 }
 
 describe("browser management service", () => {
-  it("disconnects Plex and invalidates every local credential while retaining revoked device history", async () => {
+  it("disconnects Plex and invalidates local sessions", async () => {
     const { database, management } = await createConfiguredManagement();
     management.disconnectPlex();
     expect(database.connection.prepare("SELECT COUNT(*) FROM plex_connection").pluck().get()).toBe(0);
     expect(database.connection.prepare("SELECT COUNT(*) FROM plex_auth_sessions").pluck().get()).toBe(0);
     expect(database.connection.prepare("SELECT COUNT(*) FROM browser_sessions").pluck().get()).toBe(0);
     expect(database.connection.prepare("SELECT COUNT(*) FROM pairing_codes").pluck().get()).toBe(0);
-    expect(database.connection.prepare("SELECT revoked_at FROM devices").pluck().get()).not.toBeNull();
-    expect(management.getSettings()).toMatchObject({ plexConfigured: false, selectedPlaylistCount: 0 });
+    expect(management.getSettings()).toMatchObject({ plexConfigured: false });
   });
 
-  it("deletes paired device history during full local data deletion", async () => {
+  it("deletes playlist snapshots during full local data deletion", async () => {
     const { database, management } = await createConfiguredManagement();
     management.deleteUserData();
     expect(database.connection.prepare("SELECT COUNT(*) FROM devices").pluck().get()).toBe(0);

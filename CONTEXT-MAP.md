@@ -1,6 +1,7 @@
 # SyncAndRun context map
 
-- [Watch](watch/CONTEXT.md): companion setup, synchronization, and offline playback.
-- [Companion](companion/CONTEXT.md): Plex playlist selection and watch synchronization traffic.
+- [Desktop](docs/DESKTOP.md): first run, export choices, and transfer steps.
+- [Architecture](docs/ARCHITECTURE.md): Electron, Plex, local storage, and export paths.
+- [Validation](docs/VALIDATION.md): automated and physical acceptance.
 
-The watch retrieves selected playlists and audio from the companion. The companion observes that traffic to report live sync progress.
+The retired Connect IQ app and self-hosted sync service remain in Git history for attribution and reference.

@@ -1,23 +1,9 @@
 {
-  "name": "syncandrun-for-garmin",
+  "name": "syncandrun",
   "private": true,
   "packageManager": "pnpm@10.15.1",
   "pnpm": {
-    "overrides": {
-      "js-yaml@>=4.0.0 <4.3.2": "4.3.2"
-    },
-    "onlyBuiltDependencies": [
-      "better-sqlite3",
-      "esbuild"
-    ]
-  },
-  "scripts": {
-    "contract:test": "node scripts/validate-protocol.mjs"
-  },
-  "devDependencies": {
-    "@apidevtools/swagger-parser": "10.1.1",
-    "ajv": "8.18.0",
-    "ajv-formats": "3.0.1",
-    "yaml": "2.8.3"
+    "overrides": { "js-yaml@>=4.0.0 <4.3.2": "4.3.2" },
+    "onlyBuiltDependencies": ["better-sqlite3", "esbuild", "electron"]
   }
 }

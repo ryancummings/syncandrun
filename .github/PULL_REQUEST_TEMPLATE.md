@@ -1,14 +1,11 @@
-## Problem and resulting behavior
+## Result
 
-Describe the user-visible problem and what this change does.
+Describe the user-visible change and why it is needed.
 
 ## Verification
 
-List checks run and their results. Identify checks not run and why.
-For watch evidence include source commit and distinguish simulator from hardware.
+List checks run and results. State separately whether a package was launched on its target OS and whether music was played on a physical watch. Identify checks not run and why.
 
 ## Compatibility and recovery
 
-Describe any protocol, migration, deployment, or security impact.
-
-Confirm that logs, examples, and attachments contain no real credentials or private data.
+Describe effects on existing profiles, exported files, security, and upgrade/recovery. Confirm attachments and logs contain no real credentials, media, or private library data.

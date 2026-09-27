@@ -1,12 +1,6 @@
 import { createHash } from "node:crypto";
 import type Database from "better-sqlite3";
-import {
-  calculateContentFingerprint,
-  calculateManifestRevision,
-  canonicalJson,
-  type ManifestPlaylistInput
-} from "../protocol/manifest.js";
-import { revisionSchema, transcodeProfileSchema } from "../protocol/schemas.js";
+import { canonicalJson } from "./canonical-json.js";
 import {
   PlexMediaClient,
   PlexPlaylistTooLargeError,
@@ -18,7 +12,6 @@ import type { PlexSetupService } from "./setup-service.js";
 type Fetch = typeof fetch;
 
 interface SettingsRow {
-  transcode_profile: "compact" | "balanced" | "high";
   selected_playlist_ids: string;
 }
 
@@ -97,21 +90,16 @@ export class PlexLibraryService {
     const refreshed: RefreshedPlaylist[] = [];
     for (const playlist of selected) {
       const tracks = await this.#media.listPlaylistTracks(connection, playlist);
-      const sourceRevision = revisionSchema.parse(
-        createHash("sha256")
-          .update(
-            canonicalJson({
-              id: playlist.id,
-              sourceUpdatedAt: playlist.sourceUpdatedAt,
-              tracks: tracks.map((track) => ({ id: track.id, sourceFingerprint: track.sourceFingerprint }))
-            }),
-            "utf8"
-          )
-          .digest("hex")
-      );
+      const sourceRevision = createHash("sha256")
+        .update(canonicalJson({
+          id: playlist.id,
+          sourceUpdatedAt: playlist.sourceUpdatedAt,
+          tracks: tracks.map((track) => ({ id: track.id, sourceFingerprint: track.sourceFingerprint }))
+        }), "utf8")
+        .digest("hex");
       refreshed.push({ playlist, tracks, sourceRevision });
     }
-    return this.#storeRefresh(selectedPlaylistIds, refreshed, this.#getSettings().transcode_profile, now);
+    return this.#storeRefresh(selectedPlaylistIds, refreshed, now);
   }
 
   async refreshSelected(now = new Date()): Promise<string> {
@@ -119,26 +107,9 @@ export class PlexLibraryService {
     return this.selectPlaylists(parseSelectedIds(settings.selected_playlist_ids), now);
   }
 
-  setTranscodeProfile(profile: "compact" | "balanced" | "high", now = new Date()): string {
-    transcodeProfileSchema.parse(profile);
-    const selectedIds = parseSelectedIds(this.#getSettings().selected_playlist_ids);
-    const snapshots = this.#readManifestPlaylists(selectedIds, profile);
-    const revision = calculateManifestRevision({
-      protocolVersion: 1,
-      transcodeProfile: profile,
-      selectedPlaylistIds: selectedIds,
-      playlists: snapshots
-    });
-    this.#database
-      .prepare("UPDATE settings SET transcode_profile = ?, manifest_revision = ?, updated_at = ? WHERE id = 1")
-      .run(profile, revision, now.toISOString());
-    return revision;
-  }
-
   #storeRefresh(
     selectedIds: string[],
     refreshed: RefreshedPlaylist[],
-    profile: "compact" | "balanced" | "high",
     now: Date
   ): string {
     const trackById = new Map<string, PlexNormalizedTrack>();
@@ -152,26 +123,16 @@ export class PlexLibraryService {
       }
     }
     const byId = new Map(refreshed.map((item) => [item.playlist.id, item]));
-    const manifestPlaylists = [...selectedIds]
-      .sort()
-      .map((id): ManifestPlaylistInput => {
-        const item = byId.get(id);
-        if (item === undefined) throw new Error("Selected playlist refresh is incomplete");
-        return {
-          id,
-          sourceRevision: item.sourceRevision,
-          tracks: item.tracks.map((track) => ({
-            id: track.id,
-            contentFingerprint: calculateContentFingerprint(track.sourceFingerprint, profile)
-          }))
-        };
-      });
-    const manifestRevision = calculateManifestRevision({
-      protocolVersion: 1,
-      transcodeProfile: profile,
-      selectedPlaylistIds: selectedIds,
-      playlists: manifestPlaylists
-    });
+    // Keep the existing revision column usable for upgrades from the retired
+    // watch service. Desktop export only needs the stored playlist snapshots.
+    const manifestRevision = createHash("sha256")
+      .update(canonicalJson({
+        selectedIds: [...selectedIds].sort(),
+        snapshots: [...byId.entries()]
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([id, item]) => ({ id, revision: item.sourceRevision }))
+      }))
+      .digest("hex");
     const timestamp = now.toISOString();
 
     this.#database.transaction(() => {
@@ -217,37 +178,9 @@ export class PlexLibraryService {
     return manifestRevision;
   }
 
-  #readManifestPlaylists(
-    selectedIds: string[],
-    profile: "compact" | "balanced" | "high"
-  ): ManifestPlaylistInput[] {
-    return [...selectedIds]
-      .sort()
-      .map((id) => {
-        const snapshot = this.#database
-          .prepare("SELECT revision, ordered_track_ids FROM playlist_snapshots WHERE playlist_id = ?")
-          .get(id) as { revision: string; ordered_track_ids: string } | undefined;
-        if (snapshot === undefined) throw new Error("Selected playlist has no snapshot");
-        return {
-          id,
-          sourceRevision: snapshot.revision,
-          tracks: parseSelectedIds(snapshot.ordered_track_ids).map((trackId) => {
-            const track = this.#database
-              .prepare("SELECT media_part_fingerprint FROM track_metadata WHERE track_id = ?")
-              .get(trackId) as { media_part_fingerprint: string } | undefined;
-            if (track === undefined) throw new Error("Playlist snapshot references missing track metadata");
-            return {
-              id: trackId,
-              contentFingerprint: calculateContentFingerprint(track.media_part_fingerprint, profile)
-            };
-          })
-        };
-      });
-  }
-
   #getSettings(): SettingsRow {
     return this.#database
-      .prepare("SELECT transcode_profile, selected_playlist_ids FROM settings WHERE id = 1")
+      .prepare("SELECT selected_playlist_ids FROM settings WHERE id = 1")
       .get() as SettingsRow;
   }
 }

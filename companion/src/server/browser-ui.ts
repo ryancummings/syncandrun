@@ -97,7 +97,7 @@ export function registerBrowserUiRoutes<Logger extends FastifyBaseLogger>(
       .headers(securityHeaders)
       .type("text/html; charset=utf-8")
       .send(
-        "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Plex connected</title><link rel=\"stylesheet\" href=\"/assets/app.css\"><script src=\"/assets/theme.js\"></script><main class=\"shell\"><section class=\"panel bracket-frame\"><p class=\"section-label\">Plex</p><h1 class=\"display\">Plex connected</h1><p>You can close this window and return to SyncAndRun.</p></section></main></html>"
+        "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Plex connected</title><link rel=\"stylesheet\" href=\"/assets/app.css\"><main class=\"shell\"><section class=\"panel bracket-frame\"><p class=\"section-label\">Plex</p><h1 class=\"display\">Plex connected</h1><p>You can close this window and return to SyncAndRun.</p></section></main></html>"
       )
   );
   app.get("/license", async (_request, reply) =>
@@ -105,7 +105,7 @@ export function registerBrowserUiRoutes<Logger extends FastifyBaseLogger>(
       .headers(securityHeaders)
       .type("text/plain; charset=utf-8")
       .send(
-        "SyncAndRun for Garmin is licensed under GPL-3.0-or-later and is derived from SubMusic.\n\n" +
+        "SyncAndRun is licensed under GPL-3.0-or-later and is derived from SubMusic.\n\n" +
           "Source license: https://www.gnu.org/licenses/gpl-3.0.txt\n" +
           "Upstream project: https://github.com/memen45/SubMusic\n\n" +
           "Bundled fonts are licensed under the SIL Open Font License 1.1:\n" +

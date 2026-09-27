@@ -5,19 +5,12 @@ import type Database from "better-sqlite3";
 import type { StoredPlexConnection } from "./setup-service.js";
 import { PlexSetupService } from "./setup-service.js";
 
-const product = "SyncAndRun for Garmin";
+const product = "SyncAndRun";
 const version = "1.0.0-dev.0";
 const headerTimeoutMs = 15_000;
 const audioTimeoutMs = 30 * 60 * 1000;
-const artworkTimeoutMs = 60_000;
 const profileExtra =
   "add-transcode-target(type=musicProfile&context=streaming&protocol=http&container=mp3&audioCodec=mp3)";
-
-const profileBitrates = {
-  compact: 64,
-  balanced: 96,
-  high: 128
-} as const;
 
 interface InstallationRow {
   plex_client_identifier: string;
@@ -25,11 +18,6 @@ interface InstallationRow {
 
 interface TrackRow {
   rating_key: string;
-  artwork_key: string | null;
-}
-
-interface SettingsRow {
-  transcode_profile: keyof typeof profileBitrates;
 }
 
 type Fetch = typeof fetch;
@@ -38,7 +26,6 @@ export interface PlexMediaProxyOptions {
   fetch?: Fetch;
   headerTimeoutMs?: number;
   audioTimeoutMs?: number;
-  artworkTimeoutMs?: number;
 }
 
 export interface PlexProxyStream {
@@ -52,14 +39,13 @@ interface PendingPlexStream {
 }
 
 export class PlexMediaNotFoundError extends Error {}
-export class PlexArtworkNotFoundError extends Error {}
 export class PlexTranscodeBusyError extends Error {}
 export class PlexTranscodeFailedError extends Error {}
 export class PlexProxyUnavailableError extends Error {}
 
 /**
  * Resolves only selected snapshot tracks and keeps every Plex-specific URL,
- * token, and transcode parameter behind the companion's watch API.
+ * token, and transcode parameter inside the desktop process.
  */
 export class PlexMediaProxy {
   readonly #database: Database.Database;
@@ -68,8 +54,7 @@ export class PlexMediaProxy {
   readonly #fetch: Fetch;
   readonly #headerTimeoutMs: number;
   readonly #audioTimeoutMs: number;
-  readonly #artworkTimeoutMs: number;
-  readonly #activeAudioDevices = new Set<string>();
+  #audioActive = false;
 
   constructor(
     database: Database.Database,
@@ -81,7 +66,6 @@ export class PlexMediaProxy {
     this.#fetch = options.fetch ?? fetch;
     this.#headerTimeoutMs = options.headerTimeoutMs ?? headerTimeoutMs;
     this.#audioTimeoutMs = options.audioTimeoutMs ?? audioTimeoutMs;
-    this.#artworkTimeoutMs = options.artworkTimeoutMs ?? artworkTimeoutMs;
     const installation = database
       .prepare("SELECT plex_client_identifier FROM installation WHERE id = 1")
       .get() as InstallationRow | undefined;
@@ -89,22 +73,13 @@ export class PlexMediaProxy {
     this.#clientIdentifier = installation.plex_client_identifier;
   }
 
-  async openAudio(trackId: string, deviceId: string, disconnected?: AbortSignal): Promise<PlexProxyStream> {
-    if (this.#activeAudioDevices.has(deviceId)) throw new PlexTranscodeBusyError();
-    this.#activeAudioDevices.add(deviceId);
+  async openAudio(trackId: string, bitrate: 64 | 96 | 128 | 192 | 256 | 320, disconnected?: AbortSignal): Promise<PlexProxyStream> {
+    if (this.#audioActive) throw new PlexTranscodeBusyError();
+    this.#audioActive = true;
     try {
       const track = this.#getTrack(trackId);
       const connection = this.#getConnection();
-      const settings = this.#database
-        .prepare("SELECT transcode_profile FROM settings WHERE id = 1")
-        .get() as SettingsRow | undefined;
-      if (settings === undefined) throw new Error("SyncAndRun settings are not initialized");
-      const url = buildAudioTranscodeUrl(
-        connection.serverBaseUri,
-        track.rating_key,
-        profileBitrates[settings.transcode_profile],
-        randomUUID()
-      );
+      const url = buildAudioTranscodeUrl(connection.serverBaseUri, track.rating_key, bitrate, randomUUID());
       const pending = await this.#requestStream(url, connection, disconnected, this.#audioTimeoutMs, {
         "X-Plex-Client-Profile-Name": "Generic",
         "X-Plex-Client-Profile-Extra": profileExtra
@@ -115,45 +90,16 @@ export class PlexMediaProxy {
         pending.cleanup();
         throw new PlexTranscodeFailedError();
       }
-      return this.#toProxyStream(pending, () => this.#activeAudioDevices.delete(deviceId));
+      return this.#toProxyStream(pending, () => { this.#audioActive = false; });
     } catch (error) {
-      this.#activeAudioDevices.delete(deviceId);
+      this.#audioActive = false;
       throw error;
     }
   }
 
-  async openArtwork(trackId: string, disconnected?: AbortSignal): Promise<PlexProxyStream> {
-    const track = this.#getTrack(trackId);
-    if (track.artwork_key === null) throw new PlexArtworkNotFoundError();
-    if (!/^\/library\/metadata\/[A-Za-z0-9._~-]+\/(?:thumb|art)\/[A-Za-z0-9._~-]+$/.test(track.artwork_key)) {
-      throw new PlexArtworkNotFoundError();
-    }
-    const connection = this.#getConnection();
-    const url = new URL("/photo/:/transcode", connection.serverBaseUri);
-    url.searchParams.set("url", track.artwork_key);
-    url.searchParams.set("format", "jpeg");
-    url.searchParams.set("width", "80");
-    url.searchParams.set("height", "80");
-    url.searchParams.set("upscale", "0");
-    const pending = await this.#requestStream(url, connection, disconnected, this.#artworkTimeoutMs);
-    const response = pending.response;
-    if (!response.ok || response.body === null) {
-      await response.body?.cancel();
-      pending.cleanup();
-      if (response.status === 404) throw new PlexArtworkNotFoundError();
-      throw new PlexProxyUnavailableError();
-    }
-    if (!isContentType(response, "image/jpeg")) {
-      await response.body.cancel();
-      pending.cleanup();
-      throw new PlexProxyUnavailableError();
-    }
-    return this.#toProxyStream(pending);
-  }
-
   #getTrack(trackId: string): TrackRow {
     const track = this.#database
-      .prepare("SELECT rating_key, artwork_key FROM track_metadata WHERE track_id = ?")
+      .prepare("SELECT rating_key FROM track_metadata WHERE track_id = ?")
       .get(trackId) as TrackRow | undefined;
     if (track === undefined || !/^[A-Za-z0-9._~-]+$/.test(track.rating_key)) {
       throw new PlexMediaNotFoundError();
@@ -237,7 +183,7 @@ export class PlexMediaProxy {
 export function buildAudioTranscodeUrl(
   serverBaseUri: string,
   ratingKey: string,
-  bitrate: 64 | 96 | 128,
+  bitrate: 64 | 96 | 128 | 192 | 256 | 320,
   sessionId: string
 ): URL {
   const url = new URL("/music/:/transcode/universal/start.mp3", serverBaseUri);

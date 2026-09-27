@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import Database from "better-sqlite3";
 import { initialMigration } from "./migrations/001_initial.js";
@@ -77,30 +77,6 @@ export class CompanionDatabase {
         }
       })();
     }
-  }
-
-  /**
-   * Invalidates the rendered manifest when artwork capabilities move between
-   * the companion origin and a public artwork-only origin. This makes paired
-   * watches traverse metadata again while preserving cached audio.
-   */
-  reconcileArtworkOrigin(artworkBaseUrl?: string | URL): void {
-    const fingerprint = createHash("sha256")
-      .update(artworkBaseUrl?.toString() ?? "relative-companion-origin", "utf8")
-      .digest("hex");
-    const row = this.connection
-      .prepare("SELECT manifest_revision, artwork_origin_fingerprint FROM settings WHERE id = 1")
-      .get() as { manifest_revision: string; artwork_origin_fingerprint: string | null };
-    if (row.artwork_origin_fingerprint === fingerprint) return;
-
-    const revision = createHash("sha256")
-      .update(`${row.manifest_revision}:${fingerprint}`, "utf8")
-      .digest("hex");
-    this.connection
-      .prepare(
-        "UPDATE settings SET manifest_revision = ?, artwork_origin_fingerprint = ?, updated_at = ? WHERE id = 1"
-      )
-      .run(revision, fingerprint, new Date().toISOString());
   }
 
   isReady(): boolean {

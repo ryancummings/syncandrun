@@ -15,15 +15,10 @@ import {
   BrowserSessionRepository,
   type AuthenticatedBrowserSession
 } from "../persistence/browser-session-repository.js";
-import { normalizeDeviceName } from "../persistence/device-repository.js";
 import { PlexSetupService } from "../plex/setup-service.js";
 import { PlexLibraryService } from "../plex/library-service.js";
 import { PlexPlaylistTooLargeError } from "../plex/media.js";
 import { PairingRateLimit } from "./pairing-rate-limit.js";
-import { stableIdSchema } from "../protocol/index.js";
-import type { LiveSyncTracker } from "../sync/live-sync-tracker.js";
-import type { SyncPlanService } from "../sync/sync-plan.js";
-import { buildSyncStatus, type SyncStatus } from "../sync/sync-status.js";
 
 const setupSessionIdSchema = z.uuid();
 const selectionSchema = z.strictObject({
@@ -38,21 +33,7 @@ export interface BrowserRouteDependencies {
   plexLibrary: PlexLibraryService;
   browserSessions: BrowserSessionRepository;
   management: BrowserManagementService;
-  syncPlan: SyncPlanService;
-  liveSync: LiveSyncTracker;
 }
-
-/** `null` restores the name the watch reported at pairing. */
-const deviceNameSchema = z.strictObject({
-  displayName: z
-    .string()
-    .max(200)
-    .nullable()
-    .refine((value) => value === null || normalizeDeviceName(value).length > 0)
-});
-const liveStreamHeartbeatMs = 20_000;
-/** Coalesces byte-level progress into at most one browser frame per interval. */
-const liveStreamMinIntervalMs = 500;
 
 export function registerBrowserRoutes<Logger extends FastifyBaseLogger>(
   app: FastifyInstance<
@@ -188,8 +169,8 @@ export function registerBrowserRoutes<Logger extends FastifyBaseLogger>(
       .safeParse(request.body);
     if (!body.success) return sendBrowserError(request, reply, 400, "INVALID_REQUEST", "Choose valid Plex playlists.");
     try {
-      const manifestRevision = await dependencies.plexLibrary.selectPlaylists(body.data.selectedPlaylistIds);
-      return { selectedPlaylistIds: body.data.selectedPlaylistIds, manifestRevision };
+      await dependencies.plexLibrary.selectPlaylists(body.data.selectedPlaylistIds);
+      return { selectedPlaylistIds: body.data.selectedPlaylistIds };
     } catch (error) {
       request.log.error({ err: error }, "Plex playlist selection failed");
       if (error instanceof PlexPlaylistTooLargeError) {
@@ -209,7 +190,8 @@ export function registerBrowserRoutes<Logger extends FastifyBaseLogger>(
     const session = authenticateMutation(request, reply, dependencies.browserSessions);
     if (session === undefined) return;
     try {
-      return { manifestRevision: await dependencies.plexLibrary.refreshSelected() };
+      await dependencies.plexLibrary.refreshSelected();
+      return { refreshed: true };
     } catch (error) {
       request.log.error({ err: error }, "Plex playlist refresh failed");
       if (error instanceof PlexPlaylistTooLargeError) {
@@ -225,180 +207,17 @@ export function registerBrowserRoutes<Logger extends FastifyBaseLogger>(
     }
   });
 
-  app.post("/api/v1/settings/profile", async (request, reply) => {
-    const session = authenticateMutation(request, reply, dependencies.browserSessions);
-    if (session === undefined) return;
-    const body = z.strictObject({ profile: z.enum(["compact", "balanced", "high"]) }).safeParse(request.body);
-    if (!body.success) return sendBrowserError(request, reply, 400, "INVALID_REQUEST", "Choose a valid transcode profile.");
-    try {
-      return {
-        profile: body.data.profile,
-        manifestRevision: dependencies.plexLibrary.setTranscodeProfile(body.data.profile)
-      };
-    } catch (error) {
-      request.log.error({ err: error }, "Transcode profile update failed");
-      return sendBrowserError(request, reply, 500, "INTERNAL_ERROR", "The transcode profile could not be updated.");
-    }
-  });
-
   app.get("/api/v1/settings", async (request, reply) => {
     const session = authenticateBrowser(request, reply, dependencies.browserSessions);
     if (session === undefined) return;
     reply.header("Cache-Control", "no-store");
-    // The watch's server address is typed in by hand, so the browser shows the
-    // address it reached this companion on.
-    return { ...dependencies.management.getSettings(), companionUrl: companionOrigin(request, config).origin };
-  });
-
-  app.get("/api/v1/devices", async (request, reply) => {
-    const session = authenticateBrowser(request, reply, dependencies.browserSessions);
-    if (session === undefined) return;
-    reply.header("Cache-Control", "no-store");
-    return { devices: dependencies.management.listDevices() };
-  });
-
-  app.post("/api/v1/devices/pairing-code", async (request, reply) => {
-    const session = authenticateMutation(request, reply, dependencies.browserSessions);
-    if (session === undefined) return;
-    return dependencies.management.createPairingCode();
-  });
-
-  app.delete<{ Params: { deviceId: string } }>("/api/v1/devices/:deviceId", async (request, reply) => {
-    const session = authenticateMutation(request, reply, dependencies.browserSessions);
-    if (session === undefined) return;
-    const deviceId = stableIdSchema.safeParse(request.params.deviceId);
-    if (!deviceId.success) return sendBrowserError(request, reply, 400, "INVALID_REQUEST", "Choose a valid watch.");
-    if (!dependencies.management.revokeDevice(deviceId.data)) {
-      return sendBrowserError(request, reply, 404, "DEVICE_NOT_FOUND", "This watch is not paired.");
-    }
-    dependencies.liveSync.clear(deviceId.data);
-    return { revoked: true };
-  });
-
-  app.patch<{ Params: { deviceId: string } }>("/api/v1/devices/:deviceId", async (request, reply) => {
-    const session = authenticateMutation(request, reply, dependencies.browserSessions);
-    if (session === undefined) return;
-    const deviceId = stableIdSchema.safeParse(request.params.deviceId);
-    const body = deviceNameSchema.safeParse(request.body);
-    if (!deviceId.success || !body.success) {
-      return sendBrowserError(request, reply, 400, "INVALID_REQUEST", "Choose a valid watch name.");
-    }
-    if (!dependencies.management.renameDevice(deviceId.data, body.data.displayName)) {
-      return sendBrowserError(request, reply, 404, "DEVICE_NOT_FOUND", "This watch is not paired.");
-    }
-    const device = dependencies.management.listDevices().find((item) => item.id === deviceId.data);
-    reply.header("Cache-Control", "no-store");
-    return { device };
-  });
-
-  app.post<{ Params: { deviceId: string } }>("/api/v1/devices/:deviceId/forget", async (request, reply) => {
-    const session = authenticateMutation(request, reply, dependencies.browserSessions);
-    if (session === undefined) return;
-    const deviceId = stableIdSchema.safeParse(request.params.deviceId);
-    if (!deviceId.success) return sendBrowserError(request, reply, 400, "INVALID_REQUEST", "Choose a valid watch.");
-    if (!dependencies.management.forgetDevice(deviceId.data)) {
-      return sendBrowserError(
-        request,
-        reply,
-        409,
-        "DEVICE_ACTIVE",
-        "Remove this watch before deleting its record."
-      );
-    }
-    dependencies.liveSync.clear(deviceId.data);
-    return { forgotten: true };
-  });
-
-  app.get<{ Params: { deviceId: string } }>("/api/v1/devices/:deviceId/history", async (request, reply) => {
-    const session = authenticateBrowser(request, reply, dependencies.browserSessions);
-    if (session === undefined) return;
-    const deviceId = stableIdSchema.safeParse(request.params.deviceId);
-    if (!deviceId.success) return sendBrowserError(request, reply, 400, "INVALID_REQUEST", "Choose a valid watch.");
-    reply.header("Cache-Control", "no-store");
-    return { history: dependencies.management.listSyncHistory(deviceId.data) };
-  });
-
-  const currentStatus = (): SyncStatus =>
-    buildSyncStatus(
-      dependencies.syncPlan.get(),
-      dependencies.management.listDevices(),
-      dependencies.liveSync.snapshots()
-    );
-
-  app.get("/api/v1/sync/status", async (request, reply) => {
-    const session = authenticateBrowser(request, reply, dependencies.browserSessions);
-    if (session === undefined) return;
-    reply.header("Cache-Control", "no-store");
-    return currentStatus();
-  });
-
-  // Server-sent events: the browser cannot set a CSRF header on EventSource,
-  // so this stays a read-only GET authenticated by the session cookie.
-  app.get("/api/v1/sync/live", async (request, reply) => {
-    const session = authenticateBrowser(request, reply, dependencies.browserSessions);
-    if (session === undefined) return;
-    reply.hijack();
-    const raw = reply.raw;
-    raw.writeHead(200, {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-store",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no"
-    });
-
-    let closed = false;
-    let pending = false;
-    let lastSentAt = 0;
-    let coalesceTimer: NodeJS.Timeout | undefined;
-
-    const write = () => {
-      if (closed) return;
-      if (dependencies.browserSessions.authenticate(session.rawToken) === undefined) { stop(); return; }
-      lastSentAt = Date.now();
-      pending = false;
-      try {
-        raw.write(`event: status\ndata: ${JSON.stringify(currentStatus())}\n\n`);
-      } catch (error) {
-        request.log.debug({ err: error }, "Live sync stream write failed");
-        stop();
-      }
-    };
-    const schedule = () => {
-      if (closed || pending) return;
-      const wait = Math.max(liveStreamMinIntervalMs - (Date.now() - lastSentAt), 0);
-      if (wait === 0) {
-        write();
-        return;
-      }
-      pending = true;
-      coalesceTimer = setTimeout(write, wait);
-      coalesceTimer.unref();
-    };
-    // The heartbeat carries a full frame: pairing, renames and playlist edits
-    // change the status without producing any tracker event.
-    const heartbeat = setInterval(() => {
-      if (!closed) write();
-    }, liveStreamHeartbeatMs);
-    heartbeat.unref();
-    const unsubscribe = dependencies.liveSync.subscribe(schedule);
-    function stop(): void {
-      if (closed) return;
-      closed = true;
-      clearInterval(heartbeat);
-      if (coalesceTimer !== undefined) clearTimeout(coalesceTimer);
-      unsubscribe();
-      raw.end();
-    }
-    raw.on("close", stop);
-    raw.on("error", stop);
-    write();
+    return dependencies.management.getSettings();
   });
 
   app.post("/api/v1/settings/plex/disconnect", async (request, reply) => {
     const session = authenticateMutation(request, reply, dependencies.browserSessions);
     if (session === undefined) return;
     dependencies.management.disconnectPlex();
-    dependencies.liveSync.clearAll();
     clearSessionCookie(reply);
     return { disconnected: true };
   });
@@ -407,7 +226,6 @@ export function registerBrowserRoutes<Logger extends FastifyBaseLogger>(
     const session = authenticateMutation(request, reply, dependencies.browserSessions);
     if (session === undefined) return;
     dependencies.management.deleteUserData();
-    dependencies.liveSync.clearAll();
     clearSessionCookie(reply);
     return { deleted: true };
   });

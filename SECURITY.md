@@ -1,23 +1,9 @@
-# Security policy
+# Security
 
-## Report privately
+Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/ryancummings/syncandrun/security/advisories/new). Include the affected commit and sanitized reproduction steps. Do not attach a real profile, database, Plex token, setup link, exported media, or private library metadata.
 
-Use GitHub's [private vulnerability reporting](https://github.com/ryancummings/syncandrun/security/advisories/new) for this repository. Do not open a public issue with an exploit or credentials. Include the affected commit, deployment shape, reproduction steps using synthetic data, and sanitized logs. Never attach a real database, setup link, Plex token, watch credential, signing key, or private media metadata.
+SyncAndRun is a personal desktop app. Its internal Fastify service binds to `127.0.0.1:31415` while the app is open. It serves Plex sign-in, playlist data, and UI assets; there is no watch API or intended LAN endpoint. The first Plex account that signs in owns the local profile. Later sign-ins must match that account. State-changing requests use a session cookie and CSRF token.
 
-If the private reporting form is unavailable, open a minimal issue requesting a private contact without vulnerability details. Keep the report private until a channel is available. There is no guaranteed response time.
+The SQLite profile contains encrypted Plex credentials and playlist metadata. The encryption secret is stored alongside it. Back up the database and secret together and keep backups private. Export folders contain music files and playlist names, so protect them like the source library. Exported files do not contain Plex tokens. Closing the app stops the loopback service.
 
-## Supported scope
-
-Security fixes target the current preview development line. There is no stable release or long-term-support branch yet. Do not expose an older build that lacks installation-owner authentication. Review changes and back up before updating.
-
-Each installation has one owner. Only an operator-created, single-use setup link can start initial ownership setup, and subsequent access must match that owner's Plex identity. Disconnect does not transfer ownership. The owner may pair multiple watches, each with its own revocable credential.
-
-The default installation serves plain HTTP on the home network. That is a deliberate tradeoff for setup simplicity: anyone on the same network can read browser sessions, watch credentials, and media in transit, and the first Plex account to finish signing in claims an unowned installation. Management still requires the owner's Plex account once claimed. Do not expose the default installation outside a trusted home network; use the HTTPS routes in the deployment guide for anything else. Behind a reverse proxy, keep the application port on loopback, restrict trusted proxy addresses, and avoid proxy access logs that retain sensitive requests. The optional Funnel route depends on the provider's availability and bandwidth policy. Never disable TLS verification to work around certificate failures.
-
-## Protect and recover
-
-The database contains encrypted Plex credentials and sensitive library metadata. Its encryption secret is held separately in `.env`; possession of both permits decryption. Protect backups, setup-link files, host access, and signing keys. Keep `.env` out of logs and repositories.
-
-Use [the deployment guide](docs/DEPLOYMENT.md) for backup, restore, upgrade, and ownership reset. Changing the encryption secret alone is not a safe rotation procedure. If the secret is compromised, revoke Plex authorization, retire the installation, and reconnect in a fresh installation with new credentials; invalidate affected backups according to your retention policy.
-
-A watch revocation prevents new synchronization but cannot erase audio already on an offline watch. Reset the watch locally when removing that content is required. For a suspected compromise, close ingress, preserve private evidence, revoke affected credentials, and restore service only after the cause is resolved.
+Dependencies and unsigned preview packages need normal local-app review before use. There is no auto updater. See [desktop use](docs/DESKTOP.md) for the profile backup action.

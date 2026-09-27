@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { api, errorMessage, type PlexConnection, type PlexLibrary, type PlexServer } from "../api";
-import { Notice, SectionLabel } from "./primitives";
+import { Notice } from "./primitives";
 
 /** Backs off from an eager first check to a steady poll while the owner signs in. */
 const pollIntervalMs = 1_500;
@@ -164,7 +164,6 @@ export function Setup({ onReady }: { onReady: (csrf: string) => void }) {
   if (step === "server") {
     return (
       <section className="panel bracket-frame">
-        <SectionLabel>Setup · step 2 of 3</SectionLabel>
         <h1 className="display display-lg">Choose your Plex server</h1>
         <p className="lede">Pick the server that holds your music. SyncAndRun finds the best way to reach it.</p>
         {status !== null && <Notice>{status}</Notice>}
@@ -195,7 +194,6 @@ export function Setup({ onReady }: { onReady: (csrf: string) => void }) {
   if (step === "library") {
     return (
       <section className="panel bracket-frame">
-        <SectionLabel>Setup · step 3 of 3</SectionLabel>
         <h1 className="display display-lg">Choose a music library</h1>
         <p className="lede">
           {selectedServer?.name ?? "This server"} has more than one music library. SyncAndRun uses playlists from the one
@@ -225,11 +223,9 @@ export function Setup({ onReady }: { onReady: (csrf: string) => void }) {
 
   return (
     <section className="panel bracket-frame">
-      <SectionLabel>Setup · step 1 of 3</SectionLabel>
-      <h1 className="display display-xl">Your Plex music. Offline on your Garmin.</h1>
+      <h1 className="display display-xl">Connect Plex</h1>
       <p className="lede" style={{ marginTop: "1rem" }}>
-        Sign in with Plex, pick the playlists you want, then pair your watch. The Plex account that signs in first owns
-        this SyncAndRun; only that account can manage it afterwards.
+        Sign in to choose playlists from your Plex music library.
       </p>
       {status !== null && <Notice>{status}</Notice>}
       {error !== null && <Notice tone="error">{error}</Notice>}

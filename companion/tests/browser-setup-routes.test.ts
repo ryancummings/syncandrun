@@ -48,7 +48,7 @@ async function createTestApp(baseUrl: string | null = "https://music.example.tes
     plexSetup,
     plexLibrary,
     browserSessions,
-    management: new BrowserManagementService(database.connection, secret, undefined, browserSessions)
+    management: new BrowserManagementService(database.connection, secret, browserSessions)
   });
   return { app, database, server };
 }
@@ -157,57 +157,11 @@ describe("browser Plex setup routes", () => {
     });
     expect(selection.statusCode).toBe(200);
     expect(selection.json()).toMatchObject({ selectedPlaylistIds: ["plex:playlist:10", "plex:playlist:20"] });
-    expect(selection.json().manifestRevision).toMatch(/^[a-f0-9]{64}$/);
-    const profile = await app.inject({
-      method: "POST",
-      url: "/api/v1/settings/profile",
-      headers: { cookie, "x-csrf-token": claimed.csrfToken },
-      payload: { profile: "compact" }
-    });
-    expect(profile.statusCode).toBe(200);
-    expect(profile.json()).toMatchObject({ profile: "compact" });
-
     const settings = await app.inject({ method: "GET", url: "/api/v1/settings", headers: { cookie } });
     expect(settings.json()).toMatchObject({
-      plexConfigured: true,
-      transcodeProfile: "compact",
-      selectedPlaylistCount: 2,
-      version: "1.0.0-dev.0",
-      // The browser is the only place the operator can read the origin that has
-      // to be typed into the watch's app settings by hand.
-      companionUrl: "https://music.example.test"
-    });
-    const pairing = await app.inject({
-      method: "POST",
-      url: "/api/v1/devices/pairing-code",
-      headers: { cookie, "x-csrf-token": claimed.csrfToken }
-    });
-    expect(pairing.statusCode).toBe(200);
-    const pairingCode = pairing.json<{ code: string; expiresAt: string }>();
-    expect(pairingCode.code).toMatch(/^[0-9]{6}$/);
-    const paired = await app.inject({
-      method: "POST",
-      url: "/api/v1/watch/pair",
-      payload: {
-        code: pairingCode.code,
-        deviceId: "watch:browser-fixture",
-        deviceName: "Forerunner 955 Solar",
-        appVersion: "1.0.0",
-        protocolVersion: 1
-      }
-    });
-    expect(paired.statusCode).toBe(200);
-    const devices = await app.inject({ method: "GET", url: "/api/v1/devices", headers: { cookie } });
-    expect(devices.json()).toMatchObject({
-      devices: [{ id: "watch:browser-fixture", displayName: "Forerunner 955 Solar", revokedAt: null }]
-    });
-    const revoked = await app.inject({
-      method: "DELETE",
-      url: "/api/v1/devices/watch%3Abrowser-fixture",
-      headers: { cookie, "x-csrf-token": claimed.csrfToken }
-    });
-    expect(revoked.json()).toEqual({ revoked: true });
+      plexConfigured: true
 
+    });
     const logout = await app.inject({
       method: "POST",
       url: "/api/v1/session/logout",
@@ -249,7 +203,7 @@ describe("browser Plex setup routes", () => {
       url: "/api/v1/settings",
       headers: { host, cookie: cookie.split(";", 1)[0]! }
     });
-    expect(settings.json().companionUrl).toBe("http://192.168.1.20:3000");
+    expect(settings.json()).toMatchObject({ plexConfigured: false });
     const anonymous = await app.inject({ method: "GET", url: "/api/v1/settings" });
     expect(anonymous.statusCode).toBe(401);
     await app.close();

@@ -7,17 +7,14 @@
   },
   "scripts": {
     "build": "pnpm ui:typecheck && pnpm ui:build && tsc --project tsconfig.build.json",
-    "dev": "tsx watch src/main.ts",
-    "dev:demo": "pnpm ui:build && tsx watch tests/e2e/server.ts --demo",
     "e2e": "playwright test --config playwright.config.ts",
-    "start": "node dist/main.js",
     "test": "vitest run --config vitest.config.ts",
     "typecheck": "tsc --noEmit && pnpm ui:typecheck",
     "ui:build": "vite build --config vite.config.ts",
     "ui:typecheck": "tsc --noEmit --project ui/tsconfig.json"
   },
   "dependencies": {
-    "better-sqlite3": "12.2.0",
+    "better-sqlite3": "13.0.3",
     "fastify": "5.12.2",
     "pino": "9.14.0",
     "react": "19.2.8",

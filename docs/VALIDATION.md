@@ -1,39 +1,16 @@
-# Preview validation
+# Validation
 
-This source preview is not a stable hardware-qualified release. Automated checks cannot prove offline Bluetooth playback, behavior during an activity, battery use, or the watch's compatibility with a particular network route.
+Automated checks cover TypeScript, Plex sign-in and ownership, playlist snapshots, desktop UI flow, MP3 export layout, and failed-export isolation. Build and launch the native package on each target operating system before describing it as supported. Use an empty isolated profile for launch checks and record the source commit, artifact hash, OS, and result.
 
-## Automated gate
+The Linux package has built and launched with a ready loopback service. Native macOS and Windows package launches remain unverified. A previous two-folder export copied with OpenMTP appeared as playlists on a personal Forerunner 955. That result does not prove playback of the current exporter or the Music/iTunes and Express routes.
 
-Run `make verify` from a clean checkout with the prerequisites in [DEVELOPMENT.md](DEVELOPMENT.md). Record the source commit and tool versions with the results. This checks the companion, browser journey, protocol fixtures, `fr955` compile and simulator tests, memory profiles, secret scans, and native/cross-architecture containers including backup and restore.
+For physical acceptance, using only music the owner authorizes for testing:
 
-Docker verification creates a unique disposable Compose project and image tags,
-uses an automatically assigned loopback port, and ignores deployment `.env` files,
-Compose overrides, and enabled profiles. It removes only its own test resources.
-The native stage checks startup, browser security headers, restart persistence,
-and stopped-service backup/restore. The cross-architecture stage requires Docker
-Buildx and CPU emulation; missing prerequisites leave that stage unverified and
-cause the command to fail even when the native stage passed.
+1. Export two playlists at 192 kbps and copy their folders into the Forerunner 955 Music folder with OpenMTP. Check names, order, repeated entries, tags, and playback.
+2. Repeat at 320 kbps. Garmin documents MP3 support but the cited format list does not set a maximum bitrate for this watch.
+3. Check an interrupted export and a playlist with shared tracks. Confirm an earlier complete export still works.
+4. On macOS, add Tracks to Music, import the XML, and confirm Express sees and sends both playlists.
+5. On Windows, check Express's local-folder scanner and the iTunes XML route. On Linux, check direct MTP transfer with the target watch.
+6. Compare the app's size estimate with actual output and the watch's available space. The app cannot inspect watch storage yet.
 
-Secret scanning covers history reachable from the current `HEAD`, the working
-tree, and generated build artifacts. Unrelated fetched branches are outside this
-release gate; inspect all local refs separately with
-`gitleaks git --no-banner --redact --log-opts=--all .` when auditing archives.
-
-For a public deployment, additionally verify that the owner claimed the installation before it was exposed, another Plex account cannot obtain management access, owner disconnect does not remove ownership, and multiple watches belonging to the owner retain separate credentials and synchronization state.
-
-## Physical acceptance — awaiting the watch owner
-
-All items below require a new result tied to the preview commit and deployment. Historical development results are not evidence for this build. Record firmware, source commit, artifact SHA-256, deployment method, result, and date without private metadata.
-
-1. Install on a Forerunner 955 / Solar, enter the configured companion origin, and pair with the short-lived watch code.
-2. Synchronize two playlists with a shared track and verify order, deduplication, and all three bitrate profiles.
-3. Repeat unchanged synchronization and confirm audio reuse.
-4. Interrupt a transfer, restart, and confirm that synchronization resumes without losing completed audio.
-5. Remove a playlist and confirm that tracks still used by another playlist remain playable.
-6. Exercise insufficient storage and recover without corrupting the existing cache.
-7. Disable watch networking and remove the phone, then play audio through Bluetooth headphones.
-8. Record a 30-minute Run while using pause, next, previous, shuffle, and repeat; record battery use and failures.
-9. Restart the watch and companion, verify persistence, then revoke the watch and confirm that new synchronization is denied.
-10. On the watch's intended network, verify DNS resolution when the origin uses a name and repeat pairing, artwork retrieval, long audio downloads, and interrupted synchronization through the exact deployed route. For a home-only route, use home Wi-Fi and verify that the endpoint is not publicly reachable; for public ingress, test from outside the LAN.
-
-Tailscale Funnel is optional. Do not claim route compatibility, a stable release, or broader device compatibility from simulator results.
+Record model, firmware, transfer method, app/OS versions, commit, and result without posting private playlist names, media, tokens, or profile data. Do not claim a route or bitrate has been accepted by hardware until it has been tested.

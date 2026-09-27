@@ -33,7 +33,7 @@ async function fixture(secret = defaultSecret) {
 }
 
 describe("single-owner authorization", () => {
-  it("isolates two installations' owner state, browser sessions, and watch credentials", async () => {
+  it("isolates two installations' owner state and browser sessions", async () => {
     const first = await fixture();
     const second = await fixture(randomBytes(32).toString("hex"));
     const firstLogin = await first.setup.start(baseUrl);
@@ -56,27 +56,9 @@ describe("single-owner authorization", () => {
     expect((await second.app.inject(browserRequest(firstBrowser.token))).statusCode).toBe(401);
     expect((await first.app.inject(browserRequest(secondBrowser.token))).statusCode).toBe(401);
 
-    const pair = async (instance: typeof first) => {
-      const code = await instance.management.createPairingCode();
-      const response = await instance.app.inject({ method: "POST", url: "/api/v1/watch/pair", payload: {
-        code: code.code, deviceId: "watch:fixture", deviceName: "Fixture watch", appVersion: "1.0.0", protocolVersion: 1
-      } });
-      expect(response.statusCode).toBe(200);
-      return response.json<{ deviceToken: string }>().deviceToken;
-    };
-    const firstWatch = await pair(first);
-    const secondWatch = await pair(second);
-    const watchRequest = (token: string) => ({ method: "GET" as const, url: "/api/v1/watch/config",
-      headers: { authorization: `Bearer ${token}` } });
-    expect((await first.app.inject(watchRequest(firstWatch))).statusCode).toBe(200);
-    expect((await second.app.inject(watchRequest(secondWatch))).statusCode).toBe(200);
-    expect((await second.app.inject(watchRequest(firstWatch))).statusCode).toBe(401);
-    expect((await first.app.inject(watchRequest(secondWatch))).statusCode).toBe(401);
-
     first.management.disconnectPlex();
     expect((await first.app.inject(browserRequest(firstBrowser.token))).statusCode).toBe(401);
     expect((await second.app.inject(browserRequest(secondBrowser.token))).statusCode).toBe(200);
-    expect((await second.app.inject(watchRequest(secondWatch))).statusCode).toBe(200);
     expect(second.owners.owner()).toBe("9999");
   });
 

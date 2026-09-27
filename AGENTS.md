@@ -1,15 +1,13 @@
-# Contributor and deployment agent instructions
+# Contributor agent instructions
 
-Read `README.md` and `docs/ARCHITECTURE.md` before changing behavior. For deployment, follow `docs/AGENT_DEPLOYMENT.md` and its human setup guide. For code changes, follow `CONTRIBUTING.md` and `docs/DEVELOPMENT.md`. `docs/protocol/openapi.yaml` owns the watch contract; `CONTEXT-MAP.md` links the glossary.
+Read `README.md`, `docs/ARCHITECTURE.md`, `CONTRIBUTING.md`, and `docs/DEVELOPMENT.md` before changing behavior. `docs/VALIDATION.md` separates automated results from physical device acceptance.
 
-- Keep the companion personal and single-owner. Multiple paired watches must belong to that owner and retain separate credentials and synchronization state.
-- Never print, commit, or include in issue reports Plex credentials, setup links, cookies, database contents, watch credentials, signing keys, or real library metadata.
-- The default installation is plain HTTP on a home network, owned by the first Plex account that signs in. Keep that simple path working. Use the documented HTTPS routes for anything reachable beyond a trusted home network, and never remove owner-only management.
-- Use fake Plex data for automated testing. Never use production data or volumes for tests.
-- Start required development servers yourself after checking whether they are already running; wait for readiness before testing.
+- Build the personal desktop export flow. The Connect IQ app, self-hosted deployment, and watch API are retired.
+- Keep the local profile single-owner. An existing profile and its encrypted Plex connection must remain usable after upgrades; retain historical database migrations.
+- Never print, commit, or include in issues Plex credentials, setup links, cookies, database contents, real library metadata, media, or profile backups.
+- Use fake Plex data and isolated profiles for automated tests. Never use production data or volumes for tests.
+- Start required development servers after checking whether one is running; wait for readiness before testing.
 - Preserve GPL-3.0 licensing, SubMusic ancestry, and asset attribution. Keep `upstream` pointed at `https://github.com/memen45/SubMusic.git`; do not rewrite inherited history.
 - Use public GitHub Issues and pull requests. No maintainer-private tracker, host paths, credentials, or agent runtime is required.
-- Run relevant checks and report unavailable prerequisites as not run. `docs/VALIDATION.md` separates automated evidence from physical-watch acceptance.
+- Run relevant checks and report unavailable prerequisites as not run. A cross-build is not native launch or physical-watch evidence.
 - Do not publish artifacts, submit to a store, change repository visibility, or deploy to another person's host without authorization for that action.
-
-For an installation, ask the operator for the intended instance and networking method before changing it. Do not expose a new public endpoint or erase a volume merely because an earlier check failed. Record the source commit, non-secret configuration, verification results, and next action in the pull request or operator handoff.
