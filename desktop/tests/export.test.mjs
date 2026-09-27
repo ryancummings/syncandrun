@@ -24,9 +24,8 @@ test("MTP export makes separate playlist folders with tagged MP3s and ordered re
   for (const title of ["First list", "Second list"]) {
     const folder = join(result.path, title);
     const lines = (await readFile(join(folder, `${title}.m3u8`), "utf8")).trim().split("\n");
-    assert.equal(lines[0], "#EXTM3U");
-    assert.equal(lines.length, title === "First list" ? 3 : 2);
-    for (const filename of lines.slice(1)) {
+    assert.equal(lines.length, title === "First list" ? 2 : 1);
+    for (const filename of lines) {
       assert.equal(filename.includes("/"), false);
       const data = await readFile(join(folder, filename));
       assert.equal(data.toString("ascii", 0, 3), "ID3");
