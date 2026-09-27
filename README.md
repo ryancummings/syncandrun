@@ -2,7 +2,7 @@
 
 SyncAndRun is a personal desktop app that turns Plex music playlists into local MP3 files for a Garmin music watch. Choose playlists, a transfer method, MP3 quality, and a save folder. The app creates the files and tells you what to do next.
 
-![Desktop app](docs/desktop-ui-implemented.png)
+![Electron desktop reference](docs/desktop-ui-implemented.png)
 
 ## Move music to a watch
 
@@ -18,18 +18,32 @@ Garmin documents [local folders and music libraries in Express](https://support.
 
 SyncAndRun offers MP3 at 64, 96, 128, 192, 256, and 320 kbps. The size shown is an estimate. The app cannot read free space on the watch yet. An earlier two-folder MTP export was recognized as playlists on a personal Forerunner 955. A later Linux transfer verified 20 MP3 files at 320 kbps; the playlist appeared on the watch and a track played after a plain M3U8 was copied. See [validation](docs/VALIDATION.md).
 
-## Build from source
+## Linux: Rust desktop and CLI
 
-Install Node.js 22 and Corepack. On the target operating system, run:
+The native Linux app uses Rust and GPUI. A CLI uses the same profile and export
+engine. See [native build instructions and CLI usage](docs/RUST.md).
+Create a music library folder wherever you want to stage exports, or use the
+confirmed default at `~/Music/SyncAndRun`. The app writes playlist folders
+directly there. After moving them to your watch, its **Clear library after
+transfer** action removes unchanged app-generated files while keeping other files.
 
 ```sh
-corepack pnpm install --frozen-lockfile
-corepack pnpm --dir companion build
-corepack pnpm --dir desktop pack:linux # use pack:mac or pack:win on that OS
+cargo build --locked --workspace
+cargo run --locked -p syncandrun-desktop
+cargo run --locked -p syncandrun-cli -- --help
 ```
 
-The unsigned package appears in `desktop/release`. No package is published yet. See [desktop use](docs/DESKTOP.md), [development](docs/DEVELOPMENT.md), and [architecture](docs/ARCHITECTURE.md).
+Install the Linux system dependencies listed in the native guide first. Existing
+Electron profiles retain their encrypted Plex connection and historical SQLite
+migrations. Close Electron before opening the same profile in Rust.
 
-The former Connect IQ app and self-hosted sync service are retired. Their source remains available in Git history. Direct MTP sync, device free-space detection, Jellyfin, and a Rust export engine are possible future work.
+The Electron implementation remains available for macOS/Windows and migration
+comparison. Its source build instructions are in [development](docs/DEVELOPMENT.md).
+No native Rust installer is published. See [validation](docs/VALIDATION.md) for
+what has been checked separately from real-device acceptance.
+
+The former Connect IQ app and self-hosted sync service are retired. Their source
+remains in Git history. Direct MTP sync, device free-space detection, and Jellyfin
+are outside this version.
 
 SyncAndRun is GPL-3.0 software derived from [SubMusic](https://github.com/memen45/SubMusic). Its history and attribution are preserved in [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md). It is unofficial and is not affiliated with Plex, Garmin, or SubMusic's maintainers. Use [GitHub Issues](https://github.com/ryancummings/syncandrun/issues) and pull requests to contribute.

@@ -1,0 +1,16 @@
+[package]
+name = "syncandrun-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "syncandrun"
+path = "src/main.rs"
+
+[dependencies]
+syncandrun-core.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
+clap = { version = "4", features = ["derive"] }
+ctrlc = "3"
