@@ -21,15 +21,27 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class Plex(http.server.BaseHTTPRequestHandler):
+    playlist_count = 2
     def log_message(self, *_):
         pass
 
     def do_GET(self):
         assert self.headers.get('X-Plex-Token') == 'synthetic-server-token'
         path = urllib.parse.urlsplit(self.path).path
-        if path == '/playlists':
-            items = [dict(ratingKey='10', playlistType='audio', title='Morning miles', leafCount=3, duration=540000),
-                     dict(ratingKey='20', playlistType='audio', title='Easy pace', leafCount=1, duration=180000)]
+        if path == '/':
+            items = None
+            body = json.dumps(dict(MediaContainer=dict(machineIdentifier='synthetic-server', friendlyName='Synthetic Plex', version='1.2.3'))).encode()
+        elif path == '/library/sections':
+            items = None
+            body = json.dumps(dict(MediaContainer=dict(Directory=[dict(key='1', type='artist', title='Synthetic Music')]))).encode()
+        elif path == '/library/sections/1/all':
+            assert urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)['type'][0] == '10'
+            assert self.headers.get('X-Plex-Container-Size') == '0'
+            items = None
+            body = json.dumps(dict(MediaContainer=dict(size=0, totalSize=42))).encode()
+        elif path == '/playlists':
+            items = [dict(ratingKey=str(i * 10), playlistType='audio', title=f'Synthetic playlist {i}', leafCount=3, duration=540000)
+                     for i in range(1, self.playlist_count + 1)]
         elif path.startswith('/playlists/'):
             track = dict(ratingKey='1', type='track', librarySectionID=1, title='Synthetic song', grandparentTitle='Test artist', parentTitle='Test album', duration=180000)
             items = [track] * (3 if '/10/' in path else 1)
@@ -45,7 +57,8 @@ class Plex(http.server.BaseHTTPRequestHandler):
         else:
             self.send_error(404)
             return
-        body = json.dumps(dict(MediaContainer=dict(offset=0, size=len(items), totalSize=len(items), Metadata=items))).encode()
+        if items is not None:
+            body = json.dumps(dict(MediaContainer=dict(offset=0, size=len(items), totalSize=len(items), Metadata=items))).encode()
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(body)))
@@ -100,6 +113,11 @@ def run(args):
             assert 'Connected' in result.stdout
             print('Native CLI smoke passed: profile, playlists, refresh, estimates, three export routes, backup restore.')
             if args.gui:
+                if args.gui_playlists:
+                    Plex.playlist_count = args.gui_playlists
+                    (profile / 'desktop-preferences.json').write_text(json.dumps(dict(
+                        selected=[f'plex:playlist:{i * 10}' for i in range(1, (args.gui_selected if args.gui_selected is not None else args.gui_playlists) + 1)],
+                        bitrate=192)))
                 with (root / 'gui.log').open('w') as log:
                     gui_env = os.environ.copy()
                     if args.gui_default_export:
@@ -108,6 +126,13 @@ def run(args):
                         gui_env['HOME'] = str(synthetic_home)
                     app = subprocess.Popen([str(gui), '--profile', str(profile)], stdout=log, stderr=log, env=gui_env)
                     try:
+                        if args.gui_manual:
+                            print(f'Synthetic GUI process {app.pid} ready for inspection.', flush=True)
+                            try:
+                                time.sleep(180)
+                            except KeyboardInterrupt:
+                                pass
+                            return
                         window = None
                         for _ in range(100):
                             assert app.poll() is None, 'Native app exited before window appeared'
@@ -168,7 +193,7 @@ def run(args):
                                 if len(outputs) == 3:
                                     break
                                 time.sleep(.1)
-                            if len(outputs) != 1 and args.screenshot:
+                            if len(outputs) != 3 and args.screenshot:
                                 subprocess.run(['import', '-window', 'root', str(args.screenshot)], check=True)
                             assert len(outputs) == 3, 'Desktop export or playlist selection did not complete through the portal picker'
                             assert (gui_destination / '.syncandrun-files.json').exists(), 'Desktop library manifest was not created'
@@ -209,6 +234,9 @@ def run(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--gui', action='store_true')
+    parser.add_argument('--gui-manual', action='store_true', help='Keep synthetic GUI open briefly for interactive inspection')
+    parser.add_argument('--gui-playlists', type=int, choices=range(6, 25), help='Show a larger synthetic selected-playlist set in GUI mode')
+    parser.add_argument('--gui-selected', type=int, choices=range(25), help='Select this many of the synthetic playlists initially')
     parser.add_argument('--gui-settings', action='store_true', help='Open Settings before the screenshot')
     parser.add_argument('--gui-default-export', action='store_true', help='Confirm creation of an isolated home library, then export')
     parser.add_argument('--gui-purge', action='store_true', help='After --gui-export, confirm clearing generated music')

@@ -44,6 +44,15 @@ pub struct PlaylistSummary {
     pub duration_seconds: u64,
 }
 
+/// Read-only details for the saved music library. Individual totals may be
+/// unavailable on older Plex servers or when a count endpoint is disabled.
+pub struct LibraryOverview {
+    pub server_name: Option<String>,
+    pub server_version: Option<String>,
+    pub library_name: Option<String>,
+    pub library_tracks: Option<u64>,
+}
+
 // Account tokens and setup links are never serializable or included in errors.
 pub struct Login {
     account_token: String,
@@ -355,6 +364,59 @@ impl Plex {
             })
             .collect()
     }
+
+    pub fn library_overview(&self, connection: &PlexConnection) -> Result<LibraryOverview> {
+        let base = origin(&connection.base_uri)?;
+        key(&connection.library_id)?;
+        let info = self.get(base.clone(), &connection.token).ok();
+        if let Some(machine_id) = info
+            .as_ref()
+            .and_then(|value| value["MediaContainer"]["machineIdentifier"].as_str())
+        {
+            ensure!(
+                machine_id == connection.server_id,
+                "Connected Plex server changed"
+            );
+        }
+        let sections = self
+            .get(base.join("/library/sections")?, &connection.token)
+            .ok();
+        let library_name = sections
+            .as_ref()
+            .and_then(|value| value["MediaContainer"]["Directory"].as_array())
+            .and_then(|sections| {
+                sections.iter().find(|section| {
+                    section["key"].as_str() == Some(connection.library_id.as_str())
+                        && section["type"].as_str() == Some("artist")
+                })
+            })
+            .and_then(|section| section["title"].as_str())
+            .map(str::to_owned);
+        let mut count_url =
+            base.join(&format!("/library/sections/{}/all", connection.library_id))?;
+        count_url.query_pairs_mut().append_pair("type", "10");
+        let count = self
+            .json(
+                self.request(reqwest::Method::GET, count_url, Some(&connection.token))
+                    .header("X-Plex-Container-Start", "0")
+                    .header("X-Plex-Container-Size", "0"),
+            )
+            .ok();
+        Ok(LibraryOverview {
+            server_name: info
+                .as_ref()
+                .and_then(|value| value["MediaContainer"]["friendlyName"].as_str())
+                .map(str::to_owned),
+            server_version: info
+                .as_ref()
+                .and_then(|value| value["MediaContainer"]["version"].as_str())
+                .map(str::to_owned),
+            library_name,
+            library_tracks: count
+                .as_ref()
+                .and_then(|value| value["MediaContainer"]["totalSize"].as_u64()),
+        })
+    }
     pub fn refresh(
         &self,
         profile: &mut Profile,
@@ -518,6 +580,41 @@ mod tests {
             base_uri: url.to_string(),
             library_id: "1".into(),
         }
+    }
+    #[test]
+    fn library_overview_reads_names_and_track_total_without_exposing_token() {
+        let root = tempdir().unwrap();
+        let profile = Profile::open(root.path()).unwrap();
+        let (url, server) = fake(vec![
+            Box::new(|request| {
+                assert!(request.starts_with("GET / HTTP/"));
+                assert!(!request.lines().next().unwrap().contains("fake-token"));
+                json(
+                    serde_json::json!({"MediaContainer":{"friendlyName":"Test server","version":"1.2.3","machineIdentifier":"fake-server"}}),
+                )
+            }),
+            Box::new(|request| {
+                assert!(request.starts_with("GET /library/sections HTTP/"));
+                json(
+                    serde_json::json!({"MediaContainer":{"Directory":[{"key":"1","type":"artist","title":"Test music"},{"key":"2","type":"movie","title":"Other"}]}}),
+                )
+            }),
+            Box::new(|request| {
+                assert!(request.starts_with("GET /library/sections/1/all?type=10 HTTP/"));
+                assert!(request.to_lowercase().contains("x-plex-container-size: 0"));
+                assert!(!request.lines().next().unwrap().contains("fake-token"));
+                json(serde_json::json!({"MediaContainer":{"size":0,"totalSize":1234}}))
+            }),
+        ]);
+        let overview = Plex::new(&profile)
+            .unwrap()
+            .library_overview(&connection(&url))
+            .unwrap();
+        assert_eq!(overview.server_name.as_deref(), Some("Test server"));
+        assert_eq!(overview.server_version.as_deref(), Some("1.2.3"));
+        assert_eq!(overview.library_name.as_deref(), Some("Test music"));
+        assert_eq!(overview.library_tracks, Some(1234));
+        server.join().unwrap();
     }
     #[test]
     fn paginated_refresh_filters_library_and_audio_uses_headers() {

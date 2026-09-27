@@ -15,7 +15,7 @@ use std::{
 use syncandrun_core::{
     BITRATES,
     export::{self, Progress},
-    plex::{self, Login, PlaylistSummary, Plex, ServerChoice},
+    plex::{self, LibraryOverview, Login, PlaylistSummary, Plex, ServerChoice},
     profile::{self, Profile},
 };
 
@@ -25,6 +25,7 @@ enum Event {
         playlists: Vec<PlaylistSummary>,
         selected: Vec<String>,
         server: Option<(String, String, String)>,
+        overview: Option<LibraryOverview>,
     },
     ConnectionUnavailable(String, (String, String, String)),
     SignedIn(Login),
@@ -33,7 +34,6 @@ enum Event {
     Progress(Progress),
     Exported(PathBuf),
     Purged(export::PurgeResult),
-    BackedUp,
     PreferencesFailed(String),
     Failed(String),
 }
@@ -79,10 +79,12 @@ struct Desktop {
     selected: HashSet<String>,
     settings: bool,
     server: Option<(String, String, String)>,
+    overview: Option<LibraryOverview>,
     connection_status: String,
     login: Option<Arc<Login>>,
     choice: Option<Arc<ServerChoice>>,
     bitrate: u16,
+    modal: Option<Modal>,
     destination: Option<PathBuf>,
     using_default_library: bool,
     has_saved_selection: bool,
@@ -95,6 +97,10 @@ struct Desktop {
     sender: mpsc::Sender<Event>,
     receiver: mpsc::Receiver<Event>,
     preference_sender: mpsc::Sender<Preferences>,
+}
+enum Modal {
+    CreateDefault(PathBuf),
+    ClearLibrary(PathBuf),
 }
 impl Drop for Desktop {
     fn drop(&mut self) {
@@ -132,10 +138,12 @@ impl Desktop {
             selected: HashSet::new(),
             settings: false,
             server: None,
+            overview: None,
             connection_status: "Checking…".into(),
             login: None,
             choice: None,
             bitrate: 192,
+            modal: None,
             destination: None,
             using_default_library: true,
             has_saved_selection: false,
@@ -230,11 +238,15 @@ impl Desktop {
             } else {
                 vec![]
             };
+            let overview = connection
+                .as_ref()
+                .and_then(|connection| plex.library_overview(connection).ok());
             Ok(Event::Loaded {
                 connected: connection.is_some(),
                 playlists,
                 selected: profile.selected_ids()?,
                 server: connection.map(|c| (c.base_uri, c.server_id, c.library_id)),
+                overview,
             })
         });
     }
@@ -272,31 +284,74 @@ impl Desktop {
                 self.status = format!("Could not save desktop settings: {message}");
                 return;
             }
-            Event::Loaded { connected,playlists,selected,server } => {
-                self.connected = connected; self.playlists = playlists;
+            Event::Loaded {
+                connected,
+                playlists,
+                selected,
+                server,
+                overview,
+            } => {
+                self.connected = connected;
+                self.playlists = playlists;
                 self.server = server;
-                self.connection_status = if connected { "Connected and playlists loaded" } else { "No Plex account connected" }.into();
-                if !self.has_saved_selection { self.selected = selected.into_iter().collect(); }
-                self.status = if connected { "Choose playlists to take with you." } else { "Connect your Plex account to get started." }.into();
-            },
-            Event::SignedIn(login) => { self.login = Some(Arc::new(login)); self.choice = None; self.status = "Choose your Plex server.".into(); },
-            Event::Discovered(choice) => { self.choice = Some(Arc::new(choice)); self.status = "Choose your music library.".into(); },
+                self.overview = overview;
+                self.connection_status = if connected {
+                    "Connected and playlists loaded"
+                } else {
+                    "No Plex account connected"
+                }
+                .into();
+                if !self.has_saved_selection {
+                    self.selected = selected.into_iter().collect();
+                }
+                self.status = if connected {
+                    "Ready to export."
+                } else {
+                    "Connect your Plex account to get started."
+                }
+                .into();
+            }
+            Event::SignedIn(login) => {
+                self.login = Some(Arc::new(login));
+                self.choice = None;
+                self.status = "Choose your Plex server.".into();
+            }
+            Event::Discovered(choice) => {
+                self.choice = Some(Arc::new(choice));
+                self.status = "Choose your music library.".into();
+            }
             Event::Connected => {
-                self.login = None; self.choice = None; self.connected = true; self.busy = false; self.load(); return;
-            },
-            Event::Exported(path) => { self.output = Some(path); self.progress = None; self.status = "Files ready. Copy the playlist folders into your watch’s Music folder using Files or another MTP app.".into(); },
+                self.login = None;
+                self.choice = None;
+                self.connected = true;
+                self.busy = false;
+                self.load();
+                return;
+            }
+            Event::Exported(path) => {
+                self.output = Some(path);
+                self.progress = None;
+                self.status = "Files ready. Copy the playlist folders into your watch’s Music folder using Files or another MTP app.".into();
+            }
             Event::Purged(result) => {
                 self.output = None;
-                self.status = format!("Cleared {} generated files from the music library. {} modified files were preserved; unrelated files were untouched.", result.removed, result.preserved_modified);
-            },
-            Event::BackedUp => self.status = "Backup complete. Keep the database and encryption secret together in this private folder.".into(),
+                self.status = format!(
+                    "Cleared {} generated files from the music library. {} modified files were preserved; unrelated files were untouched.",
+                    result.removed, result.preserved_modified
+                );
+            }
             Event::ConnectionUnavailable(message, server) => {
                 self.connected = true;
                 self.server = Some(server);
+                self.overview = None;
                 self.connection_status = "Saved connection; Plex is unreachable".into();
-                self.status = format!("{message}. Your saved connection is intact. Use Refresh to retry.");
-            },
-            Event::Failed(message) => { self.progress = None; self.status = message; },
+                self.status =
+                    format!("{message}. Your saved connection is intact. Use Refresh to retry.");
+            }
+            Event::Failed(message) => {
+                self.progress = None;
+                self.status = message;
+            }
         }
         self.busy = false;
     }
@@ -311,22 +366,15 @@ impl Desktop {
             )?))
         });
     }
-    fn choose_folder(&mut self, backup: bool, cx: &mut Context<Self>) {
-        if self.busy {
+    fn choose_folder(&mut self, cx: &mut Context<Self>) {
+        if self.busy || self.modal.is_some() {
             return;
         }
         let prompt = cx.prompt_for_paths(PathPromptOptions {
             files: false,
             directories: true,
             multiple: false,
-            prompt: Some(
-                if backup {
-                    "Choose backup folder"
-                } else {
-                    "Choose your SyncAndRun library folder"
-                }
-                .into(),
-            ),
+            prompt: Some("Choose your SyncAndRun library folder".into()),
         });
         cx.spawn(async move |view, cx| {
             let result = prompt.await;
@@ -334,16 +382,9 @@ impl Desktop {
                 match result {
                     Ok(Ok(Some(paths))) if !paths.is_empty() => {
                         let path = paths[0].clone();
-                        if backup {
-                            view.job("Backing up profile…", move |profile, _, _| {
-                                Profile::open(profile)?.backup(&path)?;
-                                Ok(Event::BackedUp)
-                            });
-                        } else {
-                            view.destination = Some(path);
-                            view.using_default_library = false;
-                            view.save_preferences();
-                        }
+                        view.destination = Some(path);
+                        view.using_default_library = false;
+                        view.save_preferences();
                     }
                     Ok(Ok(_)) => {}
                     _ => view.status =
@@ -355,30 +396,14 @@ impl Desktop {
         })
         .detach();
     }
-    fn create_files(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.busy {
+    fn create_files(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+        if self.busy || self.modal.is_some() {
             return;
         }
         if self.using_default_library && self.destination.as_ref().is_some_and(|p| !p.exists()) {
             let path = self.destination.as_ref().expect("default path").clone();
-            let answer = window.prompt(
-                PromptLevel::Info,
-                "Create ~/Music/SyncAndRun?",
-                Some("Export playlists there now?"),
-                &["Create and export", "Cancel"],
-                cx,
-            );
-            cx.spawn(async move |view, cx| {
-                if answer.await.ok() == Some(0) {
-                    let _ = view.update(cx, |view, cx| {
-                        if !view.busy && view.destination.as_ref() == Some(&path) {
-                            view.start_export(true);
-                            cx.notify();
-                        }
-                    });
-                }
-            })
-            .detach();
+            self.modal = Some(Modal::CreateDefault(path));
+            cx.notify();
             return;
         }
         self.start_export(false);
@@ -425,34 +450,33 @@ impl Desktop {
             },
         );
     }
-    fn confirm_purge(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.busy {
+    fn confirm_purge(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+        if self.busy || self.modal.is_some() {
             return;
         }
         let Some(library) = self.destination.clone() else {
             return;
         };
-        let answer = window.prompt(
-            PromptLevel::Warning,
-            "Clear library music?",
-            Some("Other files stay in the library."),
-            &["Clear music", "Cancel"],
-            cx,
-        );
-        cx.spawn(async move |view, cx| {
-            if answer.await.ok() == Some(0) {
-                let _ = view.update(cx, |view, cx| {
-                    if !view.busy && view.destination.as_ref() == Some(&library) {
-                        view.job("Clearing generated music…", move |profile, _, _| {
-                            let _profile_lock = Profile::open(profile)?;
-                            Ok(Event::Purged(export::purge_library(&library)?))
-                        });
-                        cx.notify();
-                    }
+        self.modal = Some(Modal::ClearLibrary(library));
+        cx.notify();
+    }
+    fn confirm_modal(&mut self) {
+        match self.modal.take() {
+            Some(Modal::CreateDefault(path))
+                if !self.busy && self.destination.as_ref() == Some(&path) =>
+            {
+                self.start_export(true);
+            }
+            Some(Modal::ClearLibrary(library))
+                if !self.busy && self.destination.as_ref() == Some(&library) =>
+            {
+                self.job("Clearing generated music…", move |profile, _, _| {
+                    let _profile_lock = Profile::open(profile)?;
+                    Ok(Event::Purged(export::purge_library(&library)?))
                 });
             }
-        })
-        .detach();
+            _ => {}
+        }
     }
 }
 fn button(
@@ -474,9 +498,21 @@ fn button(
         })
         .child(label.into())
 }
+fn panel() -> Div {
+    div()
+        .p_5()
+        .rounded_lg()
+        .border_1()
+        .border_color(rgb(0x31443a))
+        .bg(rgb(0x18251e))
+}
 impl Render for Desktop {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let active = !self.busy;
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        window.set_rem_size(px(16.));
+        let active = !self.busy && self.modal.is_none();
+        let width: f32 = window.bounds().size.width.into();
+        let height: f32 = window.bounds().size.height.into();
+        let compact = width < 1020.;
         let mut content = div().flex().flex_col().gap_3();
         if let Some(choice) = self.choice.clone() {
             content = content.child(div().text_xl().child("Choose a music library"));
@@ -537,77 +573,273 @@ impl Render for Desktop {
                     ));
             }
         } else if self.settings {
-            content = content
-                .child(div().text_2xl().child("Settings"))
-                .child(div().text_xl().child("Plex account"))
-                .child(self.connection_status.clone())
-                .child(match &self.server {
-                    Some((address, server, library)) => format!("Server address: {address}\nServer ID: {server}\nMusic library ID: {library}"),
-                    None => "No server saved.".into(),
+            let server_name = self
+                .overview
+                .as_ref()
+                .and_then(|o| o.server_name.as_deref())
+                .unwrap_or("Saved Plex server");
+            let server_version = self
+                .overview
+                .as_ref()
+                .and_then(|o| o.server_version.as_deref())
+                .unwrap_or("Unavailable");
+            let library_name = self
+                .overview
+                .as_ref()
+                .and_then(|o| o.library_name.as_deref())
+                .unwrap_or("Saved music library");
+            let server_address = self
+                .server
+                .as_ref()
+                .map(|s| s.0.as_str())
+                .unwrap_or("No server saved");
+            let server_id = self.server.as_ref().map(|s| s.1.as_str()).unwrap_or("—");
+            let library_id = self.server.as_ref().map(|s| s.2.as_str()).unwrap_or("—");
+            let library_tracks = self
+                .overview
+                .as_ref()
+                .and_then(|o| o.library_tracks)
+                .map(|count| count.to_string())
+                .unwrap_or_else(|| "—".into());
+            let selected: Vec<_> = self
+                .playlists
+                .iter()
+                .filter(|p| self.selected.contains(&p.id))
+                .collect();
+            let selected_tracks: u64 = selected.iter().map(|p| p.track_count).sum();
+            let server_card = panel()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .flex_1()
+                .min_w(px(0.))
+                .when(!compact, |card| card.h(px(410.)))
+                .child(div().text_xl().child("Plex server"))
+                .child(div().text_lg().child(server_name.to_owned()))
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(rgb(if self.connected { 0xa8d6b5 } else { 0xd8b980 }))
+                        .child(self.connection_status.clone()),
+                )
+                .child(div().text_sm().text_color(rgb(0x91a69a)).child("Address"))
+                .child(div().text_sm().truncate().child(server_address.to_owned()))
+                .child(div().text_sm().text_color(rgb(0x91a69a)).child("Server ID"))
+                .child(div().text_sm().truncate().child(server_id.to_owned()))
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(rgb(0x91a69a))
+                        .child(format!("Plex version · {server_version}")),
+                )
+                .child(
+                    button("account", "Connect or change account", active).on_click(cx.listener(
+                        |view, _, _, cx| {
+                            if view.modal.is_none() {
+                                view.sign_in();
+                                cx.notify();
+                            }
+                        },
+                    )),
+                );
+            let stat = |label: &'static str, value: String| {
+                div()
+                    .w(px(170.))
+                    .p_3()
+                    .rounded_md()
+                    .bg(rgb(0x22382b))
+                    .child(div().text_2xl().child(value))
+                    .child(div().text_sm().text_color(rgb(0xa8cbb4)).child(label))
+            };
+            let statistics = if compact {
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_2()
+                    .child(stat("Library tracks", library_tracks))
+                    .child(stat("Audio playlists", self.playlists.len().to_string()))
+                    .child(stat("Selected playlists", selected.len().to_string()))
+                    .child(stat("Selected tracks", selected_tracks.to_string()))
+            } else {
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex()
+                            .gap_2()
+                            .child(stat("Library tracks", library_tracks))
+                            .child(stat("Audio playlists", self.playlists.len().to_string())),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .gap_2()
+                            .child(stat("Selected playlists", selected.len().to_string()))
+                            .child(stat("Selected tracks", selected_tracks.to_string())),
+                    )
+            };
+            let library_card = panel().flex().flex_col().gap_3().flex_1().min_w(px(0.))
+                .when(!compact, |card| card.h(px(410.)))
+                .child(div().text_xl().child("Plex music library"))
+                .child(div().text_lg().child(library_name.to_owned()))
+                .child(div().text_sm().text_color(rgb(0x91a69a)).child(format!("Library ID · {library_id}")))
+                .child(div().text_sm().text_color(rgb(0x9fb8a7)).child(
+                    "SyncAndRun reads playlists and tracks from Plex. It does not change your Plex library."
+                ))
+                .child(statistics);
+            let layout = if compact {
+                div().flex().flex_col()
+            } else {
+                div().flex().flex_row()
+            };
+            let folder = self
+                .destination
+                .as_ref()
+                .map(|path| {
+                    format!(
+                        "{}{}",
+                        path.display(),
+                        if self.using_default_library {
+                            " (default)"
+                        } else {
+                            ""
+                        }
+                    )
                 })
-                .child(button("account", "Connect or change Plex account", active).on_click(cx.listener(|v, _, _, cx| { v.sign_in(); cx.notify(); })))
-                .child(div().text_xl().child("Music library folder"))
-                .child(div().text_color(rgb(0xa5b3aa)).child("Create a SyncAndRun library folder wherever you want to stage music, then select it here. The app will use the home folder shown below if you leave this unchanged; it will ask before creating it on the first export."))
-                .child(button("folder", "Choose library folder", active).on_click(cx.listener(|v, _, _, cx| v.choose_folder(false, cx))))
-                .child(self.destination.as_ref().map(|p| format!("{}{}", p.display(), if self.using_default_library { " (default)" } else { "" })).unwrap_or_else(|| "No home folder found; choose a library folder".into()))
-                .child(div().text_color(rgb(0xa5b3aa)).child("Playlist folders and .m3u8 files go directly into this library folder. Repeat exports update generated music and leave your other files alone."))
-                .child(div().text_xl().child("Advanced"))
-                .child(format!("MP3 bitrate: {} kbps · Transfer layout: MTP playlist folders · Profile: {}", self.bitrate, self.profile.display()))
-                .child(button("backup", "Back up encrypted profile", active).on_click(cx.listener(|v, _, _, cx| v.choose_folder(true, cx))));
+                .unwrap_or_else(|| "No library folder selected".into());
+            let mut management = panel().flex().flex_col().gap_3()
+                .child(div().text_xl().child("Export library"))
+                .child(div().text_color(rgb(0xa8cbb4)).child(folder))
+                .child(button("folder", "Change export folder", active).on_click(
+                    cx.listener(|view, _, _, cx| view.choose_folder(cx))
+                ))
+                .child(div().text_sm().text_color(rgb(0x9fb8a7)).child(
+                    "Export creates a folder and .m3u8 playlist for each selected playlist here. Later exports update app-generated music and remove obsolete generated files only when they are unchanged. Your other files stay untouched."
+                ))
+                .child(div().text_sm().text_color(rgb(0x9fb8a7)).child(
+                    "After copying music to your watch, you can clear unchanged app-generated files. Modified files and unrelated files are preserved."
+                ));
+            if self
+                .destination
+                .as_ref()
+                .is_some_and(|path| path.join(".syncandrun-files.json").exists())
+            {
+                management =
+                    management.child(button("purge", "Clear exported music…", active).on_click(
+                        cx.listener(|view, _, window, cx| view.confirm_purge(window, cx)),
+                    ));
+            }
+            content = content
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(div().text_2xl().child("Settings"))
+                        .child(
+                            div()
+                                .text_color(rgb(0x9fb8a7))
+                                .child("Connection and library details."),
+                        ),
+                )
+                .child(layout.gap_4().child(server_card).child(library_card))
+                .child(management);
         } else if !self.connected {
-            content = content.child(div().text_2xl().child("Your music. Ready for a run."))
-                .child(div().text_color(rgb(0xa5b3aa)).child("Sign in to Plex, choose your playlists, and create MP3 files for your Garmin watch."))
-                .child(button("login","Connect Plex",active).on_click(cx.listener(|view,_,_,cx| { view.sign_in(); cx.notify(); })));
+            content = content
+                .child(div().text_2xl().child("Bring your music along"))
+                .child(
+                    panel()
+                        .flex()
+                        .flex_col()
+                        .gap_4()
+                        .w(px(540.))
+                        .child(div().text_xl().child("Connect Plex"))
+                        .child(div().text_color(rgb(0x9fb8a7)).child(
+                            "Choose your Plex playlists and make MP3 files for your Garmin watch.",
+                        ))
+                        .child(
+                            button("login", "Sign in with Plex →", active)
+                                .bg(rgb(0x21825a))
+                                .border_color(rgb(0x4caa78))
+                                .on_click(cx.listener(|view, _, _, cx| {
+                                    view.sign_in();
+                                    cx.notify();
+                                })),
+                        ),
+                );
         } else {
             let selected: Vec<_> = self
                 .playlists
                 .iter()
                 .filter(|p| self.selected.contains(&p.id))
                 .collect();
-            let seconds: u64 = selected.iter().map(|p| p.duration_seconds).sum();
             let tracks: u64 = selected.iter().map(|p| p.track_count).sum();
+            let seconds: u64 = selected.iter().map(|p| p.duration_seconds).sum();
             let estimate = seconds as f64 * self.bitrate as f64 * 1000.0 / 8.0 * 1.03 / 1_000_000.0;
-            let mut available = div()
-                .id("available-playlists")
-                .flex()
-                .flex_col()
-                .gap_2()
-                .h(px(120.))
-                .overflow_y_scroll();
-            let mut syncing = div()
-                .id("syncing-playlists")
-                .flex()
-                .flex_col()
-                .gap_2()
-                .h(px(120.))
-                .overflow_y_scroll();
+            let available_count = self.playlists.len() - selected.len();
+            let row_height = 52.;
+            let available_limit = if compact {
+                (height * 0.38).clamp(250., 750.)
+            } else {
+                (height - 450.).clamp(250., 850.)
+            };
+            let selected_cap_rows = (height * 0.5 / row_height).floor().max(1.) as usize;
+            let base_selected_rows = 4.min(selected_cap_rows);
+            let selected_rows = selected
+                .len()
+                .max(base_selected_rows)
+                .min(selected_cap_rows);
+            let selected_growth = selected_rows - base_selected_rows;
+            let base_available_rows = self
+                .playlists
+                .len()
+                .max(1)
+                .min((available_limit / row_height).floor().max(1.) as usize);
+            let available_rows = base_available_rows.saturating_sub(selected_growth).max(1);
+            let available_height = available_rows as f32 * row_height;
+            let available_overflow = available_count > available_rows;
+            let selected_height = selected_rows as f32 * row_height;
+            let selected_overflow = selected.len() as f32 * row_height > selected_height;
+            let mut available = div().id("available-playlists").flex().flex_col().gap_2();
+            let mut syncing = div().id("syncing-playlists").flex().flex_col().gap_2();
+            available = available.h(px(available_height));
+            if available_overflow {
+                available = available.overflow_y_scroll();
+            }
+            syncing = syncing.h(px(selected_height));
+            if selected_overflow {
+                syncing = syncing.overflow_y_scroll();
+            }
             if self.playlists.is_empty() {
                 available =
                     available.child("No audio playlists found. Create one in Plex, then refresh.");
             }
-            for (i, p) in self.playlists.iter().enumerate() {
-                let id = p.id.clone();
+            for (i, playlist) in self.playlists.iter().enumerate() {
+                let id = playlist.id.clone();
                 let checked = self.selected.contains(&id);
-                let selectable = p.track_count <= 10000;
-                let item = button(
-                    ("playlist", i),
-                    format!(
-                        "{}   ·   {} tracks{}",
-                        p.title,
-                        p.track_count,
-                        if selectable { "" } else { " · too large" }
-                    ),
-                    active && selectable,
-                )
-                .on_click(cx.listener(move |v, _, _, cx| {
-                    if !v.busy && selectable {
-                        if !v.selected.remove(&id) {
-                            v.selected.insert(id.clone());
+                let selectable = playlist.track_count <= 10000;
+                let label = format!(
+                    "{}  {}  ·  {} tracks{}",
+                    if checked { "✓" } else { "+" },
+                    playlist.title,
+                    playlist.track_count,
+                    if selectable { "" } else { " · too large" }
+                );
+                let item = button(("playlist", i), label, active && selectable)
+                    .w_full()
+                    .bg(rgb(if checked { 0x28543e } else { 0x20352a }))
+                    .border_color(rgb(if checked { 0x69b989 } else { 0x31443a }))
+                    .on_click(cx.listener(move |view, _, _, cx| {
+                        if !view.busy && selectable {
+                            if !view.selected.remove(&id) {
+                                view.selected.insert(id.clone());
+                            }
+                            view.save_preferences();
+                            cx.notify();
                         }
-                        cx.notify();
-                        v.save_preferences();
-                    }
-                }));
+                    }));
                 if checked {
                     syncing = syncing.child(item);
                 } else {
@@ -615,102 +847,184 @@ impl Render for Desktop {
                 }
             }
             if selected.is_empty() {
-                syncing = syncing.child("Click an available playlist to add it here.");
+                syncing = syncing.child("Choose a playlist below to add it here.");
             }
-            let qualities = div()
+            if available_count == 0 && !self.playlists.is_empty() {
+                available = available.child("All playlists are selected.");
+            }
+            let playlist_panel = panel()
                 .flex()
-                .gap_2()
-                .children(BITRATES.into_iter().map(|bitrate| {
-                    button(
-                        ("quality", bitrate as usize),
-                        format!(
-                            "{}{}",
-                            bitrate,
-                            if self.bitrate == bitrate { " ✓" } else { "" }
-                        ),
-                        active,
-                    )
-                    .on_click(cx.listener(move |v, _, _, cx| {
-                        if !v.busy {
-                            v.bitrate = bitrate;
-                            cx.notify();
-                            v.save_preferences();
-                        }
-                    }))
-                }));
-            content = content
+                .flex_col()
+                .gap_3()
+                .flex_1()
                 .child(
                     div()
                         .flex()
                         .justify_between()
                         .items_center()
-                        .child(div().text_xl().child("1  Choose playlists"))
-                        .child(button("refresh", "Refresh", active).on_click(cx.listener(
-                            |v, _, _, cx| {
-                                v.load();
-                                cx.notify();
-                            },
-                        ))),
+                        .child(div().text_xl().child("Playlists"))
+                        .child(
+                            button("refresh", "Refresh from Plex", active)
+                                .text_sm()
+                                .on_click(cx.listener(|view, _, _, cx| {
+                                    view.load();
+                                    cx.notify();
+                                })),
+                        ),
                 )
-                .child(div().text_color(rgb(0x9acdb1)).child(format!("Available playlists · {}", self.playlists.len() - selected.len())))
-                .child(available)
-                .child(div().text_color(rgb(0x9acdb1)).child(format!("Syncing playlists · {}", selected.len())))
-                .child(syncing)
-                .child(div().text_xl().child("2  MP3 quality · kbps"))
-                .child(qualities)
-                .child(div().text_color(rgb(0xa5b3aa)).child(format!(
-                    "{} playlists · {} tracks · about {:.0} MB. Watch free space is not measured.",
-                    selected.len(),
-                    tracks,
-                    estimate
-                )))
-                .child(div().text_xl().child("3  Music library for MTP transfer"))
                 .child(
                     div()
                         .flex()
-                        .gap_3()
+                        .justify_between()
                         .items_center()
-                        .child(button("main-folder", "Change library folder", active).on_click(cx.listener(|v, _, _, cx| v.choose_folder(false, cx))))
                         .child(
-                            self.destination
-                                .as_ref()
-                                .map(|p| format!("{}{}", p.display(), if self.using_default_library { " (default)" } else { "" }))
-                                .unwrap_or_else(|| "Choose a library folder".into()),
-                        ),
+                            div()
+                                .text_sm()
+                                .text_color(rgb(0xa8cbb4))
+                                .child(format!("Selected · {}", selected.len())),
+                        )
+                        .child(if selected_overflow {
+                            div()
+                                .text_sm()
+                                .text_color(rgb(0x91a69a))
+                                .child("Scroll to see more")
+                        } else {
+                            div()
+                        }),
                 )
-                .child(div().text_color(rgb(0xa5b3aa)).child("Create a SyncAndRun library folder anywhere and select it above. Playlist folders are staged directly inside it. The default home folder is created only after you confirm the first export."));
-            if let Some(p) = &self.progress {
-                let fraction = if p.expected == 0 {
-                    1.0
+                .child(syncing)
+                .child(
+                    div()
+                        .flex()
+                        .justify_between()
+                        .items_center()
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(rgb(0xa8cbb4))
+                                .child(format!("Available · {}", available_count)),
+                        )
+                        .child(if !available_overflow {
+                            div()
+                        } else {
+                            div()
+                                .text_sm()
+                                .text_color(rgb(0x91a69a))
+                                .child("Scroll to browse")
+                        }),
+                )
+                .child(available);
+            let qualities = div()
+                .flex()
+                .flex_wrap()
+                .gap_2()
+                .children(BITRATES.into_iter().map(|bitrate| {
+                    let selected = self.bitrate == bitrate;
+                    button(
+                        ("quality", bitrate as usize),
+                        format!("{}{}", bitrate, if selected { " ✓" } else { "" }),
+                        active,
+                    )
+                    .bg(rgb(if selected { 0x28543e } else { 0x20352a }))
+                    .border_color(rgb(if selected { 0x69b989 } else { 0x31443a }))
+                    .on_click(cx.listener(move |view, _, _, cx| {
+                        if !view.busy {
+                            view.bitrate = bitrate;
+                            view.save_preferences();
+                            cx.notify();
+                        }
+                    }))
+                }));
+            let folder = self
+                .destination
+                .as_ref()
+                .map(|path| {
+                    format!(
+                        "{}{}",
+                        path.display(),
+                        if self.using_default_library {
+                            " (default)"
+                        } else {
+                            ""
+                        }
+                    )
+                })
+                .unwrap_or_else(|| "Choose a library folder".into());
+            let export_panel = panel().flex().flex_col().gap_4()
+                .child(div().text_xl().child("Export settings"))
+                .child(div().flex().flex_col().gap_2()
+                    .child(div().text_sm().text_color(rgb(0xa8cbb4)).child("MP3 quality"))
+                    .child(qualities)
+                    .child(div().text_sm().text_color(rgb(0x91a69a)).child("192 kbps is a good balance of sound and size.")))
+                .child(div().p_4().rounded_md().bg(rgb(0x22382b))
+                    .child(div().text_lg().child(format!("{} playlists  ·  {} tracks", selected.len(), tracks)))
+                    .child(div().text_sm().text_color(rgb(0xa8cbb4)).child(format!("About {:.0} MB at {} kbps", estimate, self.bitrate))))
+                .child(div().flex().flex_col().gap_2()
+                    .child(div().text_sm().text_color(rgb(0xa8cbb4)).child("Music library folder"))
+                    .child(div().text_sm().child(folder))
+                    .child(button("main-folder", "Change folder", active).on_click(
+                        cx.listener(|view, _, _, cx| view.choose_folder(cx))
+                    )))
+                .child(div().text_sm().text_color(rgb(0x91a69a))
+                    .child("Copy the exported playlist folders into your watch’s Music folder with an MTP app."));
+            let export_panel = if compact {
+                export_panel.w_full()
+            } else {
+                export_panel.w(px(350.)).h(px(540.)).flex_none()
+            };
+            let layout = if compact {
+                div().flex().flex_col()
+            } else {
+                div().flex().flex_row().items_start()
+            };
+            content = content
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(div().text_2xl().child("Your music"))
+                        .child(div().text_color(rgb(0x9fb8a7)).child(if compact {
+                            "Choose playlists, then scroll down for export settings."
+                        } else {
+                            "Choose playlists, set quality, then export for your watch."
+                        })),
+                )
+                .child(layout.gap_4().child(playlist_panel).child(export_panel));
+            if let Some(progress) = &self.progress {
+                let fraction = if progress.expected == 0 {
+                    1.
                 } else {
-                    p.completed as f32 / p.expected as f32
+                    progress.completed as f32 / progress.expected as f32
                 };
                 let eta = self
                     .export_started
                     .and_then(|start| {
-                        (p.completed > 0 && p.completed < p.expected).then(|| {
-                            let remaining = start.elapsed().as_secs_f64()
-                                * (p.expected - p.completed) as f64
-                                / p.completed as f64;
-                            format!(
-                                " · about {} min {} sec remaining",
-                                (remaining / 60.0) as u64,
-                                (remaining as u64) % 60
-                            )
-                        })
+                        (progress.completed > 0 && progress.completed < progress.expected).then(
+                            || {
+                                let remaining = start.elapsed().as_secs_f64()
+                                    * (progress.expected - progress.completed) as f64
+                                    / progress.completed as f64;
+                                format!(
+                                    " · about {} min {} sec remaining",
+                                    (remaining / 60.) as u64,
+                                    (remaining as u64) % 60
+                                )
+                            },
+                        )
                     })
                     .unwrap_or_default();
                 content = content
                     .child(div().child(format!(
-                        "Export progress: {} / {} tracks ({:.0}%){}",
-                        p.completed,
-                        p.expected,
-                        fraction * 100.0,
+                        "Exporting {} of {} tracks ({:.0}%){}",
+                        progress.completed,
+                        progress.expected,
+                        fraction * 100.,
                         eta
                     )))
                     .child(
                         div()
-                            .h(px(12.))
+                            .h(px(10.))
                             .w_full()
                             .rounded_md()
                             .bg(rgb(0x263b2d))
@@ -726,28 +1040,15 @@ impl Render for Desktop {
         }
         let mut footer = div().flex().gap_3();
         if self.connected && !self.settings && self.login.is_none() && self.choice.is_none() {
+            let can_export = active && !self.selected.is_empty() && self.destination.is_some();
             footer = footer.child(
-                button(
-                    "export",
-                    "Export selected playlists to MP3 →",
-                    active && !self.selected.is_empty() && self.destination.is_some(),
-                )
-                .on_click(cx.listener(|v, _, window, cx| {
-                    v.create_files(window, cx);
-                    cx.notify();
-                })),
-            );
-            footer = footer.child(
-                button(
-                    "purge",
-                    "Clear library after transfer",
-                    active
-                        && self
-                            .destination
-                            .as_ref()
-                            .is_some_and(|p| p.join(".syncandrun-files.json").exists()),
-                )
-                .on_click(cx.listener(|v, _, window, cx| v.confirm_purge(window, cx))),
+                button("export", "Export music →", can_export)
+                    .bg(rgb(if can_export { 0x21825a } else { 0x202621 }))
+                    .border_color(rgb(if can_export { 0x4caa78 } else { 0x38443d }))
+                    .on_click(cx.listener(|v, _, window, cx| {
+                        v.create_files(window, cx);
+                        cx.notify();
+                    })),
             );
         }
         if self.busy {
@@ -767,8 +1068,9 @@ impl Render for Desktop {
                 },
             ));
         }
-        div()
+        let mut shell = div()
             .size_full()
+            .relative()
             .bg(rgb(0x101a15))
             .text_color(rgb(0xe7eee9))
             .font_family("DejaVu Sans")
@@ -795,48 +1097,104 @@ impl Render for Desktop {
                             ),
                     )
                     .child(
-                        div()
-                            .flex()
-                            .gap_2()
-                            .child(
-                                button("header-folder", "Library folder", active).on_click(
-                                    cx.listener(|v, _, _, cx| v.choose_folder(false, cx)),
-                                ),
-                            )
-                            .child(
-                                button(
-                                    "settings",
-                                    if self.settings {
-                                        "Back to playlists"
-                                    } else {
-                                        "Settings"
-                                    },
-                                    active,
-                                )
-                                .on_click(cx.listener(
-                                    |v, _, _, cx| {
-                                        v.settings = !v.settings;
-                                        cx.notify();
-                                    },
-                                )),
-                            ),
+                        button(
+                            "settings",
+                            if self.settings {
+                                "Back to playlists"
+                            } else {
+                                "Settings"
+                            },
+                            active,
+                        )
+                        .on_click(cx.listener(|v, _, _, cx| {
+                            if v.modal.is_none() && !v.busy {
+                                v.settings = !v.settings;
+                                cx.notify();
+                            }
+                        })),
                     ),
             )
-            .child(
+            .child(if compact {
                 div()
                     .id("content")
                     .flex_1()
                     .overflow_y_scroll()
-                    .child(content),
+                    .child(content)
+            } else {
+                div().id("content").overflow_y_scroll().child(content)
+            })
+            .when(
+                self.status != "Ready to export."
+                    && self.status != "Connect your Plex account to get started.",
+                |shell| {
+                    shell.child(
+                        div()
+                            .p_4()
+                            .rounded_md()
+                            .bg(rgb(0x1c2921))
+                            .child(self.status.clone()),
+                    )
+                },
             )
-            .child(
+            .child(footer);
+        if let Some(modal) = &self.modal {
+            let (title, detail, confirm) = match modal {
+                Modal::CreateDefault(_) => (
+                    "Create music library folder?",
+                    "SyncAndRun will create ~/Music/SyncAndRun and export the selected playlists there.",
+                    "Create and export",
+                ),
+                Modal::ClearLibrary(_) => (
+                    "Clear exported music?",
+                    "Only unchanged files generated by SyncAndRun will be removed. Modified and unrelated files stay in the folder.",
+                    "Clear exported music",
+                ),
+            };
+            shell = shell.child(
                 div()
-                    .p_4()
-                    .rounded_md()
-                    .bg(rgb(0x1c2921))
-                    .child(self.status.clone()),
-            )
-            .child(footer)
+                    .absolute()
+                    .top_0()
+                    .right_0()
+                    .bottom_0()
+                    .left_0()
+                    .bg(rgba(0x07110bdc))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .on_mouse_move(|_, _, cx| cx.stop_propagation())
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .child(
+                        panel()
+                            .w(px(500.))
+                            .flex()
+                            .flex_col()
+                            .gap_4()
+                            .child(div().text_2xl().child(title))
+                            .child(div().text_color(rgb(0xa8cbb4)).child(detail))
+                            .child(
+                                div()
+                                    .flex()
+                                    .gap_3()
+                                    .child(
+                                        button("modal-confirm", confirm, true)
+                                            .bg(rgb(0x21825a))
+                                            .border_color(rgb(0x4caa78))
+                                            .on_click(cx.listener(|view, _, _, cx| {
+                                                view.confirm_modal();
+                                                cx.notify();
+                                            })),
+                                    )
+                                    .child(button("modal-cancel", "Cancel", true).on_click(
+                                        cx.listener(|view, _, _, cx| {
+                                            view.modal = None;
+                                            cx.notify();
+                                        }),
+                                    )),
+                            ),
+                    ),
+            );
+        }
+        shell
     }
 }
 fn main() {
