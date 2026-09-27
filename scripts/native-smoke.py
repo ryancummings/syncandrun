@@ -113,18 +113,20 @@ def run(args):
             assert 'Connected' in result.stdout
             print('Native CLI smoke passed: profile, playlists, refresh, estimates, three export routes, backup restore.')
             if args.gui:
+                (profile / 'desktop-preferences.json').write_text(json.dumps(dict(
+                    selected=['plex:playlist:10', 'plex:playlist:20'], bitrate=192, direct=False)))
                 if args.gui_playlists:
                     Plex.playlist_count = args.gui_playlists
                     (profile / 'desktop-preferences.json').write_text(json.dumps(dict(
                         selected=[f'plex:playlist:{i * 10}' for i in range(1, (args.gui_selected if args.gui_selected is not None else args.gui_playlists) + 1)],
-                        bitrate=192)))
+                        bitrate=192, direct=False)))
                 with (root / 'gui.log').open('w') as log:
                     gui_env = os.environ.copy()
                     if args.gui_default_export:
                         synthetic_home = root / 'home'
                         synthetic_home.mkdir()
                         gui_env['HOME'] = str(synthetic_home)
-                    app = subprocess.Popen([str(gui), '--profile', str(profile)], stdout=log, stderr=log, env=gui_env)
+                    app = subprocess.Popen([str(gui), '--profile', str(profile), '--no-usb'], stdout=log, stderr=log, env=gui_env)
                     try:
                         if args.gui_manual:
                             print(f'Synthetic GUI process {app.pid} ready for inspection.', flush=True)

@@ -14,12 +14,16 @@ use std::{
 };
 use syncandrun_core::{
     BITRATES,
+    device::{self, Watch},
     export::{self, Progress},
     plex::{self, LibraryOverview, Login, PlaylistSummary, Plex, ServerChoice},
     profile::{self, Profile},
 };
 
 enum Event {
+    Watches(Result<Vec<Watch>, String>),
+    WatchProgress(device::TransferProgress),
+    Transferred(device::TransferResult),
     Loaded {
         connected: bool,
         playlists: Vec<PlaylistSummary>,
@@ -39,6 +43,8 @@ enum Event {
 }
 #[derive(Default, Serialize, Deserialize)]
 struct Preferences {
+    #[serde(default = "direct_default")]
+    direct: bool,
     selected: Vec<String>,
     #[serde(default)]
     library_folder: Option<PathBuf>,
@@ -49,6 +55,9 @@ struct Preferences {
     )]
     legacy_destination: Option<PathBuf>,
     bitrate: Option<u16>,
+}
+fn direct_default() -> bool {
+    true
 }
 fn default_library_path() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Music/SyncAndRun"))
@@ -74,6 +83,13 @@ fn chosen_library(prefs: &Preferences) -> Option<PathBuf> {
 }
 struct Desktop {
     profile: PathBuf,
+    usb_enabled: bool,
+    watches: Vec<Watch>,
+    selected_watch: Option<String>,
+    watch_status: String,
+    scanning: bool,
+    last_scan: Instant,
+    direct: bool,
     connected: bool,
     playlists: Vec<PlaylistSummary>,
     selected: HashSet<String>,
@@ -108,7 +124,7 @@ impl Drop for Desktop {
     }
 }
 impl Desktop {
-    fn new(profile: PathBuf, cx: &mut Context<Self>) -> Self {
+    fn new(profile: PathBuf, usb_enabled: bool, cx: &mut Context<Self>) -> Self {
         let (sender, receiver) = mpsc::channel();
         let (preference_sender, preference_receiver) = mpsc::channel::<Preferences>();
         let preference_path = preferences_path(&profile);
@@ -133,6 +149,13 @@ impl Desktop {
         });
         let mut this = Self {
             profile,
+            usb_enabled,
+            watches: Vec::new(),
+            selected_watch: None,
+            watch_status: "Looking for a Garmin watch…".into(),
+            scanning: false,
+            last_scan: Instant::now(),
+            direct: true,
             connected: false,
             playlists: vec![],
             selected: HashSet::new(),
@@ -159,7 +182,11 @@ impl Desktop {
         };
         let prefs = read_preferences(&this.profile);
         this.has_saved_selection = prefs.is_some();
-        let prefs = prefs.unwrap_or_default();
+        let prefs = prefs.unwrap_or_else(|| Preferences {
+            direct: true,
+            ..Default::default()
+        });
+        this.direct = prefs.direct;
         let chosen_library = chosen_library(&prefs);
         this.selected = prefs.selected.into_iter().collect();
         this.using_default_library = chosen_library.is_none();
@@ -169,6 +196,7 @@ impl Desktop {
             .filter(|b| BITRATES.contains(b))
             .unwrap_or(192);
         this.load();
+        this.scan_watches();
         cx.spawn(async move |view, cx| {
             loop {
                 Timer::after(Duration::from_millis(100)).await;
@@ -177,6 +205,14 @@ impl Desktop {
                         let mut changed = false;
                         while let Ok(event) = view.receiver.try_recv() {
                             view.apply(event);
+                            changed = true;
+                        }
+                        if view.usb_enabled
+                            && !view.busy
+                            && !view.scanning
+                            && view.last_scan.elapsed() >= Duration::from_secs(8)
+                        {
+                            view.scan_watches();
                             changed = true;
                         }
                         if changed {
@@ -191,6 +227,64 @@ impl Desktop {
         })
         .detach();
         this
+    }
+    fn scan_watches(&mut self) {
+        if !self.usb_enabled || self.scanning {
+            return;
+        }
+        self.scanning = true;
+        self.last_scan = Instant::now();
+        let sender = self.sender.clone();
+        std::thread::spawn(move || {
+            let result = device::discover().map_err(|e| e.to_string());
+            let _ = sender.send(Event::Watches(result));
+        });
+    }
+    fn transfer_to_watch(&mut self) {
+        if self.busy || self.modal.is_some() || self.scanning {
+            return;
+        }
+        let Some(watch) = self
+            .watches
+            .iter()
+            .find(|w| Some(w.key()) == self.selected_watch)
+            .cloned()
+        else {
+            return;
+        };
+        let ids: Vec<_> = self
+            .playlists
+            .iter()
+            .filter(|p| self.selected.contains(&p.id))
+            .map(|p| p.id.clone())
+            .collect();
+        if ids.is_empty() {
+            return;
+        }
+        let bitrate = self.bitrate;
+        self.output = None;
+        self.progress = None;
+        self.export_started = Some(Instant::now());
+        self.job(
+            "Refreshing selected playlists for the watch…",
+            move |path, cancel, sender| {
+                let mut profile = Profile::open(path)?;
+                let plex = Plex::new(&profile)?;
+                let plan = plex.refresh(&mut profile, &ids, &cancel)?;
+                let connection = profile.connection()?.context("Sign in to Plex first")?;
+                let result = device::transfer(
+                    &watch,
+                    &plan,
+                    bitrate,
+                    &cancel,
+                    |t, b| plex.audio(&connection, t, b),
+                    |p| {
+                        let _ = sender.send(Event::WatchProgress(p));
+                    },
+                )?;
+                Ok(Event::Transferred(result))
+            },
+        );
     }
     fn job(
         &mut self,
@@ -258,6 +352,7 @@ impl Desktop {
             .map(|p| p.id.clone())
             .collect();
         let prefs = Preferences {
+            direct: self.direct,
             selected,
             library_folder: if self.using_default_library {
                 None
@@ -272,6 +367,49 @@ impl Desktop {
     }
     fn apply(&mut self, event: Event) {
         match event {
+            Event::Watches(result) => {
+                self.scanning = false;
+                match result {
+                    Ok(watches) => {
+                        if !watches.iter().any(|w| Some(w.key()) == self.selected_watch) {
+                            self.selected_watch = if watches.len() == 1 {
+                                Some(watches[0].key())
+                            } else {
+                                None
+                            };
+                        }
+                        self.watch_status = if watches.is_empty() {
+                            "Plug in your Garmin music watch and select USB / MTP mode."
+                        } else {
+                            "Connected over USB · direct music transfer available"
+                        }
+                        .into();
+                        self.watches = watches;
+                    }
+                    Err(error) => {
+                        self.watches.clear();
+                        self.selected_watch = None;
+                        self.watch_status = error;
+                    }
+                }
+                return;
+            }
+            Event::WatchProgress(p) => {
+                self.status = format!(
+                    "{} · {} of {} tracks",
+                    p.phase, p.tracks.completed, p.tracks.expected
+                );
+                self.progress = Some(p.tracks);
+                return;
+            }
+            Event::Transferred(result) => {
+                self.progress = None;
+                self.status = format!(
+                    "Transferred and verified {} tracks in {} playlists on your watch. Disconnect USB to let Garmin index the music.",
+                    result.tracks, result.playlists
+                );
+                self.last_scan = Instant::now() - Duration::from_secs(8);
+            }
             Event::Progress(p) => {
                 if p.completed == 0 {
                     self.export_started = Some(Instant::now());
@@ -400,6 +538,10 @@ impl Desktop {
         if self.busy || self.modal.is_some() {
             return;
         }
+        if self.direct {
+            self.transfer_to_watch();
+            return;
+        }
         if self.using_default_library && self.destination.as_ref().is_some_and(|p| !p.exists()) {
             let path = self.destination.as_ref().expect("default path").clone();
             self.modal = Some(Modal::CreateDefault(path));
@@ -513,6 +655,62 @@ impl Render for Desktop {
         let width: f32 = window.bounds().size.width.into();
         let height: f32 = window.bounds().size.height.into();
         let compact = width < 1020.;
+        let mut watch_card = panel()
+            .py_3()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child(div().text_lg().child("Garmin watch"))
+                    .child(
+                        button(
+                            "scan-watch",
+                            if self.scanning {
+                                "Scanning…"
+                            } else {
+                                "Scan USB"
+                            },
+                            active && !self.scanning,
+                        )
+                        .text_sm()
+                        .on_click(cx.listener(|v, _, _, cx| {
+                            if !v.busy {
+                                v.scan_watches();
+                                cx.notify();
+                            }
+                        })),
+                    ),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(rgb(0xa8cbb4))
+                    .child(self.watch_status.clone()),
+            );
+        for (i, watch) in self.watches.iter().enumerate() {
+            let key = watch.key();
+            let chosen = Some(key.clone()) == self.selected_watch;
+            let label = format!(
+                "{}{} · {:.2} GB free / {:.2} GB · firmware {}",
+                if chosen { "✓ " } else { "" },
+                watch.model,
+                watch.free_bytes as f64 / 1e9,
+                watch.total_bytes as f64 / 1e9,
+                watch.firmware
+            );
+            watch_card = watch_card.child(button(("watch", i), label, active).text_sm().on_click(
+                cx.listener(move |v, _, _, cx| {
+                    if !v.busy {
+                        v.selected_watch = Some(key.clone());
+                        cx.notify();
+                    }
+                }),
+            ));
+        }
         let mut content = div().flex().flex_col().gap_3();
         if let Some(choice) = self.choice.clone() {
             content = content.child(div().text_xl().child("Choose a music library"));
@@ -783,7 +981,7 @@ impl Render for Desktop {
             let available_limit = if compact {
                 (height * 0.38).clamp(250., 750.)
             } else {
-                (height - 450.).clamp(250., 850.)
+                (height - 590.).clamp(250., 850.)
             };
             let selected_cap_rows = (height * 0.5 / row_height).floor().max(1.) as usize;
             let base_selected_rows = 4.min(selected_cap_rows);
@@ -951,7 +1149,11 @@ impl Render for Desktop {
                 })
                 .unwrap_or_else(|| "Choose a library folder".into());
             let export_panel = panel().flex().flex_col().gap_4()
-                .child(div().text_xl().child("Export settings"))
+                .child(div().text_xl().child("Transfer settings"))
+                .child(div().flex().flex_col().gap_2().children([(true, "Direct to watch"), (false, "Export to folder")].into_iter().map(|(direct, label)| {
+                    button(if direct { "direct-mode" } else { "folder-mode" }, format!("{}{}", if self.direct == direct { "✓ " } else { "" }, label), active)
+                        .on_click(cx.listener(move |v, _, _, cx| { if !v.busy { v.direct = direct; v.output = None; v.save_preferences(); cx.notify(); } }))
+                })))
                 .child(div().flex().flex_col().gap_2()
                     .child(div().text_sm().text_color(rgb(0xa8cbb4)).child("MP3 quality"))
                     .child(qualities)
@@ -959,18 +1161,18 @@ impl Render for Desktop {
                 .child(div().p_4().rounded_md().bg(rgb(0x22382b))
                     .child(div().text_lg().child(format!("{} playlists  ·  {} tracks", selected.len(), tracks)))
                     .child(div().text_sm().text_color(rgb(0xa8cbb4)).child(format!("About {:.0} MB at {} kbps", estimate, self.bitrate))))
-                .child(div().flex().flex_col().gap_2()
+                .when(!self.direct, |panel| panel.child(div().flex().flex_col().gap_2()
                     .child(div().text_sm().text_color(rgb(0xa8cbb4)).child("Music library folder"))
                     .child(div().text_sm().child(folder))
                     .child(button("main-folder", "Change folder", active).on_click(
                         cx.listener(|view, _, _, cx| view.choose_folder(cx))
-                    )))
+                    ))))
                 .child(div().text_sm().text_color(rgb(0x91a69a))
-                    .child("Copy the exported playlist folders into your watch’s Music folder with an MTP app."));
+                    .child(if self.direct { "Transfers directly over USB and verifies every file. Each transfer adds new playlist folders; earlier music is kept." } else { "Copy the exported playlist folders into your watch’s Music folder with an MTP app." }));
             let export_panel = if compact {
                 export_panel.w_full()
             } else {
-                export_panel.w(px(350.)).h(px(540.)).flex_none()
+                export_panel.w(px(350.)).flex_none()
             };
             let layout = if compact {
                 div().flex().flex_col()
@@ -985,9 +1187,9 @@ impl Render for Desktop {
                         .gap_1()
                         .child(div().text_2xl().child("Your music"))
                         .child(div().text_color(rgb(0x9fb8a7)).child(if compact {
-                            "Choose playlists, then scroll down for export settings."
+                            "Choose playlists, then scroll down for transfer settings."
                         } else {
-                            "Choose playlists, set quality, then export for your watch."
+                            "Choose playlists and MP3 quality, then send them to your watch."
                         })),
                 )
                 .child(layout.gap_4().child(playlist_panel).child(export_panel));
@@ -1016,7 +1218,7 @@ impl Render for Desktop {
                     .unwrap_or_default();
                 content = content
                     .child(div().child(format!(
-                        "Exporting {} of {} tracks ({:.0}%){}",
+                        "{} of {} tracks ({:.0}%){}",
                         progress.completed,
                         progress.expected,
                         fraction * 100.,
@@ -1040,15 +1242,29 @@ impl Render for Desktop {
         }
         let mut footer = div().flex().gap_3();
         if self.connected && !self.settings && self.login.is_none() && self.choice.is_none() {
-            let can_export = active && !self.selected.is_empty() && self.destination.is_some();
+            let can_export = active
+                && !self.selected.is_empty()
+                && if self.direct {
+                    self.selected_watch.is_some() && !self.scanning
+                } else {
+                    self.destination.is_some()
+                };
             footer = footer.child(
-                button("export", "Export music →", can_export)
-                    .bg(rgb(if can_export { 0x21825a } else { 0x202621 }))
-                    .border_color(rgb(if can_export { 0x4caa78 } else { 0x38443d }))
-                    .on_click(cx.listener(|v, _, window, cx| {
-                        v.create_files(window, cx);
-                        cx.notify();
-                    })),
+                button(
+                    "export",
+                    if self.direct {
+                        "Transfer to watch →"
+                    } else {
+                        "Export music →"
+                    },
+                    can_export,
+                )
+                .bg(rgb(if can_export { 0x21825a } else { 0x202621 }))
+                .border_color(rgb(if can_export { 0x4caa78 } else { 0x38443d }))
+                .on_click(cx.listener(|v, _, window, cx| {
+                    v.create_files(window, cx);
+                    cx.notify();
+                })),
             );
         }
         if self.busy {
@@ -1056,7 +1272,7 @@ impl Render for Desktop {
                 |v, _, _, cx| {
                     v.cancel.store(true, Ordering::Relaxed);
                     v.status =
-                        "Cancelling… Waiting for the current network request to stop.".into();
+                        "Cancelling… Waiting for the current request and cleanup to finish.".into();
                     cx.notify();
                 },
             )));
@@ -1114,6 +1330,7 @@ impl Render for Desktop {
                         })),
                     ),
             )
+            .when(self.usb_enabled, |shell| shell.child(watch_card))
             .child(if compact {
                 div()
                     .id("content")
@@ -1200,6 +1417,7 @@ impl Render for Desktop {
 fn main() {
     let mut args = std::env::args_os().skip(1);
     let mut path = None;
+    let mut usb_enabled = true;
     while let Some(arg) = args.next() {
         if arg == "--profile" {
             path = args.next().map(PathBuf::from);
@@ -1207,8 +1425,10 @@ fn main() {
                 eprintln!("--profile needs a folder");
                 std::process::exit(2);
             }
+        } else if arg == "--no-usb" {
+            usb_enabled = false;
         } else if arg == "--help" || arg == "-h" {
-            println!("syncandrun-desktop [--profile FOLDER]");
+            println!("syncandrun-desktop [--profile FOLDER] [--no-usb]");
             return;
         } else {
             eprintln!("Unknown option. Use --help.");
@@ -1241,7 +1461,7 @@ fn main() {
                     }),
                     ..Default::default()
                 },
-                |_, cx| cx.new(|cx| Desktop::new(path, cx)),
+                |_, cx| cx.new(|cx| Desktop::new(path, usb_enabled, cx)),
             )
             .is_err()
         {

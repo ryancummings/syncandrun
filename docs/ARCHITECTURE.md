@@ -3,7 +3,7 @@
 The Linux implementation is a Rust workspace. `syncandrun-core` owns the local
 profile, Plex requests, and streaming export engine. The GPUI desktop app runs
 blocking work on worker threads and receives progress through a channel; the CLI
-calls the same core. No local HTTP server is started. Linux uses the MTP folder
+calls the same core. No local HTTP server is started. Linux supports direct USB MTP transfer and the MTP folder
 flow; the CLI also supports shared Tracks and Music/iTunes XML layouts.
 
 Rust preserves the existing SQLite migration sequence and credential encryption
@@ -15,6 +15,28 @@ The desktop keeps nonsecret playlist and output preferences in an atomic JSON fi
 inside the profile. Its MTP export reconciles generated files directly inside the
 chosen library folder using a hash manifest; it leaves unrelated files alone.
 
+## Direct USB MTP
+
+`core::device` reuses the system libmtp library through `libmtp-sys`. A small
+RAII wrapper owns the device, file metadata, and synchronous memory callbacks.
+A process mutex serializes discovery and transfer sessions. Worker threads
+poll for Garmin USB devices, identify model/firmware/storage, and release the
+connection after each scan. Transfers reopen and check the selected device’s
+identity before writing. Raw serial numbers are not displayed or persisted.
+
+Plex MP3 streams pass through the same tag/validation writer as folder exports,
+into a bounded 256 MiB memory buffer. MTP needs the exact length before upload;
+there is no audio staging directory. The transfer engine checks storage, creates
+new folders under Music, uploads and hashes each MP3 by reading it back, then
+publishes and validates the playlist. It deletes only objects created by the
+current attempt on cancellation or failure; unsuccessful cleanup is reported.
+A private target trait supplies an in-memory fake for failure tests.
+
+Garmin rewrites playlist paths while retaining the old MTP object length on the
+validated Forerunner. Direct transfers therefore write canonical `0:/MUSIC/…`
+paths with CRLF up front. Folder exports retain their existing relative M3U8
+format. See [DIRECT-MTP.md](DIRECT-MTP.md) for evidence and limits.
+
 ## Retained Electron implementation
 
 The previous implementation is an Electron desktop app. The renderer shows Plex playlists and export choices. A narrow preload bridge lets it choose an output folder, start an export, receive progress, and open the result. Only Electron's main process writes music files.
@@ -25,4 +47,4 @@ Plex connection details, encrypted credentials, playlist snapshots, and owner st
 
 `desktop/export.mjs` reads saved playlist snapshots and requests MP3 streams from Plex at the chosen bitrate. It writes ID3v2.3 tags, checks the MP3 header, and creates a new dated output folder. A failed run keeps an `.incomplete` folder and cannot overwrite a complete export. MTP output has one folder and ordered relative M3U8 per playlist. Music/iTunes output shares track files and writes playlist XML. Tokens never enter exported files.
 
-This implementation exports through JavaScript in Electron's main process. The Linux Rust implementation is independent of that runtime. Device discovery, free-space checks, direct MTP sync, and Jellyfin are outside this version. See [validation](VALIDATION.md) for what has been verified.
+This implementation exports through JavaScript in Electron's main process. The Linux Rust implementation is independent of that runtime. The Electron implementation does not offer direct MTP transfer or storage discovery. Jellyfin remains unsupported. See [validation](VALIDATION.md) for what has been verified.

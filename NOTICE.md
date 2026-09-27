@@ -28,3 +28,9 @@ maintainers. Plex and Garmin names are used only to describe interoperability.
 The native Linux interface uses GPUI (Apache-2.0) and system fonts. Rust dependency
 versions are recorded in Cargo.lock; their licenses remain those of their
 respective authors. No Electron web fonts are bundled into the Rust binary.
+
+Direct USB transfer dynamically links the system [libmtp](https://github.com/libmtp/libmtp)
+(LGPL-2.1) using [libmtp-sys](https://github.com/quebin31/libmtp-rs) bindings (MIT).
+Their upstream licenses apply. No third-party MTP protocol implementation is
+copied into this repository; packaging must include the applicable dependency
+notices and comply with the system library’s license.

@@ -1,6 +1,25 @@
 # Validation
 
-## Rust Linux implementation
+## Direct Linux USB transfer (2026-09-27)
+
+The native GPUI desktop and CLI identified a plugged-in Forerunner 955 Solar
+(firmware `2905`) and transferred four generated MP3s and two playlists directly
+over libmtp 1.1.23. The desktop showed the model and free space, and its transfer
+button completed the operation. Audio read-back passed byte-count and SHA-256
+checks; playlists passed ordered-reference checks. No local MP3 files were
+created. Testing used fake Plex and a disposable profile; no production Plex
+profile or library was read. Playback after disconnect remains unverified.
+See [DIRECT-MTP.md](DIRECT-MTP.md) for Garmin’s playlist rewrite behavior and the
+explicit physical acceptance command.
+
+The workspace has 23 passing synthetic core tests after this change. Formatting,
+strict Clippy, workspace build and the existing CLI smoke pass. The native GUI
+was visually inspected through the physical Linux Xwayland session. Xvfb launch
+was not validated in this session: a software Vulkan ICD was unavailable, and
+the hardware driver could not present to Xvfb. The automated GUI fixture now
+uses `--no-usb`, so it cannot access a physical watch.
+
+## Earlier Rust Linux implementation
 
 The native Rust workspace builds on Ubuntu 24.04 x86_64 with Rust 1.98.1 and
 GPUI 0.2.2. Fourteen synthetic core tests pass, including all historical migration
@@ -58,7 +77,7 @@ For physical acceptance, using only music the owner authorizes for testing:
 2. Repeat at 320 kbps. Garmin documents MP3 support but the cited format list does not set a maximum bitrate for this watch.
 3. Check an interrupted export and a playlist with shared tracks. Confirm an earlier complete export still works.
 4. On macOS, add Tracks to Music, import the XML, and confirm Express sees and sends both playlists.
-5. On Windows, check Express's local-folder scanner and the iTunes XML route. On Linux, check direct MTP transfer with the target watch.
-6. Compare the app's size estimate with actual output and the watch's available space. The app cannot inspect watch storage yet.
+5. On Windows, check Express's local-folder scanner and the iTunes XML route. On Linux, use the direct MTP acceptance command above, then check playlist browsing and playback.
+6. Compare the app's size estimate with actual output and the watch's available space. The Linux Rust app now reports watch storage; compare the actual change with the estimate.
 
 Record model, firmware, transfer method, app/OS versions, commit, and result without posting private playlist names, media, tokens, or profile data. Do not claim a route or bitrate has been accepted by hardware until it has been tested.
