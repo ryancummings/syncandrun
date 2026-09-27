@@ -22,6 +22,10 @@ SyncAndRun offers MP3 at 64, 96, 128, 192, 256, and 320 kbps. The size shown is 
 
 The native Linux app uses Rust and GPUI. A CLI uses the same profile and export
 engine. See [native build instructions and CLI usage](docs/RUST.md).
+Create a music library folder wherever you want to stage exports, or use the
+confirmed default at `~/Music/SyncAndRun`. The app writes playlist folders
+directly there. After moving them to your watch, its **Clear library after
+transfer** action removes unchanged app-generated files while keeping other files.
 
 ```sh
 cargo build --locked --workspace

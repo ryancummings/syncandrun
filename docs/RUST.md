@@ -20,10 +20,16 @@ cargo run --locked -p syncandrun-desktop
 ```
 
 The window needs a Linux graphical session and a working Vulkan driver. Folder
-selection uses the desktop portal. The Linux interface exports MTP folders:
-choose playlists, quality, and a folder, then **Create music files**. Copy the
-resulting playlist folders into the watch's Music folder using Files or another
-MTP application. The app does not transfer files to the watch itself.
+selection uses the desktop portal. Create a SyncAndRun music library folder
+wherever you want, then select it on the main page or in Settings. If you do not
+choose one, the app offers `~/Music/SyncAndRun` and asks before creating
+it on the first export. Click playlists to move them between Available and
+Syncing, choose MP3 quality, then **Export selected playlists to MP3**. The app
+stages one folder and `.m3u8` file per selected playlist directly in the library
+folder. Copy those playlist folders into the watch's Music folder using Files or
+another MTP application. After transfer, **Clear library after transfer** removes
+only unchanged app-generated files after confirmation. The app does not transfer
+files to the watch itself.
 
 For optimized binaries, use `cargo build --locked --release --workspace`.
 For just the CLI, `cargo build --locked -p syncandrun-cli` avoids GPUI and its
@@ -62,9 +68,13 @@ do not paste it into public issues without replacing personal information.
 
 Ctrl-C cancels CLI work. The desktop has a Cancel button. Cancellation is checked
 between requests and audio chunks; an outstanding blocking network request must
-finish or reach its timeout first. Export progress reports track counts. Failed
-or cancelled runs remain in a uniquely named `.incomplete` folder; a completed
-export is never reused or overwritten.
+finish or reach its timeout first. Export progress reports track counts and the
+desktop estimates remaining time after the first track. The desktop reuses
+unchanged generated files in the chosen library, updates changed files, and
+removes obsolete generated files when they have not been edited outside the app.
+Other files are preserved. A conflicting unmanaged file or edited generated file
+stops synchronization. Failed or cancelled downloads remain in a uniquely named
+`.incomplete` folder. The CLI continues to create a new dated export each run.
 
 ## Existing profiles
 

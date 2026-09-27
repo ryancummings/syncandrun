@@ -101,7 +101,12 @@ def run(args):
             print('Native CLI smoke passed: profile, playlists, refresh, estimates, three export routes, backup restore.')
             if args.gui:
                 with (root / 'gui.log').open('w') as log:
-                    app = subprocess.Popen([str(gui), '--profile', str(profile)], stdout=log, stderr=log)
+                    gui_env = os.environ.copy()
+                    if args.gui_default_export:
+                        synthetic_home = root / 'home'
+                        synthetic_home.mkdir()
+                        gui_env['HOME'] = str(synthetic_home)
+                    app = subprocess.Popen([str(gui), '--profile', str(profile)], stdout=log, stderr=log, env=gui_env)
                     try:
                         window = None
                         for _ in range(100):
@@ -113,14 +118,13 @@ def run(args):
                             time.sleep(.1)
                         assert window, 'Native window did not appear'
                         time.sleep(5)
-                        # Exercise a bitrate button and a playlist checkbox.
-                        subprocess.run(['xdotool', 'mousemove', '--window', window, '55', '471', 'click', '1'], check=True)
-                        subprocess.run(['xdotool', 'mousemove', '--window', window, '150', '200', 'click', '1'], check=True)
-                        time.sleep(.5)
+                        if args.gui_settings or args.gui_export:
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, '990', '70', 'click', '1'], check=True)
+                            time.sleep(.5)
                         if args.gui_export:
                             gui_destination = root / 'gui-exports'
                             gui_destination.mkdir()
-                            subprocess.run(['xdotool', 'mousemove', '--window', window, '100', '608', 'click', '1'], check=True)
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, '100', '535', 'click', '1'], check=True)
                             time.sleep(2)
                             subprocess.run(['xdotool', 'key', 'alt+Home'], check=True)
                             time.sleep(.5)
@@ -134,17 +138,61 @@ def run(args):
                                 geometry = dict(line.split('=', 1) for line in subprocess.check_output(['xdotool', 'getwindowgeometry', '--shell', dialog], text=True).splitlines())
                                 subprocess.run(['xdotool', 'mousemove', '--window', dialog, str(int(geometry['WIDTH']) - 90), str(int(geometry['HEIGHT']) - 25), 'click', '1'], check=True)
                             time.sleep(1)
-                            subprocess.run(['xdotool', 'mousemove', '--window', window, '160', '665', 'click', '1'], check=True)
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, '990', '70', 'click', '1'], check=True)
+                        # Exercise playlist movement before exporting.
+                        if not args.gui_settings:
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, '55', '471', 'click', '1'], check=True)
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, '150', '200', 'click', '1'], check=True)
+                        time.sleep(.5)
+                        if args.gui_default_export:
+                            default_library = synthetic_home / 'Music' / 'SyncAndRun'
+                            assert not default_library.exists(), 'Default library existed before confirmation'
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, '160', '805', 'click', '1'], check=True)
+                            time.sleep(.5)
+                            assert not default_library.exists(), 'Default library was created before confirmation'
+                            if args.prompt_screenshot:
+                                subprocess.run(['import', '-window', 'root', str(args.prompt_screenshot)], check=True)
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, '540', '445', 'click', '1'], check=True)
                             for _ in range(100):
-                                outputs = [p for p in gui_destination.iterdir() if not p.name.endswith('.incomplete')]
-                                if len(outputs) == 1:
+                                if (default_library / '.syncandrun-files.json').exists():
+                                    break
+                                time.sleep(.1)
+                            if len(list(default_library.rglob('*.mp3'))) != 3 and args.screenshot:
+                                subprocess.run(['import', '-window', 'root', str(args.screenshot)], check=True)
+                            assert len(list(default_library.rglob('*.mp3'))) == 3, 'Confirmed default library export failed'
+                            print('Native GPUI default library confirmation and export passed.')
+                        if args.gui_export:
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, '160', '805', 'click', '1'], check=True)
+                            for _ in range(100):
+                                outputs = list(gui_destination.rglob('*.mp3'))
+                                if len(outputs) == 3:
                                     break
                                 time.sleep(.1)
                             if len(outputs) != 1 and args.screenshot:
                                 subprocess.run(['import', '-window', 'root', str(args.screenshot)], check=True)
-                            assert len(outputs) == 1, 'Desktop export did not complete through the portal picker'
-                            assert len(list(outputs[0].rglob('*.mp3'))) == 1, 'Desktop playlist selection did not affect export'
+                            assert len(outputs) == 3, 'Desktop export or playlist selection did not complete through the portal picker'
+                            assert (gui_destination / '.syncandrun-files.json').exists(), 'Desktop library manifest was not created'
+                            preferences = json.loads((profile / 'desktop-preferences.json').read_text())
+                            assert preferences['selected'] == ['plex:playlist:10'], 'Desktop playlist choice was not saved'
+                            assert Path(preferences['library_folder']) == gui_destination, 'Desktop library folder was not saved'
                             print('Native GPUI export passed through the GTK portal folder picker.')
+                            if args.gui_purge:
+                                (gui_destination / 'notes.txt').write_text('keep me')
+                                subprocess.run(['xdotool', 'mousemove', '--window', window, '470', '805', 'click', '1'], check=True)
+                                time.sleep(.5)
+                                assert len(list(gui_destination.rglob('*.mp3'))) == 3, 'Music was cleared before confirmation'
+                                if args.prompt_screenshot:
+                                    subprocess.run(['import', '-window', 'root', str(args.prompt_screenshot)], check=True)
+                                subprocess.run(['xdotool', 'mousemove', '--window', window, '540', '445', 'click', '1'], check=True)
+                                for _ in range(100):
+                                    if not (gui_destination / '.syncandrun-files.json').exists():
+                                        break
+                                    time.sleep(.1)
+                                if list(gui_destination.rglob('*.mp3')) and args.screenshot:
+                                    subprocess.run(['import', '-window', 'root', str(args.screenshot)], check=True)
+                                assert not list(gui_destination.rglob('*.mp3')), 'Generated music survived purge'
+                                assert (gui_destination / 'notes.txt').read_text() == 'keep me', 'Purge touched unrelated files'
+                                print('Native GPUI library purge passed after confirmation.')
                             time.sleep(.5)
                         if args.screenshot:
                             subprocess.run(['import', '-window', window, str(args.screenshot)], check=True)
@@ -161,6 +209,10 @@ def run(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--gui', action='store_true')
+    parser.add_argument('--gui-settings', action='store_true', help='Open Settings before the screenshot')
+    parser.add_argument('--gui-default-export', action='store_true', help='Confirm creation of an isolated home library, then export')
+    parser.add_argument('--gui-purge', action='store_true', help='After --gui-export, confirm clearing generated music')
+    parser.add_argument('--prompt-screenshot', type=Path)
     parser.add_argument('--screenshot', type=Path)
     parser.add_argument('--gui-export', action='store_true', help='Also exercise the GTK portal folder picker and export (requires --gui and a session bus)')
     run(parser.parse_args())

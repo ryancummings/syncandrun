@@ -11,6 +11,9 @@ format. Native operations lock the profile, validate single-owner sign-in, rejec
 HTTP redirects, and keep tokens in request headers. Exports use unique incomplete
 folders, ID3v2.3 tags, and plain relative M3U8 files for MTP. Tests use synthetic
 profiles and a fake Plex server. See [the native guide](RUST.md).
+The desktop keeps nonsecret playlist and output preferences in an atomic JSON file
+inside the profile. Its MTP export reconciles generated files directly inside the
+chosen library folder using a hash manifest; it leaves unrelated files alone.
 
 ## Retained Electron implementation
 

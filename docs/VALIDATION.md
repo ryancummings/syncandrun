@@ -30,6 +30,20 @@ not playable audio. Historical watch results below apply to the Electron
 exporter. Recheck physical acceptance before describing Rust output as
 watch-validated.
 
+The Linux desktop revision adds separate available/syncing playlist lists,
+persisted library and bitrate settings, connection diagnostics, a progress bar
+with an estimated remaining time, and a managed music library folder. The
+default is `~/Music/SyncAndRun` and is created only after confirmation.
+Synthetic tests cover repeat reconciliation, unchanged file reuse, unrelated
+file preservation, safe library purge, and refusal to replace an externally
+edited generated file.
+The native GPUI window was launched under Xvfb and visually inspected after
+this revision. A synthetic export through Settings, the GTK folder picker, and
+the desktop action produced the expected three MP3 files and saved the chosen
+playlist and library folder. The confirmed default-folder export and confirmed
+purge also passed in an isolated synthetic home. A real Plex export through the revised desktop
+interface and physical watch playback remain to be checked.
+
 Reproduce automated and native launch checks using [the Rust guide](RUST.md).
 
 ## Historical Electron and physical-device evidence
