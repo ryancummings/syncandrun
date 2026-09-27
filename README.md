@@ -12,11 +12,11 @@ SyncAndRun is a personal desktop app that turns Plex music playlists into local 
 | macOS | Music + Express | Add the exported Tracks folder to Music, import `Import playlists.xml`, then send the playlists with Garmin Express. |
 | Windows | Garmin Express | In Garmin Express, open the watch's Music page. Use My Music to choose the saved local folder, then send the music. |
 | Windows | iTunes + Express | Add Tracks to iTunes, import the playlist XML, and send the playlists with Garmin Express. |
-| Windows or Linux | MTP app | Copy the exported playlist folders into the watch's Music folder with an MTP app. |
+| Windows or Linux | MTP app | Copy the exported playlist folders into the watch's Music folder. On Linux, the Files app can open the watch as an MTP device. |
 
 Garmin documents [local folders and music libraries in Express](https://support.garmin.com/sv-SE/?faq=1ZDlVH09XB1169yYD5FIWA), [iTunes playlist visibility](https://support.garmin.com/en-US/?faq=iBiZBj3Cer5py2x29trVN8), and [supported MP3 and M3U8 files](https://support.garmin.com/en-US/?faq=JyNEOTsZaR3KMXqej3oQp5). [Express runs on Windows and macOS, not Linux](https://support.garmin.com/en-US/navionics/faq/4QVp7mKSIA1LDk5fc1OHX8/). Apple says to [add tracks before importing a playlist XML on Mac](https://support.apple.com/es-es/guide/music/-mus27cd5060f/mac) or [in iTunes on Windows](https://support.apple.com/en-ie/guide/itunes/itns2998/windows).
 
-SyncAndRun offers MP3 at 64, 96, 128, 192, 256, and 320 kbps. The size shown is an estimate. The app cannot read free space on the watch yet. An earlier two-folder MTP export was recognized as playlists on a personal Forerunner 955; the current exporter still needs physical playback checks at each transfer route and quality. See [validation](docs/VALIDATION.md).
+SyncAndRun offers MP3 at 64, 96, 128, 192, 256, and 320 kbps. The size shown is an estimate. The app cannot read free space on the watch yet. An earlier two-folder MTP export was recognized as playlists on a personal Forerunner 955. A later Linux transfer verified the 320 kbps MP3 files and required a plain M3U8 playlist without an extended header; watch UI and playback checks are still pending. See [validation](docs/VALIDATION.md).
 
 ## Build from source
 

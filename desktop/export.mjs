@@ -171,7 +171,9 @@ export async function exportMusic({ plan, bitrate, route, destination, openAudio
       const folderName = uniqueName(safeName(playlist.title), usedFolders);
       const folder = route === "mtp" ? join(root, folderName) : root;
       if (route === "mtp") await mkdir(folder);
-      const lines = ["#EXTM3U"];
+      // Garmin accepts plain relative paths over MTP and rewrites them when indexed.
+      // The extended M3U header caused this watch to discard the playlist file.
+      const lines = route === "mtp" ? [] : ["#EXTM3U"];
       const usedFiles = new Set();
       for (const track of playlist.tracks) {
         let path;
