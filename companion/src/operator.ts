@@ -18,9 +18,10 @@ async function main() {
     database = new CompanionDatabase(config.dataDir);
     database.migrate();
     const token = new OwnerRepository(database.connection).issueInvitation();
-    const url = new URL(config.baseUrl);
-    url.hash = `setup=${token}`;
-    await file.writeFile(`${url.href}\n`);
+    // Without a configured address, the link is relative to wherever the
+    // owner opens the companion.
+    const link = config.baseUrl === undefined ? `/#setup=${token}` : new URL(`#setup=${token}`, config.baseUrl).href;
+    await file.writeFile(`${link}\n`);
     complete = true;
     process.stdout.write("Setup link saved to the requested private file; expires in 30 minutes.\n");
   } finally {

@@ -23,7 +23,7 @@ let window;
 let tray;
 let configuredAddress;
 let quitting = false;
-let restarting = false;
+let serviceOperation;
 let bootstrapping = true;
 let shutdownComplete = false;
 let shutdownPending = false;
@@ -107,7 +107,7 @@ async function startService(state) {
     SYNCANDRUN_HOST: "127.0.0.1",
     SYNCANDRUN_PORT: "3000",
     SYNCANDRUN_LOG_LEVEL: "warn",
-    SYNCANDRUN_TRUST_PROXY: "false"
+    SYNCANDRUN_TRUST_PROXY: "127.0.0.1"
   });
   companion = await createRuntime(config);
   try {
@@ -203,10 +203,17 @@ function startupEnabled() {
 }
 
 async function backup() {
+  if (serviceOperation || quitting) return;
+  serviceOperation = backupService();
+  try { await serviceOperation; } finally { serviceOperation = undefined; }
+}
+
+async function backupService() {
   try {
     const choice = await dialog.showOpenDialog({ title: "Choose a private backup folder", properties: ["openDirectory", "createDirectory"] });
     if (choice.canceled || !choice.filePaths[0]) return;
     const state = profilePaths();
+    if (!existsSync(state.config)) throw new Error("Desktop configuration is missing. Restart the service before backing up.");
     const target = join(choice.filePaths[0], `syncandrun-${new Date().toISOString().replaceAll(/[:.]/g, "-")}`);
     await mkdir(target, { mode: 0o700 });
     await stopService();
@@ -214,12 +221,12 @@ async function backup() {
     const { cp } = await import("node:fs/promises");
     await cp(state.data, join(target, "data"), { recursive: true });
     await writeFile(join(target, "version.txt"), `${app.getVersion()}\n`, { mode: 0o600 });
-    await startService({ paths: state, address: configuredAddress, secret: await readFile(state.secret, "utf8"), changed: false });
+    if (!quitting) await startService({ paths: state, address: configuredAddress, secret: await readFile(state.secret, "utf8"), changed: false });
     await dialog.showMessageBox({ type: "info", message: "Backup complete", detail: "Keep this folder private. It contains the database and encryption secret together." });
   } catch (error) {
     await dialog.showMessageBox({ type: "error", message: "Backup or restart failed", detail: String(error) });
     const state = profilePaths();
-    if (!companion) await startService({ paths: state, address: configuredAddress, secret: await readFile(state.secret, "utf8"), changed: false }).catch(() => undefined);
+    if (!quitting && !companion) await startService({ paths: state, address: configuredAddress, secret: await readFile(state.secret, "utf8"), changed: false }).catch(() => undefined);
   }
 }
 
@@ -232,30 +239,39 @@ function installMenus(origin) {
   const menu = () => Menu.buildFromTemplate([
     { label: "Open management", click: () => void openManagement() },
     { label: "Open in browser", click: () => void shell.openExternal(origin) },
-    { label: "Start at login", type: "checkbox", checked: startupEnabled(), click: (item) => void setStartup(item.checked) },
+    { label: "Start at login", type: "checkbox", checked: startupEnabled(), click: (item) => void setStartup(item.checked).catch(async (error) => {
+      await dialog.showMessageBox({ type: "error", message: "Could not change login setting", detail: String(error) });
+      installMenus(origin);
+    }) },
     { label: "Back up data and secret", click: () => void backup() },
     { label: "Restart service", click: () => void restartService() },
     { type: "separator" },
     { label: "Quit SyncAndRun", click: () => app.quit() }
   ]);
   tray?.setContextMenu(menu());
-  tray?.on("double-click", () => void openManagement());
+  if (tray && tray.listenerCount("double-click") === 0) tray.on("double-click", () => void openManagement());
   Menu.setApplicationMenu(menu());
 }
 
 async function restartService() {
-  if (restarting) return;
-  restarting = true;
+  if (serviceOperation || quitting) return;
+  serviceOperation = restartServiceLocked();
+  try { await serviceOperation; } finally { serviceOperation = undefined; }
+}
+
+async function restartServiceLocked() {
   try {
     await stopService();
+    if (quitting) return;
     const state = await readState();
     if (!state) { app.quit(); return; }
+    if (quitting) return;
     const origin = await startService(state);
     installMenus(origin);
     if (window && !window.isDestroyed()) await window.loadURL(await managementUrl());
   } catch (error) {
     await dialog.showMessageBox({ type: "error", message: "Service restart failed", detail: String(error) });
-  } finally { restarting = false; }
+  }
 }
 
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -270,7 +286,7 @@ else {
     if (shutdownPending) return;
     shutdownPending = true;
     window?.destroy();
-    void stopService().catch(() => {
+    void Promise.resolve(serviceOperation).catch(() => undefined).then(() => stopService()).catch(() => {
       process.stderr.write("Companion shutdown failed.\n");
     }).finally(() => {
       shutdownComplete = true;

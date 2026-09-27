@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   errorMessage,
@@ -53,10 +53,13 @@ export function Devices({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [loaded, setLoaded] = useState(false);
+
   const load = useCallback(async () => {
     try {
       setDevices((await api<{ devices: Device[] }>("/api/v1/devices")).devices);
       setError(null);
+      setLoaded(true);
     } catch (cause) {
       setError(errorMessage(cause, "Paired watches could not be loaded."));
     }
@@ -81,7 +84,7 @@ export function Devices({
     (entry) => entry.live !== null && entry.live.finishedStatus === null
   ).length;
 
-  async function createCode() {
+  const createCode = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
@@ -97,7 +100,20 @@ export function Devices({
     } finally {
       setBusy(false);
     }
-  }
+  }, [announce, csrf, refreshStatus]);
+
+  // A newly paired watch has spent the code on screen.
+  const pairedCount = useRef(active.length);
+  useEffect(() => {
+    if (active.length > pairedCount.current) setPairing(null);
+    pairedCount.current = active.length;
+  }, [active.length]);
+
+  // The first visit with no watch goes straight to a usable code.
+  const firstWatch = loaded && active.length === 0;
+  useEffect(() => {
+    if (firstWatch && pairing === null) void createCode();
+  }, [firstWatch, pairing, createCode]);
 
   async function mutate(action: () => Promise<unknown>, success: string, failure: string) {
     setBusy(true);
@@ -114,124 +130,131 @@ export function Devices({
     }
   }
 
-  return (
-    <>
-      <section className="panel">
-        <div className="label-row">
-          <SectionLabel>Live transfer</SectionLabel>
-          <span className="tag">
-            <StatusDot tone={stream === "live" ? "live" : stream === "polling" ? "warn" : "idle"} />
-            {stream === "live" ? "Streaming" : stream === "polling" ? "Polling" : "Connecting"}
-          </span>
+  const statusPanel = (
+    <section className="panel">
+      <div className="label-row">
+        <SectionLabel>Live transfer</SectionLabel>
+        <span className="tag">
+          <StatusDot tone={stream === "live" ? "live" : stream === "polling" ? "warn" : "idle"} />
+          {stream === "live" ? "Streaming" : stream === "polling" ? "Polling" : "Connecting"}
+        </span>
+      </div>
+      <div className="panel-head">
+        <div>
+          <h1 className="display display-lg">Sync status</h1>
+          <p className="meta">
+            Measured by the companion as it serves the watch — no watch-side reporting delay.
+          </p>
         </div>
-        <div className="panel-head">
-          <div>
-            <h1 className="display display-lg">Sync status</h1>
-            <p className="meta">
-              Measured by the companion as it serves the watch — no watch-side reporting delay.
-            </p>
-          </div>
+      </div>
+
+      {status !== null && <PlanSummary plan={status.plan} liveCount={liveCount} />}
+
+      {active.length === 0 && <p className="empty">Pair a watch to see sync activity here.</p>}
+      {active.map((device) => {
+        const entry = statusByDevice.get(device.id);
+        return entry === undefined ? null : (
+          <LiveCard
+            key={device.id}
+            device={device}
+            entry={entry}
+            plan={status?.plan ?? null}
+            receivedAt={receivedAt}
+          />
+        );
+      })}
+    </section>
+  );
+
+  const pairingPanel = (
+    <section className="panel">
+      <div className="panel-head">
+        <div>
+          <SectionLabel>Garmin connection</SectionLabel>
+          <h2 className="display display-lg">{active.length === 0 ? "Pair your watch" : "Paired watches"}</h2>
+          <p className="meta">
+            {active.length === 0
+              ? "Three steps on the watch, with it on the same Wi-Fi as this computer."
+              : "To add another watch, create a code and follow the same steps on it."}
+          </p>
         </div>
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void createCode()}>
+          {pairing === null ? "Create pairing code" : "New code"}
+        </button>
+      </div>
 
-        {status !== null && <PlanSummary plan={status.plan} liveCount={liveCount} />}
+      {error !== null && <Notice tone="error">{error}</Notice>}
 
-        {active.length === 0 && <p className="empty">Pair a watch to see sync activity here.</p>}
-        {active.map((device) => {
-          const entry = statusByDevice.get(device.id);
-          return entry === undefined ? null : (
-            <LiveCard
+      {(pairing !== null || active.length === 0) && <WatchSteps pairing={pairing} />}
+
+      {active.length === 0 && <p className="empty">No watches are paired yet.</p>}
+      {active.length > 0 && (
+        <div className="worklist">
+          {active.map((device, index) => (
+            <DeviceRow
               key={device.id}
+              index={index}
               device={device}
-              entry={entry}
-              plan={status?.plan ?? null}
-              receivedAt={receivedAt}
+              entry={statusByDevice.get(device.id)}
+              busy={busy}
+              onRename={(name) =>
+                mutate(
+                  () =>
+                    api(`/api/v1/devices/${encodeURIComponent(device.id)}`, {
+                      method: "PATCH",
+                      csrf,
+                      body: { displayName: name }
+                    }),
+                  name === null ? "Watch name reset." : `Watch renamed to ${name}.`,
+                  "The watch could not be renamed."
+                )
+              }
+              onRevoke={() =>
+                mutate(
+                  () => api(`/api/v1/devices/${encodeURIComponent(device.id)}`, { method: "DELETE", csrf }),
+                  "Watch removed.",
+                  "The watch could not be removed."
+                )
+              }
             />
-          );
-        })}
-      </section>
-
-      <section className="panel">
-        <div className="panel-head">
-          <div>
-            <SectionLabel>Garmin connection</SectionLabel>
-            <h2 className="display display-lg">Paired watches</h2>
-            <p className="meta">Create a six-character code, then enter it in SyncAndRun on your watch.</p>
-          </div>
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void createCode()}>
-            Create pairing code
-          </button>
+          ))}
         </div>
+      )}
 
-        {error !== null && <Notice tone="error">{error}</Notice>}
-
-        {pairing !== null && (
-          <div className="panel crt" style={{ marginBottom: "1.25rem" }} aria-live="polite">
-            <p className="readout-label">Pairing code</p>
-            <strong className="pairing-code phosphor">{pairing.code}</strong>
-            <p className="meta mono">Expires {formatDate(pairing.expiresAt)}</p>
-          </div>
-        )}
-
-        {active.length === 0 && <p className="empty">No watches are paired yet.</p>}
-        {active.length > 0 && (
+      {removed.length > 0 && (
+        <>
+          <div className="divider" />
+          <SectionLabel>Removed watches</SectionLabel>
           <div className="worklist">
-            {active.map((device, index) => (
+            {removed.map((device, index) => (
               <DeviceRow
                 key={device.id}
                 index={index}
                 device={device}
-                entry={statusByDevice.get(device.id)}
+                entry={undefined}
                 busy={busy}
-                onRename={(name) =>
+                onForget={() =>
                   mutate(
                     () =>
-                      api(`/api/v1/devices/${encodeURIComponent(device.id)}`, {
-                        method: "PATCH",
-                        csrf,
-                        body: { displayName: name }
-                      }),
-                    name === null ? "Watch name reset." : `Watch renamed to ${name}.`,
-                    "The watch could not be renamed."
-                  )
-                }
-                onRevoke={() =>
-                  mutate(
-                    () => api(`/api/v1/devices/${encodeURIComponent(device.id)}`, { method: "DELETE", csrf }),
-                    "Watch removed.",
-                    "The watch could not be removed."
+                      api(`/api/v1/devices/${encodeURIComponent(device.id)}/forget`, { method: "POST", csrf }),
+                    "Watch record deleted.",
+                    "The watch record could not be deleted."
                   )
                 }
               />
             ))}
           </div>
-        )}
+        </>
+      )}
+    </section>
+  );
 
-        {removed.length > 0 && (
-          <>
-            <div className="divider" />
-            <SectionLabel>Removed watches</SectionLabel>
-            <div className="worklist">
-              {removed.map((device, index) => (
-                <DeviceRow
-                  key={device.id}
-                  index={index}
-                  device={device}
-                  entry={undefined}
-                  busy={busy}
-                  onForget={() =>
-                    mutate(
-                      () =>
-                        api(`/api/v1/devices/${encodeURIComponent(device.id)}/forget`, { method: "POST", csrf }),
-                      "Watch record deleted.",
-                      "The watch record could not be deleted."
-                    )
-                  }
-                />
-              ))}
-            </div>
-          </>
-        )}
-      </section>
+  // Someone setting up their first watch needs the steps before an empty
+  // status panel.
+  return (
+    <>
+      {active.length === 0 ? pairingPanel : statusPanel}
+      {active.length === 0 ? statusPanel : pairingPanel}
     </>
   );
 }
@@ -584,5 +607,66 @@ function DeviceDetail({ device, history }: { device: Device; history: SyncHistor
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * What to type on the watch. The browser's address bar is the only reliable
+ * source: inside Docker the companion cannot see the host's LAN address.
+ */
+export function watchAddress(location: Pick<Location, "protocol" | "hostname" | "port"> = window.location): {
+  /** What to enter in the watch's Server address picker (IPv4 and optional port), when it fits. */
+  ip: string | null;
+  /** The full address, for Settings > Advanced > Other address. */
+  origin: string;
+} {
+  const origin = `${location.protocol}//${location.hostname}${location.port === "" ? "" : `:${location.port}`}`;
+  const ipv4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(location.hostname);
+  const ip = `${location.hostname}${location.port === "" ? "" : `:${location.port}`}`;
+  return { ip: ipv4 && location.protocol === "http:" ? ip : null, origin };
+}
+
+export function WatchSteps({ pairing }: { pairing: { code: string; expiresAt: string } | null }) {
+  const address = watchAddress();
+  const nameOnly = !/^\d{1,3}(\.\d{1,3}){3}$/.test(window.location.hostname);
+  return (
+    <ol className="steps watch-steps" aria-live="polite">
+      <li>
+        Install SyncAndRun on the watch, open it from Music, and choose <span className="mono">Set up watch</span>.
+        If the watch shows <span className="mono">No media</span>, hold <span className="mono">UP (Menu)</span> first.
+      </li>
+      <li>
+        {address.ip !== null ? (
+          <>
+            Enter the server address <strong className="mono phosphor">{address.ip}</strong>. The watch
+            continues to the pairing code on its own.
+          </>
+        ) : (
+          <>
+            This address needs the full form: back out of setup, open{" "}
+            <span className="mono">Settings → Advanced → Other address</span>, and enter{" "}
+            <strong className="mono phosphor">{address.origin}</strong>. Then choose{" "}
+            <span className="mono">Set up watch</span> again.
+          </>
+        )}
+        {nameOnly && (
+          <span className="meta">
+            {" "}
+            Watches often cannot look up computer names; if pairing fails, open this page by the computer&apos;s IP
+            address instead and use the address shown then.
+          </span>
+        )}
+      </li>
+      <li>
+        Enter the code below. The watch pairs and starts syncing over Wi-Fi on its own.
+        {pairing !== null && (
+          <div className="panel crt" style={{ margin: "0.75rem 0 0" }}>
+            <p className="readout-label">Pairing code</p>
+            <strong className="pairing-code phosphor">{pairing.code}</strong>
+            <p className="meta mono">Expires {formatDate(pairing.expiresAt)}</p>
+          </div>
+        )}
+      </li>
+    </ol>
   );
 }

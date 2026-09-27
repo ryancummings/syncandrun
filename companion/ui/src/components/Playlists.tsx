@@ -10,12 +10,15 @@ export function Playlists({
   csrf,
   profile,
   status,
-  announce
+  announce,
+  onPairWatch
 }: {
   csrf: string;
   profile: Profile;
   status: SyncStatus | null;
   announce: (message: string) => void;
+  /** Offered once playlists are saved and no watch is paired yet. */
+  onPairWatch: () => void;
 }) {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -176,9 +179,15 @@ export function Playlists({
             {dirty ? "Unsaved changes. Watches pick up the new selection on their next sync." : "Selection matches the companion manifest."}
           </p>
           <div className="actions">
-            <button className="btn btn-primary" disabled={busy || !dirty}>
-              Save playlist selection
-            </button>
+            {!dirty && saved.size > 0 && status !== null && status.devices.length === 0 ? (
+              <button type="button" className="btn btn-primary" onClick={onPairWatch}>
+                Next: pair your watch
+              </button>
+            ) : (
+              <button className="btn btn-primary" disabled={busy || !dirty}>
+                Save playlist selection
+              </button>
+            )}
           </div>
         </div>
       </form>

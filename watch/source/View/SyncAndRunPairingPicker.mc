@@ -39,9 +39,11 @@ module SyncAndRun {
 
 		private var d_digits = [0, 0, 0, 0, 0, 0];
 		private var d_index = 0;
+		private var d_guided = false;
 
-		function initialize() {
+		function initialize(guided) {
 			View.initialize();
+			d_guided = guided;
 
 			// Resume a partially entered code rather than restarting at zero.
 			var existing = Application.Storage.getValue(PAIRING_CODE_KEY);
@@ -60,9 +62,20 @@ module SyncAndRun {
 			var font = Graphics.FONT_NUMBER_MILD;
 			var digitHeight = dc.getFontHeight(font);
 
+			var height = dc.getHeight();
+			var smallHeight = dc.getFontHeight(Graphics.FONT_XTINY);
 			dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-			dc.drawText(width / 2, centerY - digitHeight, Graphics.FONT_XTINY,
+			if (d_guided) {
+				dc.drawText(width / 2, height / 10, Graphics.FONT_XTINY,
+					WatchUi.loadResource(Rez.Strings.Setup_step2), Graphics.TEXT_JUSTIFY_CENTER);
+			}
+			dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+			dc.drawText(width / 2, (height / 10) + smallHeight, Graphics.FONT_TINY,
 				WatchUi.loadResource(Rez.Strings.PairingCode), Graphics.TEXT_JUSTIFY_CENTER);
+			dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+			dc.drawText(width / 2, (height / 10) + smallHeight + dc.getFontHeight(Graphics.FONT_TINY),
+				Graphics.FONT_XTINY, WatchUi.loadResource(Rez.Strings.PairingPicker_source),
+				Graphics.TEXT_JUSTIFY_CENTER);
 
 			var cell = width / (PAIRING_CODE_LENGTH + 1);
 			var first = (width - (cell * (PAIRING_CODE_LENGTH - 1))) / 2;
@@ -73,6 +86,7 @@ module SyncAndRun {
 				dc.drawText(x, centerY - (digitHeight / 2), font,
 					d_digits[idx].toString(), Graphics.TEXT_JUSTIFY_CENTER);
 				if (active) {
+					dc.setColor(Graphics.COLOR_BLUE, Graphics.COLOR_TRANSPARENT);
 					dc.fillRectangle(x - (cell / 3), centerY + (digitHeight / 2), (cell * 2) / 3, 3);
 				}
 			}
@@ -140,14 +154,19 @@ module SyncAndRun {
 			if (!d_view.advance()) { return true; }
 
 			// A saved code is a claim, not a pairing. The reconciler exchanges
-			// it on the next sync and clears it once a token is stored.
+			// it during a sync, which runs over Wi-Fi; requests made from this
+			// menu would go through the phone, which may refuse plain HTTP.
 			Application.Storage.setValue(PAIRING_CODE_KEY, d_view.code());
+			var syncNow = (new Client()).validOrigin();
 
 			// Replace rather than pop-then-push: the confirmation takes the
 			// picker's place in one step, so Back returns to the menu the
 			// picker was opened from whatever the stack depth is.
-			WatchUi.switchToView(new TextView(WatchUi.loadResource(Rez.Strings.PairingPicker_saved)),
-				null, WatchUi.SLIDE_IMMEDIATE);
+			WatchUi.switchToView(new TextView(WatchUi.loadResource(syncNow
+					? Rez.Strings.Setup_pairing
+					: Rez.Strings.PairingPicker_savedManual)),
+				null, WatchUi.SLIDE_LEFT);
+			if (syncNow) { Menu.Playback.onSyncNow(); }
 			return true;
 		}
 

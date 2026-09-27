@@ -77,7 +77,10 @@ describe("Plex setup service", () => {
         name: "Fixture Server",
         owned: true,
         presence: true,
-        connections: [{ uri: server.pmsUri, local: false, relay: false }]
+        connections: [
+          { uri: "http://private.example.test:32400", local: true, relay: false },
+          { uri: server.pmsUri, local: false, relay: false }
+        ]
       }
     ]);
     expect(JSON.stringify(plexServers)).not.toContain(server.fixtureToken);

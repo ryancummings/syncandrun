@@ -80,12 +80,20 @@ module SyncAndRun {
 				}
 				// remove all cached media
 				Media.resetContentCache();
-				
-				// remove all metadata
-				Application.Storage.clearValues();
+				clearAppData();
 				
 				// exit app to make sure ram is cleared
 				System.exit();
+			}
+
+			// Also clear Connect IQ settings used as setup fallbacks. Leave the
+			// unrelated debug preference alone.
+			function clearAppData() {
+				Application.Storage.clearValues();
+				Application.Properties.setValue("companion_url", "");
+				Application.Properties.setValue("pairing_code", "");
+				Application.Properties.setValue(SyncAndRun.Report.PAIRING, "Not paired");
+				Application.Properties.setValue(SyncAndRun.Report.LAST_SYNC, "Never");
 			}
 
 			function formatBytes(bytes as Lang.Integer) as Lang.String {

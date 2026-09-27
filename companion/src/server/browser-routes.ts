@@ -28,7 +28,7 @@ import { buildSyncStatus, type SyncStatus } from "../sync/sync-status.js";
 const setupSessionIdSchema = z.uuid();
 const selectionSchema = z.strictObject({
   serverId: z.string().min(1).max(128),
-  connectionUri: z.url().refine((value) => new URL(value).protocol === "https:")
+  connectionUri: z.url().refine((value) => ["http:", "https:"].includes(new URL(value).protocol))
 });
 const completionSchema = selectionSchema.extend({ librarySectionId: z.string().min(1).max(64) });
 const sessionCookieName = "syncandrun_session";
@@ -69,7 +69,7 @@ export function registerBrowserRoutes<Logger extends FastifyBaseLogger>(
   app.post("/api/v1/setup/plex/pin", async (request, reply) => {
     if (!startRateLimit.allows(request.ip)) return sendBrowserError(request, reply, 429, "RATE_LIMITED", "Wait before trying again.");
     try {
-      const forwardUrl = new URL("/setup/plex/callback", config.baseUrl);
+      const forwardUrl = new URL("/setup/plex/callback", companionOrigin(request, config));
       const body = z.strictObject({ invitation: z.string().regex(/^[A-Za-z0-9_-]{43}$/).optional() }).safeParse(request.body ?? {});
       if (!body.success) return sendBrowserError(request, reply, 400, "INVALID_REQUEST", "Use a valid setup link.");
       const started = await dependencies.plexSetup.start(forwardUrl, new Date(), body.data.invitation);
@@ -90,7 +90,7 @@ export function registerBrowserRoutes<Logger extends FastifyBaseLogger>(
       reply.header("Cache-Control", "no-store");
       if (status.status !== "claimed" && status.status !== "completed") return status;
       const session = dependencies.browserSessions.create(parsed.data);
-      setSessionCookie(reply, session.token, session.expiresAt, config.baseUrl.protocol === "https:");
+      setSessionCookie(reply, session.token, session.expiresAt, companionOrigin(request, config).protocol === "https:");
       return { ...status, csrfToken: session.csrfToken };
     } catch (error) {
       if (error instanceof OwnerAuthorizationError) return sendBrowserError(request, reply, 403, "OWNER_REQUIRED", error.message);
@@ -245,9 +245,9 @@ export function registerBrowserRoutes<Logger extends FastifyBaseLogger>(
     const session = authenticateBrowser(request, reply, dependencies.browserSessions);
     if (session === undefined) return;
     reply.header("Cache-Control", "no-store");
-    // The watch's companion_url app setting has to be typed in by hand, so the
-    // browser has to be able to show the origin this companion answers on.
-    return { ...dependencies.management.getSettings(), companionUrl: config.baseUrl.origin };
+    // The watch's server address is typed in by hand, so the browser shows the
+    // address it reached this companion on.
+    return { ...dependencies.management.getSettings(), companionUrl: companionOrigin(request, config).origin };
   });
 
   app.get("/api/v1/devices", async (request, reply) => {
@@ -411,6 +411,11 @@ export function registerBrowserRoutes<Logger extends FastifyBaseLogger>(
     clearSessionCookie(reply);
     return { deleted: true };
   });
+}
+
+/** The configured origin, or the one this request reached the companion on. */
+function companionOrigin(request: FastifyRequest, config: RuntimeConfig): URL {
+  return config.baseUrl ?? new URL(`${request.protocol}://${request.host}`);
 }
 
 function authenticateBrowser(

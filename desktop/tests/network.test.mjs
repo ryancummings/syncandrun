@@ -47,6 +47,7 @@ test("gateway preserves watch Authorization and body but removes spoofed proxy i
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
     host: `127.0.0.1:${backendPort}`,
+    forwarded: "127.0.0.1",
     authorization: "Bearer synthetic-watch-token",
     body: "fixture"
   });

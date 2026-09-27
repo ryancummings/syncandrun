@@ -22,13 +22,15 @@ if (!demo) fake.setPlaylistLeafCount("20", 10_001);
 const database = new CompanionDatabase(dataDir);
 database.migrate();
 
+// The demo can listen on the LAN so the Connect IQ simulator or a phone can
+// reach it; like a real home installation it has no configured address.
+const host = demo ? (process.env.SYNCANDRUN_DEMO_HOST ?? "127.0.0.1") : "127.0.0.1";
 const config: RuntimeConfig = {
-  baseUrl: new URL("https://music.example.test"),
   secret,
   dataDir,
   port,
   logLevel: "silent",
-  host: "127.0.0.1",
+  host,
   trustProxy: false
 };
 const setup = new PlexSetupService(database.connection, secret, {
@@ -71,5 +73,5 @@ async function shutdown() {
 process.once("SIGINT", () => { void shutdown().finally(() => process.exit(0)); });
 process.once("SIGTERM", () => { void shutdown().finally(() => process.exit(0)); });
 
-await app.listen({ host: "127.0.0.1", port });
-if (demo) console.log(`Fake-Plex demo ready at http://127.0.0.1:${port}/__demo/start (temporary data; resets on restart).`);
+await app.listen({ host, port });
+if (demo) console.log(`Fake-Plex demo ready at http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}/ (temporary data; resets on restart).`);

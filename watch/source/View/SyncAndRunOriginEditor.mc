@@ -34,11 +34,8 @@ module SyncAndRun {
 			var candidate = value.toLower();
 			if (d_lanMode) {
 				if ((candidate.length() >= 7) && candidate.substring(0, 7).equals("http://")) {
-					var authority = candidate.substring(7, null);
-					if (CompanionOrigin.normalize(candidate) instanceof Lang.String
-						&& CompanionOrigin.validPrivateLanIpv4(authority.substring(0, authority.find(":")))) {
-						d_authority = authority;
-					}
+					var host = candidate.substring(7, null);
+					if (CompanionOrigin.validIpv4Authority(host)) { d_authority = host; }
 				}
 				return;
 			}
@@ -209,7 +206,7 @@ module SyncAndRun {
 			}
 			if (action != ORIGIN_EDITOR_SAVE) { return true; }
 
-			if ((d_view.isLanMode() && !CompanionOrigin.validPrivateLanIpv4(d_view.authority()))
+			if ((d_view.isLanMode() && !CompanionOrigin.validIpv4Authority(d_view.authority()))
 				|| !CompanionOrigin.save(d_view.candidate())) {
 				WatchUi.pushView(new TextView(WatchUi.loadResource(Rez.Strings.CompanionOrigin_invalid)),
 					null, WatchUi.SLIDE_IMMEDIATE);

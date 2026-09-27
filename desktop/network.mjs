@@ -7,11 +7,12 @@ export function privateLanAddresses(interfaces = networkInterfaces()) {
   ).map((item) => item.address))].sort();
 }
 
-/** The LAN listener cannot select the companion's trusted-proxy identity. */
+/** Only this gateway may forward a LAN client's identity to the loopback service. */
 export function createGateway(targetPort) {
   return http.createServer((incoming, outgoing) => {
     const headers = { ...incoming.headers, host: `127.0.0.1:${targetPort}` };
     for (const key of ["x-forwarded-for", "x-forwarded-host", "x-forwarded-proto", "forwarded"]) delete headers[key];
+    headers["x-forwarded-for"] = incoming.socket.remoteAddress;
     const request = http.request({
       host: "127.0.0.1", port: targetPort, method: incoming.method,
       path: incoming.url, headers
@@ -20,9 +21,12 @@ export function createGateway(targetPort) {
       response.pipe(outgoing);
     });
     request.on("error", () => {
+      if (outgoing.destroyed) return;
       if (!outgoing.headersSent) outgoing.writeHead(502);
       outgoing.end();
     });
+    outgoing.on("close", () => request.destroy());
+    incoming.on("aborted", () => request.destroy());
     incoming.pipe(request);
   });
 }

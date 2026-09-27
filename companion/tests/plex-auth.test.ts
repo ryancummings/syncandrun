@@ -26,14 +26,11 @@ async function createClient() {
 }
 
 describe("Plex PIN authentication", () => {
-  it("requires explicit opt-in for a private-IP HTTP return URL", async () => {
-    const { client, server } = await createClient();
-    await expect(client.createPin(new URL("http://192.168.1.20/setup/plex/callback"))).rejects.toThrow("HTTPS");
-    const optedIn = new PlexAuthClient({ clientIdentifier: "fixture-client-id", plexOrigin: server.origin,
-      authOrigin: new URL("https://app.plex.example.test"), allowLanHttp: true });
-    const pin = await optedIn.createPin(new URL("http://192.168.1.20/setup/plex/callback"));
-    expect(pin.authUrl).toContain("forwardUrl=http%3A%2F%2F192.168.1.20%2Fsetup%2Fplex%2Fcallback");
-    await expect(optedIn.createPin(new URL("http://8.8.8.8/setup/plex/callback"))).rejects.toThrow("HTTPS");
+  it("returns to a plain-HTTP companion address on any host and port", async () => {
+    const { client } = await createClient();
+    const pin = await client.createPin(new URL("http://192.168.1.20:3000/setup/plex/callback"));
+    expect(pin.authUrl).toContain("forwardUrl=http%3A%2F%2F192.168.1.20%3A3000%2Fsetup%2Fplex%2Fcallback");
+    await expect(client.createPin(new URL("ftp://192.168.1.20/setup/plex/callback"))).rejects.toThrow("HTTP or HTTPS");
   });
 
   it("creates a strong PIN and a correctly encoded Plex Auth App URL", async () => {

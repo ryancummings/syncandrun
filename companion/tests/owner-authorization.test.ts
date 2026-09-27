@@ -36,15 +36,13 @@ describe("single-owner authorization", () => {
   it("isolates two installations' owner state, browser sessions, and watch credentials", async () => {
     const first = await fixture();
     const second = await fixture(randomBytes(32).toString("hex"));
-    const firstInvitation = first.owners.issueInvitation();
-    await expect(second.setup.start(baseUrl, new Date(), firstInvitation)).rejects.toThrow();
-    const firstLogin = await first.setup.start(baseUrl, new Date(), firstInvitation);
+    const firstLogin = await first.setup.start(baseUrl);
     first.fake.claimPin();
     await first.setup.getStatus(firstLogin.sessionId);
     expect(second.owners.owner()).toBeUndefined();
 
     second.fake.setUserId(9999);
-    const secondLogin = await second.setup.start(baseUrl, new Date(), second.owners.issueInvitation());
+    const secondLogin = await second.setup.start(baseUrl);
     second.fake.claimPin();
     await second.setup.getStatus(secondLogin.sessionId);
     expect(first.owners.owner()).toBe("1234");
@@ -82,11 +80,9 @@ describe("single-owner authorization", () => {
     expect(second.owners.owner()).toBe("9999");
   });
 
-  it("fails closed before operator setup and denies a different Plex account before issuing a session or overwriting state", async () => {
+  it("lets the first Plex account claim without a setup link and denies a different account before issuing a session or overwriting state", async () => {
     const { db, app, fake, owners } = await fixture();
-    expect((await app.inject({ method: "POST", url: "/api/v1/setup/plex/pin" })).statusCode).toBe(403);
-    const invitation = owners.issueInvitation();
-    const started = await app.inject({ method: "POST", url: "/api/v1/setup/plex/pin", payload: { invitation } });
+    const started = await app.inject({ method: "POST", url: "/api/v1/setup/plex/pin" });
     expect(started.statusCode).toBe(200);
     fake.claimPin();
     const url = `/api/v1/setup/plex/pin/${started.json().sessionId}`;
@@ -113,27 +109,28 @@ describe("single-owner authorization", () => {
     expect(replay.statusCode).not.toBe(200);
   });
 
-  it("consumes an invitation once even when PIN requests race; replacement invalidates the pending claim", async () => {
-    const { owners, setup, fake, db } = await fixture();
-    const token = owners.issueInvitation();
-    expect(JSON.stringify(db.connection.prepare("SELECT * FROM setup_invitation").get())).not.toContain(token);
-    const results = await Promise.allSettled([setup.start(baseUrl, new Date(), token), setup.start(baseUrl, new Date(), token)]);
-    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
-    const winner = results.find((r) => r.status === "fulfilled");
-    if (winner?.status !== "fulfilled") throw new Error("Missing winner");
-    await expect(setup.start(baseUrl, new Date(), token)).rejects.toThrow();
-    owners.issueInvitation();
+  it("gives the installation to whichever account finishes signing in first", async () => {
+    const { setup, fake } = await fixture();
+    const [first, second] = await Promise.all([setup.start(baseUrl), setup.start(baseUrl)]);
     fake.claimPin();
-    await expect(setup.getStatus(winner.value.sessionId)).rejects.toThrow();
-    expect(owners.owner()).toBeUndefined();
+    await setup.getStatus(first.sessionId);
+    fake.setUserId(9999);
+    await expect(setup.getStatus(second.sessionId)).rejects.toThrow("another Plex account");
   });
 
-  it("rejects expired links and claims without assigning an owner", async () => {
+  it("still honors an operator setup link, and ignores an expired one instead of blocking setup", async () => {
     const { owners, setup, fake } = await fixture();
     const expired = owners.issueInvitation(new Date(Date.now() - 31 * 60_000));
-    await expect(setup.start(baseUrl, new Date(), expired)).rejects.toThrow();
-    const token = owners.issueInvitation();
-    const started = await setup.start(baseUrl, new Date(), token);
+    await expect(setup.start(baseUrl, new Date(), expired)).resolves.toBeDefined();
+    const started = await setup.start(baseUrl, new Date(), owners.issueInvitation());
+    fake.claimPin();
+    await setup.getStatus(started.sessionId);
+    expect(owners.owner()).toBe("1234");
+  });
+
+  it("does not assign an owner when the Plex sign-in expires", async () => {
+    const { owners, setup, fake } = await fixture();
+    const started = await setup.start(baseUrl);
     fake.claimPin();
     await expect(setup.getStatus(started.sessionId, new Date(Date.now() + 31 * 60_000))).resolves.toMatchObject({ status: "expired" });
     expect(owners.owner()).toBeUndefined();
@@ -191,6 +188,8 @@ describe("single-owner authorization", () => {
     expect(owners.owner()).toBeUndefined();
     expect(db.connection.prepare("SELECT count(*) FROM browser_sessions").pluck().get()).toBe(0);
     expect(db.connection.prepare("SELECT * FROM plex_connection").get()).toBeDefined();
-    await expect(setup.start(baseUrl)).rejects.toThrow();
+    // The next Plex sign-in claims it, exactly like a new installation.
+    await expect(setup.start(baseUrl)).resolves.toBeDefined();
+    expect(owners.owner()).toBeUndefined();
   });
 });

@@ -24,7 +24,7 @@ async function createClient() {
 }
 
 describe("Plex discovery", () => {
-  it("normalizes usable servers and excludes clients, tokenless servers, and insecure connections", async () => {
+  it("normalizes usable servers, keeps LAN HTTP connections, and excludes clients and tokenless servers", async () => {
     const { client, server } = await createClient();
     await expect(client.listServers(server.fixtureToken)).resolves.toEqual([
       {
@@ -33,7 +33,10 @@ describe("Plex discovery", () => {
         owned: true,
         presence: true,
         accessToken: server.fixtureToken,
-        connections: [{ uri: server.pmsUri, local: false, relay: false }]
+        connections: [
+          { uri: "http://private.example.test:32400", local: true, relay: false },
+          { uri: server.pmsUri, local: false, relay: false }
+        ]
       }
     ]);
   });
