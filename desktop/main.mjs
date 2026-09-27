@@ -25,6 +25,8 @@ let configuredAddress;
 let quitting = false;
 let restarting = false;
 let bootstrapping = true;
+let shutdownComplete = false;
+let shutdownPending = false;
 
 function profilePaths() {
   const root = app.getPath("userData");
@@ -131,13 +133,15 @@ async function startService(state) {
 
 async function stopService() {
   if (gateway) {
+    const closing = new Promise((resolve) => gateway.close(resolve));
     gateway.closeAllConnections();
-    await new Promise((resolve) => gateway.close(resolve));
+    await closing;
     gateway = undefined;
   }
   if (companion) {
+    const closing = companion.app.close();
     companion.app.server.closeAllConnections();
-    await companion.app.close();
+    await closing;
     companion = undefined;
   }
 }
@@ -259,15 +263,22 @@ else {
   process.once("SIGTERM", () => app.quit());
   process.once("SIGINT", () => app.quit());
   app.on("second-instance", () => void openManagement());
-  app.on("before-quit", () => { quitting = true; });
+  app.on("before-quit", (event) => {
+    quitting = true;
+    if (shutdownComplete) return;
+    event.preventDefault();
+    if (shutdownPending) return;
+    shutdownPending = true;
+    window?.destroy();
+    void stopService().catch(() => {
+      process.stderr.write("Companion shutdown failed.\n");
+    }).finally(() => {
+      shutdownComplete = true;
+      app.quit();
+    });
+  });
   app.on("window-all-closed", () => { if (!tray && !bootstrapping) app.quit(); });
   app.on("activate", () => void openManagement());
-  app.on("will-quit", (event) => {
-    if (companion || gateway) {
-      event.preventDefault();
-      void stopService().finally(() => { companion = undefined; gateway = undefined; app.quit(); });
-    }
-  });
   void app.whenReady().then(async () => {
     try {
       const state = await readState();
