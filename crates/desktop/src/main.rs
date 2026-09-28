@@ -1404,13 +1404,12 @@ impl Render for Desktop {
                         .flex()
                         .flex_col()
                         .gap_1()
-                        .child(div().text_xs().text_color(rgb(0xd7a05a)).child(
-                            if self.scanning {
-                                "Scanning for Garmin devices · detection may take about 30 seconds"
-                            } else {
-                                "Waiting for a Garmin device · select Scan for device to check now"
-                            },
-                        ))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(0xd7a05a))
+                                .child("Waiting for a Garmin device · checking automatically"),
+                        )
                         .child(
                             div()
                                 .relative()
