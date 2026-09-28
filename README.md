@@ -28,7 +28,7 @@ playlist behavior has only been checked with SyncAndRun on a Forerunner 955 Sola
 See the [model compatibility guide](docs/GARMIN-COMPATIBILITY.md) for candidate
 families, transfer routes, and the device acceptance procedure.
 
-SyncAndRun offers MP3 at 64, 96, 128, 192, and 256 kbps, plus 320 kbps for Plex.
+SyncAndRun offers MP3 at 64, 96, 128, 192, and 256 kbps, plus 320 kbps for Plex and Local folder.
 Jellyfin limits stereo MP3 transcoding to 256 kbps. The size shown is an estimate. The Linux Rust app shows the connected device’s model, firmware, and free space. An earlier two-folder MTP export was recognized as playlists on a personal Forerunner 955. A later Linux transfer verified 20 MP3 files at 320 kbps; the playlist appeared on the watch and a track played after a plain M3U8 was copied. See [validation](docs/VALIDATION.md).
 
 ## Linux: Rust desktop and CLI

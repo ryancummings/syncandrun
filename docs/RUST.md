@@ -129,7 +129,7 @@ upgrade if you need to roll back.
 Repeat `--playlist` to select multiple playlists; omit it to reuse the saved
 selection. Export refreshes the selection first. `--offline-plan` uses saved
 snapshots, but audio downloads still need the selected server. Available bitrates are 64, 96,
-128, 192, and 256 kbps; Plex also supports 320 kbps. Jellyfin limits stereo MP3
+128, 192, and 256 kbps; Plex and Local folder also support 320 kbps. Jellyfin limits stereo MP3
 transcoding to 256 kbps, so requesting 320 kbps returns an explicit error. `--route mtp` creates separate playlist folders;
 `--route express` shares a Tracks folder; `--route music` also writes Music/iTunes
 playlist XML. Express and Music/iTunes transfer acceptance remain unverified.
