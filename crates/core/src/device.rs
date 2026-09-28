@@ -415,7 +415,7 @@ fn transfer_to_with_layout<R: Read>(
         for id in created.into_iter().rev() {
             incomplete |= target.delete(id).is_err();
         }
-        return Err(error).context(if incomplete { "Transfer stopped. Some new files could not be removed; reconnect and remove the incomplete SAR folders with an MTP app before retrying" } else { "Transfer stopped; this attempt's files were removed" });
+        return Err(error).context(if incomplete { "Transfer stopped. Some new files could not be removed. Reconnect the watch and remove incomplete SAR folders from Music before retrying." } else { "Transfer stopped. Files that finished copying were removed. An unfinished file may remain on the watch." });
     }
     if mode == TransferMode::Replace {
         // Staging succeeded. From here on deletion is irreversible. A failure or
@@ -835,7 +835,11 @@ mod tests {
                 |_| {},
             )
             .unwrap_err();
-            assert!(error.to_string().contains("files were removed"));
+            assert!(
+                error
+                    .to_string()
+                    .contains("Files that finished copying were removed")
+            );
             assert_eq!(target.entries.len(), 2);
         }
     }
@@ -1118,7 +1122,7 @@ mod tests {
             (TransferMode::Add, Layout::Shared),
         )
         .unwrap_err();
-        assert!(format!("{error:#}").contains("files were removed"));
+        assert!(format!("{error:#}").contains("Files that finished copying were removed"));
         assert_eq!(target.uploads, 4);
         assert_eq!(target.entries.len(), 2);
         assert_eq!(target.entries[&2].data, Some(vec![42]));

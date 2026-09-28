@@ -25,7 +25,11 @@ The native Linux app uses Rust and GPUI. A CLI uses the same profile and export
 engine. See [native build instructions and CLI usage](docs/RUST.md).
 Plug in a Garmin music watch and choose **Direct to watch**. No export folder
 is needed. The app buffers one MP3 at a time in memory and transfers it with
-libmtp. Choose **Add** to keep earlier music, or **Replace watch music** to stage and verify the selected playlists before removing other recognized content inside the watch’s Music folder. The app also lets you inspect and remove individual watch music items. Replacement needs enough free space for the new playlists and deletion cannot be undone. See
+libmtp. Choose **Add playlists. Keep old music.** to keep earlier music.
+Choose **Replace old music with these playlists.** to send and check the new
+music before removing older recognized music from the watch’s Music folder.
+The app also lets you inspect and remove individual music items. Replacement
+needs enough space for both old and new music. You cannot undo the removal. See
 [direct MTP behavior and validation](docs/DIRECT-MTP.md).
 
 For folder exports, choose **Export to folder** and a music library folder,

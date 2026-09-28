@@ -23,8 +23,9 @@ Install `libmtp-dev` on Debian/Ubuntu or `libmtp` on Arch, including the package
 USB permission rules. No daemon or MCP server is needed: the watch uses **Media
 Transfer Protocol (MTP)**. A busy-device message usually means Files, another MTP
 app, or another SyncAndRun process owns the USB interface. Close or unmount it
-there, then use **Scan USB**. The app scans periodically until it finds a usable
-watch. Scan USB again after disconnecting or changing watches.
+there, then use **Scan for watch**. The app scans periodically until it finds a usable
+watch. It also scans after a transfer or removal so the free-space display updates.
+Use **Scan for watch** after disconnecting or changing watches.
 
 ## macOS development references
 

@@ -29,7 +29,7 @@ unmount the watch in Files and other MTP applications if they hold the connectio
 The app checks free space and verifies files by reading them back over USB.
 The default adds new folders. Select **Replace watch music** for a confirmed,
 permanent replacement of recognized content within the watch’s Music folder.
-Use **Manage watch music** to inspect or remove one item. Replacement stages and
+Use **Watch music** to inspect or remove one item. Replacement stages and
 verifies new music first, so it needs enough free space for both old and new
 content. Unknown files under Music block replacement. Cancellation or USB failure
 during removal can leave a mix of old and new music; removed files cannot be

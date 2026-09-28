@@ -34,8 +34,10 @@ tab click landed correctly. These UI checks did not use the watch. The real app
 was opened as a floating window for manual inspection; the revised progress
 display and automatic watch-list reload have not yet been checked on hardware.
 Automatic USB scans continue while no usable watch is listed. Once a watch is
-found, the app leaves the watch display steady; use Scan USB after connecting,
-disconnecting, or changing watches.
+found, the app leaves the watch display steady. It scans after a transfer or
+removal to update free space. Use **Scan for watch** after connecting,
+disconnecting, or changing watches. The post-write scan has not been checked
+on hardware.
 
 ## Watch music management and shared tracks (2026-09-27)
 

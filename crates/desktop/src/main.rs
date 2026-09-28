@@ -120,6 +120,7 @@ struct Desktop {
     last_stats_tick: Instant,
     export_started: Option<Instant>,
     busy: bool,
+    watch_music_may_have_changed: bool,
     cancel: Arc<AtomicBool>,
     sender: mpsc::Sender<Event>,
     receiver: mpsc::Receiver<Event>,
@@ -200,6 +201,7 @@ impl Desktop {
             last_stats_tick: Instant::now(),
             export_started: None,
             busy: false,
+            watch_music_may_have_changed: false,
             cancel: Arc::new(AtomicBool::new(false)),
             sender,
             receiver,
@@ -309,6 +311,7 @@ impl Desktop {
         bitrate: u16,
         replace: bool,
     ) {
+        self.watch_music_may_have_changed = true;
         self.output = None;
         self.progress = None;
         self.watch_progress = None;
@@ -428,6 +431,7 @@ impl Desktop {
         let _ = self.preference_sender.send(prefs);
     }
     fn apply(&mut self, event: Event) {
+        let mut rescan_watch = false;
         match event {
             Event::Watches(result) => {
                 self.scanning = false;
@@ -451,11 +455,15 @@ impl Desktop {
                         } else if watches.is_empty() {
                             "Plug in your Garmin music watch and select USB / MTP mode."
                         } else {
-                            "Connected over USB · direct music transfer available"
+                            "Watch ready for music transfer"
                         }
                         .to_owned();
                         if !discovery.unavailable.is_empty() {
-                            status.push_str(&format!(" · {} Garmin device(s) unavailable; close other MTP apps or check USB permissions", discovery.unavailable.len()));
+                            let count = discovery.unavailable.len();
+                            status.push_str(&format!(
+                                " · {count} Garmin {} unavailable. Close apps using the watch, then scan again.",
+                                if count == 1 { "device is" } else { "devices are" }
+                            ));
                         }
                         self.watch_status = status;
                         self.watches = watches;
@@ -478,14 +486,16 @@ impl Desktop {
             }
             Event::MusicRemoved { count, items } => match items {
                 Ok(items) => {
+                    rescan_watch = true;
                     self.music_items = items;
                     self.status =
-                        format!("Removed {count} music objects. Watch music is up to date.");
+                        format!("Removed {count} items from Music. The list is up to date.");
                 }
                 Err(_) => {
+                    rescan_watch = true;
                     self.music_items.clear();
                     self.status = format!(
-                        "Removed {count} music objects, but could not reload Music. Select Refresh watch music to try again."
+                        "Removed {count} items from Music, but the list could not reload. Select Refresh watch music to try again."
                     );
                 }
             },
@@ -499,6 +509,7 @@ impl Desktop {
                 return;
             }
             Event::Transferred(result) => {
+                rescan_watch = true;
                 self.progress = None;
                 self.watch_done = true;
                 self.watch_finished_elapsed = self.export_started.map(|started| started.elapsed());
@@ -509,10 +520,15 @@ impl Desktop {
                 }
                 self.music_items.clear();
                 self.status = format!(
-                    "Transferred and verified {} tracks in {} playlists; removed {} old music objects. Disconnect USB to let Garmin index the music.",
-                    result.tracks, result.playlists, result.removed
+                    "Sent and checked {} tracks in {} playlists.{} When you finish transferring, unplug the watch so Garmin can find the music.",
+                    result.tracks,
+                    result.playlists,
+                    if result.removed == 0 {
+                        String::new()
+                    } else {
+                        format!(" Removed {} old music items.", result.removed)
+                    }
                 );
-                self.last_scan = Instant::now() - Duration::from_secs(8);
             }
             Event::Progress(p) => {
                 if p.completed == 0 {
@@ -597,11 +613,18 @@ impl Desktop {
                     self.watch_finished_elapsed =
                         self.export_started.map(|started| started.elapsed());
                 }
-                self.music_items.clear();
+                if self.watch_music_may_have_changed {
+                    self.music_items.clear();
+                    rescan_watch = true;
+                }
                 self.status = message;
             }
         }
         self.busy = false;
+        self.watch_music_may_have_changed = false;
+        if rescan_watch {
+            self.scan_watches();
+        }
     }
     fn sign_in(&mut self) {
         self.job("Finish signing in in your browser…", |path, cancel, _| {
@@ -728,6 +751,7 @@ impl Desktop {
             Some(Modal::RemoveMusic(watch, id, name))
                 if !self.busy && Some(watch.key()) == self.selected_watch =>
             {
+                self.watch_music_may_have_changed = true;
                 self.job("Removing watch music…", move |_, cancel, _| {
                     let count = device::remove_music_item(&watch, id, &name, &cancel)?;
                     let items = device::music_items(&watch).map_err(|error| error.to_string());
@@ -815,7 +839,7 @@ impl Render for Desktop {
                             if self.scanning {
                                 "Scanning…"
                             } else {
-                                "Scan USB"
+                                "Scan for watch"
                             },
                             active && !self.scanning,
                         )
@@ -861,7 +885,7 @@ impl Render for Desktop {
         let mut content = div().flex().flex_col().gap_3();
         if self.page == Page::WatchMusic {
             content = content.child(div().text_2xl().child("Watch music"))
-                .child(div().text_sm().child("This page shows the selected watch’s Music folder. Use Playlists to add or replace music. Activities and Garmin files outside Music stay on the watch."))
+                .child(div().text_sm().child("See files and folders directly inside the watch’s Music folder. Folder sizes include their contents. To add or replace music, open Playlists. Activities and Garmin files outside Music stay on the watch."))
                 .child(button("refresh-watch-music", "Refresh watch music", active).on_click(cx.listener(|v, _, _, cx| { v.inspect_watch_music(); cx.notify(); })));
             for (i, item) in self.music_items.iter().enumerate() {
                 let name = item.name.clone();
@@ -1092,16 +1116,16 @@ impl Render for Desktop {
                 })
                 .unwrap_or_else(|| "No library folder selected".into());
             let mut management = panel().flex().flex_col().gap_3()
-                .child(div().text_xl().child("Export library"))
+                .child(div().text_xl().child("Export folder on this computer"))
                 .child(div().text_color(rgb(0xa8cbb4)).child(folder))
                 .child(button("folder", "Change export folder", active).on_click(
                     cx.listener(|view, _, _, cx| view.choose_folder(cx))
                 ))
                 .child(div().text_sm().text_color(rgb(0x9fb8a7)).child(
-                    "Export creates a folder and .m3u8 playlist for each selected playlist here. Later exports update app-generated music and remove obsolete generated files only when they are unchanged. Your other files stay untouched."
+                    "Each export creates a folder and playlist file for every selected playlist. Later exports update files made by SyncAndRun. They remove old files only if you did not change them. Your other files stay."
                 ))
                 .child(div().text_sm().text_color(rgb(0x9fb8a7)).child(
-                    "After copying music to your watch, you can clear unchanged app-generated files. Modified files and unrelated files are preserved."
+                    "After copying music to your watch, you can clear unchanged files made by SyncAndRun. Changed and unrelated files stay."
                 ));
             if self
                 .destination
@@ -1287,7 +1311,7 @@ impl Render for Desktop {
                     .child(div().text_sm().text_color(rgb(0xa8cbb4)).child("2. Choose what happens to music on the watch"))
                     .child(button("add-watch-music", format!("{} Add playlists. Keep old music.", if self.replace_watch_music { "○" } else { "✓" }), active).bg(rgb(if self.replace_watch_music { 0x203027 } else { 0x24543b })).on_click(cx.listener(|v, _, _, cx| { v.replace_watch_music = false; cx.notify(); })))
                     .child(button("replace-watch-music", format!("{} Replace old music with these playlists.", if self.replace_watch_music { "✓" } else { "○" }), active).bg(rgb(if self.replace_watch_music { 0x24543b } else { 0x203027 })).on_click(cx.listener(|v, _, _, cx| { v.replace_watch_music = true; cx.notify(); })))
-                    .child(div().text_sm().text_color(rgb(0xa8cbb4)).child("Replace sends and checks new music first. It then deletes old music in the watch’s Music folder. You need space for both copies until deletion ends."))))
+                    .child(div().text_sm().text_color(rgb(0xa8cbb4)).child("Replace sends and checks new music first. Then it deletes old music from the watch’s Music folder. The watch needs space for both copies until deletion ends."))))
                 .child(div().flex().flex_col().gap_2()
                     .child(div().text_sm().text_color(rgb(0xa8cbb4)).child("MP3 quality"))
                     .child(qualities)
@@ -1302,7 +1326,7 @@ impl Render for Desktop {
                         cx.listener(|view, _, _, cx| view.choose_folder(cx))
                     ))))
                 .child(div().text_sm().text_color(rgb(0x91a69a))
-                    .child(if self.direct { "The watch stays connected during transfer." } else { "Copy the exported playlist folders into your watch’s Music folder with an MTP app." }));
+                    .child(if self.direct { "Keep the watch connected until the transfer finishes." } else { "Copy the exported playlist folders into your watch’s Music folder with an MTP app." }));
             let export_panel = if compact {
                 export_panel.w_full()
             } else {
@@ -1604,12 +1628,12 @@ impl Render for Desktop {
                 ),
                 Modal::ReplaceMusic(watch) => (
                     "Replace watch music?",
-                    format!("On {}, the app sends and checks your selected playlists first. It then deletes old music inside Music. This cannot be undone. Activities and Garmin files outside Music stay on the watch. If USB disconnects during deletion, some old music can remain.", watch.model),
+                    format!("SyncAndRun will first send and check the selected playlists on {}. It will then delete older music in that watch’s Music folder. You cannot undo this. Activities and Garmin files outside Music stay on the watch. If the watch disconnects during removal, some old music can remain.", watch.model),
                     "Replace watch music",
                 ),
                 Modal::RemoveMusic(watch, _, name) => (
                     "Remove this music?",
-                    format!("Remove ‘{name}’ from Music on {}? This cannot be undone. Activities and Garmin files outside Music stay on the watch. If USB disconnects, part of the folder can remain.", watch.model),
+                    format!("Remove ‘{name}’ from the Music folder on {}? You cannot undo this. Activities and Garmin files outside Music stay on the watch. If the watch disconnects, some music can remain.", watch.model),
                     "Remove item",
                 ),
             };

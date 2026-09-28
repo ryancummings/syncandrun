@@ -352,8 +352,10 @@ impl Target for Usb {
             || state.offset != bytes.len()
             || id == 0
         {
-            if id != 0 {
-                let _ = self.delete(id);
+            if id != 0 && self.delete(id).is_err() {
+                bail!(
+                    "Part of a music file could not be removed. Reconnect the watch and check its Music folder before retrying."
+                );
             }
             result?;
             bail!("Transfer cancelled or incomplete");
