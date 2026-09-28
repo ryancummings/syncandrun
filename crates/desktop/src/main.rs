@@ -1187,42 +1187,70 @@ fn panel() -> Div {
         .border_color(rgb(0x3b3932))
         .bg(rgb(0x25241f))
 }
-fn export_status_glow(elapsed: Duration) -> Div {
-    let phase = (elapsed.as_secs_f32() / 0.85) % 4.0;
-    let edge = phase.floor() as usize;
-    let travel = phase.fract();
-    let highlight = div()
-        .absolute()
-        .rounded_md()
-        .bg(rgb(0xf3bd70))
-        .shadow(vec![BoxShadow {
-            color: Hsla::from(rgba(0xd7a05a99)),
-            offset: point(px(0.), px(0.)),
-            blur_radius: px(9.),
-            spread_radius: px(2.),
-        }]);
-    match edge {
-        0 => highlight
-            .top_0()
-            .left(relative(travel * 0.78))
-            .w(relative(0.22))
-            .h(px(3.)),
-        1 => highlight
-            .right_0()
-            .top(relative(travel * 0.60))
-            .w(px(3.))
-            .h(relative(0.40)),
-        2 => highlight
-            .bottom_0()
-            .left(relative((1. - travel) * 0.78))
-            .w(relative(0.22))
-            .h(px(3.)),
-        _ => highlight
-            .left_0()
-            .top(relative((1. - travel) * 0.60))
-            .w(px(3.))
-            .h(relative(0.40)),
-    }
+fn export_status_glow(elapsed: Duration) -> impl IntoElement {
+    // The status box can change width and height as the window or text changes.
+    // Travel in measured pixels so every side moves at the same speed.
+    canvas(
+        |_, _, _| {},
+        move |bounds, _, window, _| {
+            let width: f32 = bounds.size.width.into();
+            let height: f32 = bounds.size.height.into();
+            let horizontal = (width - 4.0).max(0.0);
+            let vertical = (height - 4.0).max(0.0);
+            if horizontal <= 0.0 || vertical <= 0.0 {
+                return;
+            }
+            let perimeter = 2.0 * (horizontal + vertical);
+            let head = (elapsed.as_secs_f64() * 180.0).rem_euclid(perimeter as f64) as f32;
+            let origin_x: f32 = bounds.origin.x.into();
+            let origin_y: f32 = bounds.origin.y.into();
+            let left = origin_x + 2.0;
+            let top = origin_y + 2.0;
+            let right = left + horizontal;
+            let bottom = top + vertical;
+            let sides = [horizontal, vertical, horizontal, vertical];
+            let mut side_start = 0.0;
+            for (side, length) in sides.into_iter().enumerate() {
+                for wrap in [0.0, perimeter] {
+                    let from = (head - 36.0 + wrap).max(side_start);
+                    let to = (head + wrap).min(side_start + length);
+                    if to <= from {
+                        continue;
+                    }
+                    let start = from - side_start;
+                    let end = to - side_start;
+                    let (x, y, w, h) = match side {
+                        0 => (left + start, top - 1.5, end - start, 3.0),
+                        1 => (right - 1.5, top + start, 3.0, end - start),
+                        2 => (right - end, bottom - 1.5, end - start, 3.0),
+                        _ => (left - 1.5, bottom - end, 3.0, end - start),
+                    };
+                    window.paint_quad(quad(
+                        Bounds::new(
+                            point(px(x - 2.0), px(y - 2.0)),
+                            size(px(w + 4.0), px(h + 4.0)),
+                        ),
+                        px(3.0),
+                        rgba(0xd7a05a55),
+                        px(0.0),
+                        transparent_black(),
+                        Default::default(),
+                    ));
+                    window.paint_quad(quad(
+                        Bounds::new(point(px(x), px(y)), size(px(w), px(h))),
+                        px(1.5),
+                        rgb(0xf3bd70),
+                        px(0.0),
+                        transparent_black(),
+                        Default::default(),
+                    ));
+                }
+                side_start += length;
+            }
+        },
+    )
+    .absolute()
+    .inset_0()
 }
 fn data_size(bytes: u64) -> String {
     if bytes >= 1_000_000 {
