@@ -101,8 +101,8 @@ exports folders for manual transfer; it has no direct MTP implementation.
   read-back on the Forerunner 955 Solar. The first on-watch check found neither
   test playlist; those files had an unknown MTP object type. After changing the
   upload to use the playlist object type, both synthetic playlists appeared on
-  the watch with the expected entry counts. Playback is still unverified, so
-  this layout remains opt-in. A
+  the watch with the expected entry counts. The generated tone played from all
+  entries in both playlists. This layout remains opt-in for other models. A
   [Forerunner 955 owner reports](https://forums.garmin.com/sports-fitness/running-multisport/f/forerunner-955-series/402291/how-to-copy-music-under-linux)
   using top-level Music playlists that reference tracks in subfolders. Garmin
   [lists M3U8 as a supported format](https://support.garmin.com/en-US/?faq=JyNEOTsZaR3KMXqej3oQp5).
@@ -129,7 +129,15 @@ verification. Playlist upload exposed the rewrite/length behavior above; sending
 canonical paths passed verification. The GUI showed completion after clicking
 **Transfer to watch**. Only synthetic Plex metadata and an isolated profile were
 used; source audio was generated and served from memory. No local MP3 files were
-created. This is device transfer evidence, not on-watch playback acceptance.
+created. That first run established device transfer and read-back only.
+
+After the MTP playlist-type fix, a shared-track run sent one generated MP3 and
+two playlists. Both appeared on the watch with the expected three repeated
+entries and one entry; every entry played the short tone. A distinct test of
+the default separate-folder layout sent four generated MP3s in two playlists.
+Both appeared with the expected three and one tracks, and every track played.
+All tests used fake Plex data and disposable profiles. Other Garmin models,
+real Plex media, and playback after destructive replacement remain untested.
 
 ```sh
 cargo test --locked --workspace

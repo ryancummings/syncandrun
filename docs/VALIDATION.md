@@ -1,5 +1,21 @@
 # Validation
 
+## On-watch playlist and playback acceptance (2026-09-27)
+
+On a Forerunner 955 Solar running firmware 2905, the corrected direct MTP
+transfer passed USB read-back and on-watch checks with generated audio. Two
+shared-track test playlists appeared under My Music with three repeated entries
+and one entry, matching the synthetic fixture; every entry played the short
+tone. A separate-folder test used distinct playlist names. Both playlists
+appeared with three and one tracks, and every track played the tone. The
+separate-folder layout is the desktop default. Each test used a disposable
+profile and fake Plex data; no real Plex library or media was accessed.
+
+The first shared-track upload had passed USB read-back but produced no visible
+playlists. It marked M3U8 files as unknown MTP objects. The corrected upload
+marks them as playlists. This matches the successful repeat test, though an
+indexing delay after the first upload cannot be ruled out.
+
 ## Transfer details and page navigation (2026-09-27)
 
 The desktop now has Playlists, Watch music, and Settings tabs. Watch transfer
@@ -39,9 +55,10 @@ The first shared layout failed on-watch acceptance. The first transfer labeled
 M3U8 files as unknown MTP objects. A second synthetic transfer labeled them as
 playlists, as GNOME GVfs does for M3U content. After disconnecting, both
 playlists appeared on the watch: playlist 1 showed three entries of the same
-track and playlist 2 showed one. Those counts match the fixture. Playback has
-not yet been checked. The type change is consistent with the result, but the
-test does not rule out an indexing delay after the first transfer.
+track and playlist 2 showed one. Those counts match the fixture. Ryan played
+all entries from both playlists; each played the generated short tone. The
+type change is consistent with the result, but the test does not rule out an
+indexing delay after the first transfer.
 
 Thirty synthetic core tests, strict Clippy, workspace build, and the CLI smoke
 passed. A physical GUI session used an isolated synthetic profile. Xvfb was
@@ -55,7 +72,8 @@ over libmtp 1.1.23. The desktop showed the model and free space, and its transfe
 button completed the operation. Audio read-back passed byte-count and SHA-256
 checks; playlists passed ordered-reference checks. No local MP3 files were
 created. Testing used fake Plex and a disposable profile; no production Plex
-profile or library was read. Playback after disconnect remains unverified.
+profile or library was read. The later corrected transfer passed on-watch
+listing and playback as recorded above.
 See [DIRECT-MTP.md](DIRECT-MTP.md) for Garmin’s playlist rewrite behavior and the
 explicit physical acceptance command.
 
@@ -90,11 +108,10 @@ and the user confirmed that it worked. The desktop binary SHA-256 was
 This confirms the native launch and visible interface, not the complete export
 workflow with a real Plex library.
 
-Real Plex browser authorization and playback of Rust-generated output on a
-Garmin watch remain unverified. The fake MP3 stream verifies file handling,
-not playable audio. Historical watch results below apply to the Electron
-exporter. Recheck physical acceptance before describing Rust output as
-watch-validated.
+Real Plex browser authorization and real-library transfer remain unverified.
+The earlier fake MP3 stream tested file handling; later generated MP3 tones
+passed playback on the Forerunner 955 Solar as recorded above. Historical
+watch results below apply to the Electron exporter.
 
 The Linux desktop revision adds separate available/syncing playlist lists,
 persisted library and bitrate settings, connection diagnostics, a progress bar
@@ -107,8 +124,9 @@ The native GPUI window was launched under Xvfb and visually inspected after
 this revision. A synthetic export through Settings, the GTK folder picker, and
 the desktop action produced the expected three MP3 files and saved the chosen
 playlist and library folder. The confirmed default-folder export and confirmed
-purge also passed in an isolated synthetic home. A real Plex export through the revised desktop
-interface and physical watch playback remain to be checked.
+purge also passed in an isolated synthetic home. A real Plex export through the
+revised desktop interface and playback of its folder-exported files remain to
+be checked.
 
 Reproduce automated and native launch checks using [the Rust guide](RUST.md).
 

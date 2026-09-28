@@ -74,9 +74,14 @@ and uses the same direct transfer engine as the GUI.
 
 `--shared-tracks` puts each track in one new Music folder and places multiple
 M3U8 playlists beside it. It stores a repeated track once per run. It is an
-experimental add mode: USB read-back passed on a Forerunner 955 Solar, and
-both synthetic playlists appeared after the MTP playlist-type fix. Playback
-still needs a watch check. It cannot be combined with `--replace-music` yet.
+opt-in add mode: USB read-back passed on a Forerunner 955 Solar, both synthetic
+playlists appeared after the MTP playlist-type fix, and their generated tone
+played from every entry. It cannot be combined with `--replace-music` yet.
+
+The default separate-folder direct transfer was also checked on a Forerunner
+955 Solar with two distinctly named synthetic playlists. Both appeared under
+My Music and all four generated track entries played the short tone. Real Plex
+media and other Garmin models still need their own checks.
 
 `login` opens the browser and then asks for a server and music library by number.
 It deliberately does not print authentication links or accept tokens in command
