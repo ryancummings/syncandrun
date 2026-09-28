@@ -23,6 +23,11 @@ Jellyfin connections. The retained Electron app supports Plex only.
 
 Garmin documents [local folders and music libraries in Express](https://support.garmin.com/sv-SE/?faq=1ZDlVH09XB1169yYD5FIWA), [iTunes playlist visibility](https://support.garmin.com/en-US/?faq=iBiZBj3Cer5py2x29trVN8), and [supported MP3 and M3U8 files](https://support.garmin.com/en-US/?faq=JyNEOTsZaR3KMXqej3oQp5). [Express runs on Windows and macOS, not Linux](https://support.garmin.com/en-US/navionics/faq/4QVp7mKSIA1LDk5fc1OHX8/). Apple says to [add tracks before importing a playlist XML on Mac](https://support.apple.com/es-es/guide/music/-mus27cd5060f/mac) or [in iTunes on Windows](https://support.apple.com/en-ie/guide/itunes/itns2998/windows).
 
+Garmin music watches share the documented MP3 and M3U8 formats, but direct USB
+playlist behavior has only been checked with SyncAndRun on a Forerunner 955 Solar.
+See the [model compatibility guide](docs/GARMIN-COMPATIBILITY.md) for candidate
+families, transfer routes, and the device acceptance procedure.
+
 SyncAndRun offers MP3 at 64, 96, 128, 192, and 256 kbps, plus 320 kbps for Plex.
 Jellyfin limits stereo MP3 transcoding to 256 kbps. The size shown is an estimate. The Linux Rust app shows the connected device’s model, firmware, and free space. An earlier two-folder MTP export was recognized as playlists on a personal Forerunner 955. A later Linux transfer verified 20 MP3 files at 320 kbps; the playlist appeared on the watch and a track played after a plain M3U8 was copied. See [validation](docs/VALIDATION.md).
 

@@ -120,6 +120,8 @@ exports folders for manual transfer; it has no direct MTP implementation.
 Automatic matching of playlist identities across transfers is not implemented.
 The `0:` music volume and playlist handling have been checked on the Forerunner
 955 Solar; other Garmin models and storage layouts need physical acceptance.
+See the [model compatibility guide](GARMIN-COMPATIBILITY.md) for Garmin's
+documented families and a reproducible synthetic acceptance procedure.
 
 ## Evidence and reproduction
 
