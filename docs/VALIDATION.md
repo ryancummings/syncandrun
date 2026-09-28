@@ -35,11 +35,13 @@ An opt-in shared-track run sent one generated MP3 and two M3U8 playlists in one
 folder. Both playlists passed USB read-back with references to the same track.
 After disconnecting, Ryan reported that neither test playlist appeared on the
 watch. USB read-back alone does not establish that Garmin indexed the files.
-The shared layout failed on-watch acceptance and needs further investigation.
-One possible cause is the MTP object type: the first transfer labeled M3U8
-files as unknown. A candidate fix labels them as playlists, as GNOME GVfs does
-for M3U content. This candidate has passed synthetic tests but still needs a
-watch transfer and another on-watch check.
+The first shared layout failed on-watch acceptance. The first transfer labeled
+M3U8 files as unknown MTP objects. A second synthetic transfer labeled them as
+playlists, as GNOME GVfs does for M3U content. After disconnecting, both
+playlists appeared on the watch: playlist 1 showed three entries of the same
+track and playlist 2 showed one. Those counts match the fixture. Playback has
+not yet been checked. The type change is consistent with the result, but the
+test does not rule out an indexing delay after the first transfer.
 
 Thirty synthetic core tests, strict Clippy, workspace build, and the CLI smoke
 passed. A physical GUI session used an isolated synthetic profile. Xvfb was

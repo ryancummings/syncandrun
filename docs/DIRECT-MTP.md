@@ -98,9 +98,11 @@ exports folders for manual transfer; it has no direct MTP implementation.
 - The CLI has an opt-in `--shared-tracks` layout. It puts one copy of each
   track in a single new folder with multiple M3U8 playlists. A repeated track
   appears in each playlist by path. This layout passed synthetic tests and USB
-  read-back on the Forerunner 955 Solar, but Ryan reported that neither test
-  playlist appeared on the watch after disconnecting. Treat this opt-in layout
-  as experimental until the cause is fixed and on-watch listing passes. A
+  read-back on the Forerunner 955 Solar. The first on-watch check found neither
+  test playlist; those files had an unknown MTP object type. After changing the
+  upload to use the playlist object type, both synthetic playlists appeared on
+  the watch with the expected entry counts. Playback is still unverified, so
+  this layout remains opt-in. A
   [Forerunner 955 owner reports](https://forums.garmin.com/sports-fitness/running-multisport/f/forerunner-955-series/402291/how-to-copy-music-under-linux)
   using top-level Music playlists that reference tracks in subfolders. Garmin
   [lists M3U8 as a supported format](https://support.garmin.com/en-US/?faq=JyNEOTsZaR3KMXqej3oQp5).
