@@ -55,6 +55,24 @@ fn raw_devices() -> Result<Vec<ffi::LIBMTP_raw_device_t>> {
     unsafe { libc::free(raw.cast()) };
     result
 }
+
+pub(super) fn connected_keys(watches: &[Watch]) -> Result<Vec<String>> {
+    let _guard = lock()?;
+    let attached: Vec<_> = raw_devices()?
+        .into_iter()
+        .filter(|raw| raw.device_entry.vendor_id == 0x091e)
+        .map(|raw| (raw.bus_location, raw.devnum))
+        .collect();
+    Ok(connected_keys_for_attached(watches, &attached))
+}
+
+fn connected_keys_for_attached(watches: &[Watch], attached: &[(u32, u8)]) -> Vec<String> {
+    watches
+        .iter()
+        .filter(|watch| attached.contains(&(watch.bus, watch.number)))
+        .map(Watch::key)
+        .collect()
+}
 // SAFETY: getters return owned, malloc-allocated NUL-terminated strings, or NULL.
 unsafe fn owned_string(value: *mut libc::c_char) -> String {
     if value.is_null() {
@@ -471,5 +489,32 @@ mod tests {
         });
         assert_eq!(scan.watches[0].key(), "2:5:7");
         assert_eq!(scan.unavailable[0].number, 2);
+    }
+    #[test]
+    fn presence_check_drops_only_disconnected_watches() {
+        let watches = [
+            Watch {
+                bus: 1,
+                number: 2,
+                storage_id: 4,
+                fingerprint: "first".into(),
+                model: "Synthetic Garmin".into(),
+                firmware: "1".into(),
+                free_bytes: 10,
+                total_bytes: 20,
+            },
+            Watch {
+                bus: 1,
+                number: 3,
+                storage_id: 5,
+                fingerprint: "second".into(),
+                model: "Synthetic Garmin".into(),
+                firmware: "1".into(),
+                free_bytes: 10,
+                total_bytes: 20,
+            },
+        ];
+        assert_eq!(connected_keys_for_attached(&watches, &[(1, 3)]), ["1:3:5"]);
+        assert!(connected_keys_for_attached(&watches, &[]).is_empty());
     }
 }

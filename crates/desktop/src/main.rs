@@ -1,4 +1,8 @@
 mod input;
+#[cfg(not(target_os = "macos"))]
+mod watch_diagnostics;
+#[cfg(target_os = "macos")]
+#[path = "watch_diagnostics_macos.rs"]
 mod watch_diagnostics;
 
 use anyhow::{Context as _, Result, ensure};
@@ -30,6 +34,10 @@ enum Event {
     WatchDiagnostics(WatchDiagnostics),
     SourceAvailability([bool; 3]),
     Watches(Result<Discovery, String>),
+    WatchPresence {
+        observed: Vec<String>,
+        connected: Result<Vec<String>, String>,
+    },
     MusicItems(Vec<device::MusicItem>),
     MusicRemoved {
         count: usize,
@@ -118,6 +126,8 @@ struct Desktop {
     replace_watch_music: bool,
     scanning: bool,
     last_scan: Instant,
+    presence_checking: bool,
+    last_presence_check: Instant,
     last_monitor_tick: Instant,
     monitor_started: Instant,
     direct: bool,
@@ -236,6 +246,8 @@ impl Desktop {
             replace_watch_music: false,
             scanning: false,
             last_scan: Instant::now(),
+            presence_checking: false,
+            last_presence_check: Instant::now(),
             last_monitor_tick: Instant::now(),
             monitor_started: Instant::now(),
             direct: true,
@@ -349,6 +361,15 @@ impl Desktop {
                             view.scan_watches();
                             changed = true;
                         }
+                        if view.usb_enabled
+                            && !view.busy
+                            && !view.scanning
+                            && !view.presence_checking
+                            && !view.watches.is_empty()
+                            && view.last_presence_check.elapsed() >= Duration::from_secs(2)
+                        {
+                            view.check_watch_presence();
+                        }
                         if changed {
                             cx.notify();
                         }
@@ -372,6 +393,20 @@ impl Desktop {
         std::thread::spawn(move || {
             let result = device::discover_with_unavailable().map_err(|e| e.to_string());
             let _ = sender.send(Event::Watches(result));
+        });
+    }
+    fn check_watch_presence(&mut self) {
+        self.presence_checking = true;
+        self.last_presence_check = Instant::now();
+        let watches = self.watches.clone();
+        let observed = watches.iter().map(Watch::key).collect();
+        let sender = self.sender.clone();
+        std::thread::spawn(move || {
+            let connected = device::connected_keys(&watches).map_err(|error| error.to_string());
+            let _ = sender.send(Event::WatchPresence {
+                observed,
+                connected,
+            });
         });
     }
     fn run_watch_diagnostics(&mut self) {
@@ -711,6 +746,49 @@ impl Desktop {
                 }
                 return;
             }
+            Event::WatchPresence {
+                observed,
+                connected,
+            } => {
+                self.presence_checking = false;
+                if self.busy
+                    || self.scanning
+                    || self.watches.iter().map(Watch::key).collect::<Vec<_>>() != observed
+                {
+                    return;
+                }
+                if let Ok(connected) = connected
+                    && connected.len() < self.watches.len()
+                {
+                    let connected: HashSet<_> = connected.into_iter().collect();
+                    self.watches
+                        .retain(|watch| connected.contains(&watch.key()));
+                    if !self
+                        .watches
+                        .iter()
+                        .any(|watch| Some(watch.key()) == self.selected_watch)
+                    {
+                        self.selected_watch = if self.watches.len() == 1 {
+                            Some(self.watches[0].key())
+                        } else {
+                            None
+                        };
+                        self.music_items.clear();
+                        self.watch_music_pending = false;
+                        if self.selected_watch.is_none() && self.page == Page::WatchMusic {
+                            self.page = Page::Playlists;
+                        }
+                    }
+                    self.watch_status = if self.watches.is_empty() {
+                        "Garmin device disconnected. Reconnect it or select Scan for device."
+                    } else {
+                        "Garmin device ready for music transfer"
+                    }
+                    .into();
+                    self.last_scan = Instant::now();
+                }
+                return;
+            }
             Event::MusicItems(items) => {
                 self.music_items = items;
                 self.watch_music_pending = false;
@@ -973,9 +1051,7 @@ impl Desktop {
                         view.save_preferences();
                     }
                     Ok(Ok(_)) => {}
-                    _ => view.status =
-                        "Could not open the folder picker. Check that a desktop portal is running."
-                            .into(),
+                    _ => view.status = "Could not open the folder picker.".into(),
                 }
                 cx.notify();
             });
@@ -1005,9 +1081,7 @@ impl Desktop {
                         });
                     }
                     Ok(Ok(_)) => {}
-                    _ => view.status =
-                        "Could not open the folder picker. Check that a desktop portal is running."
-                            .into(),
+                    _ => view.status = "Could not open the folder picker.".into(),
                 }
                 cx.notify();
             });
@@ -1187,42 +1261,70 @@ fn panel() -> Div {
         .border_color(rgb(0x3b3932))
         .bg(rgb(0x25241f))
 }
-fn export_status_glow(elapsed: Duration) -> Div {
-    let phase = (elapsed.as_secs_f32() / 0.85) % 4.0;
-    let edge = phase.floor() as usize;
-    let travel = phase.fract();
-    let highlight = div()
-        .absolute()
-        .rounded_md()
-        .bg(rgb(0xf3bd70))
-        .shadow(vec![BoxShadow {
-            color: Hsla::from(rgba(0xd7a05a99)),
-            offset: point(px(0.), px(0.)),
-            blur_radius: px(9.),
-            spread_radius: px(2.),
-        }]);
-    match edge {
-        0 => highlight
-            .top_0()
-            .left(relative(travel * 0.78))
-            .w(relative(0.22))
-            .h(px(3.)),
-        1 => highlight
-            .right_0()
-            .top(relative(travel * 0.60))
-            .w(px(3.))
-            .h(relative(0.40)),
-        2 => highlight
-            .bottom_0()
-            .left(relative((1. - travel) * 0.78))
-            .w(relative(0.22))
-            .h(px(3.)),
-        _ => highlight
-            .left_0()
-            .top(relative((1. - travel) * 0.60))
-            .w(px(3.))
-            .h(relative(0.40)),
-    }
+fn export_status_glow(elapsed: Duration) -> impl IntoElement {
+    // The status box can change width and height as the window or text changes.
+    // Travel in measured pixels so every side moves at the same speed.
+    canvas(
+        |_, _, _| {},
+        move |bounds, _, window, _| {
+            let width: f32 = bounds.size.width.into();
+            let height: f32 = bounds.size.height.into();
+            let horizontal = (width - 4.0).max(0.0);
+            let vertical = (height - 4.0).max(0.0);
+            if horizontal <= 0.0 || vertical <= 0.0 {
+                return;
+            }
+            let perimeter = 2.0 * (horizontal + vertical);
+            let head = (elapsed.as_secs_f64() * 180.0).rem_euclid(perimeter as f64) as f32;
+            let origin_x: f32 = bounds.origin.x.into();
+            let origin_y: f32 = bounds.origin.y.into();
+            let left = origin_x + 2.0;
+            let top = origin_y + 2.0;
+            let right = left + horizontal;
+            let bottom = top + vertical;
+            let sides = [horizontal, vertical, horizontal, vertical];
+            let mut side_start = 0.0;
+            for (side, length) in sides.into_iter().enumerate() {
+                for wrap in [0.0, perimeter] {
+                    let from = (head - 36.0 + wrap).max(side_start);
+                    let to = (head + wrap).min(side_start + length);
+                    if to <= from {
+                        continue;
+                    }
+                    let start = from - side_start;
+                    let end = to - side_start;
+                    let (x, y, w, h) = match side {
+                        0 => (left + start, top - 1.5, end - start, 3.0),
+                        1 => (right - 1.5, top + start, 3.0, end - start),
+                        2 => (right - end, bottom - 1.5, end - start, 3.0),
+                        _ => (left - 1.5, bottom - end, 3.0, end - start),
+                    };
+                    window.paint_quad(quad(
+                        Bounds::new(
+                            point(px(x - 2.0), px(y - 2.0)),
+                            size(px(w + 4.0), px(h + 4.0)),
+                        ),
+                        px(3.0),
+                        rgba(0xd7a05a55),
+                        px(0.0),
+                        transparent_black(),
+                        Default::default(),
+                    ));
+                    window.paint_quad(quad(
+                        Bounds::new(point(px(x), px(y)), size(px(w), px(h))),
+                        px(1.5),
+                        rgb(0xf3bd70),
+                        px(0.0),
+                        transparent_black(),
+                        Default::default(),
+                    ));
+                }
+                side_start += length;
+            }
+        },
+    )
+    .absolute()
+    .inset_0()
 }
 fn data_size(bytes: u64) -> String {
     if bytes >= 1_000_000 {
@@ -1302,9 +1404,12 @@ impl Render for Desktop {
                         .flex()
                         .flex_col()
                         .gap_1()
-                        .child(div().text_xs().text_color(rgb(0xd7a05a)).child(
-                            "Scanning for Garmin devices · detection may take about 30 seconds",
-                        ))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(0xd7a05a))
+                                .child("Waiting for a Garmin device · checking automatically"),
+                        )
                         .child(
                             div()
                                 .relative()
@@ -2551,7 +2656,7 @@ fn main() {
             )
             .is_err()
         {
-            eprintln!("Could not open the Linux window. Check the display and Vulkan driver.");
+            eprintln!("Could not open the SyncAndRun window.");
             cx.quit();
         }
         cx.activate(true);

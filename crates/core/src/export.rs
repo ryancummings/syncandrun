@@ -784,7 +784,7 @@ mod tests {
         let cancel = AtomicBool::new(false);
         let run = || export_sync(&plan(), 192, dest.path(), &cancel, |_, _| Ok(mp3()), |_| {});
         let output = run().unwrap();
-        assert_eq!(output, dest.path());
+        assert_eq!(output, fs::canonicalize(dest.path()).unwrap());
         let playlist = fs::read_dir(&output)
             .unwrap()
             .map(|e| e.unwrap().path())

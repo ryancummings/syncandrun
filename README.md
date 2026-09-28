@@ -1,70 +1,61 @@
 # SyncAndRun
 
-SyncAndRun is a personal desktop app that turns Plex, Jellyfin, or local music into MP3 files for a Garmin music device. On Linux, choose playlists and MP3 quality, then transfer directly to a connected device over USB MTP. Folder exports remain available on every desktop platform.
+SyncAndRun moves music from Plex, Jellyfin, or a local folder to a Garmin music watch. It runs as a native desktop app on macOS and Linux. Choose playlists, choose MP3 quality, and send the music over USB. You can also export playlist folders for a manual copy.
 
-![Electron desktop reference](docs/desktop-ui-implemented.png)
+![Plex playlists in the native Mac app](docs/screenshots/native-plex.png)
 
-The Linux app and CLI support Jellyfin sign-in with a server address, username,
-and password. Choose a music library and playlists, then use the same export or
-watch transfer controls as Plex. Credentials are encrypted in your local profile;
-the password is not saved. Settings lets you switch between saved Plex and
-Jellyfin connections. The retained Electron app supports Plex only.
+![Local folder playlists and MP3 quality](docs/screenshots/native-folder.png)
 
-## Move music to a Garmin device
+These screenshots use an isolated demo profile, a fake Plex server, and generated audio. The playlist names and track counts are synthetic.
 
-| Computer | Choose in SyncAndRun | Then |
+## Download and install
+
+Download the current packages from [GitHub Releases](https://github.com/ryancummings/syncandrun/releases). Choose the file for your computer.
+
+| Computer | File | Install |
 | --- | --- | --- |
-| Linux (Rust app) | Direct to device | Select the detected Garmin, then **Transfer to device**. The app verifies the transferred files. |
-| macOS | MTP app | Copy the exported playlist folders into the device's Music folder with OpenMTP or another MTP app. |
-| macOS | Music + Express | Add the exported Tracks folder to Music, import `Import playlists.xml`, then send the playlists with Garmin Express. |
-| Windows | Garmin Express | In Garmin Express, open the device's Music page. Use My Music to choose the saved local folder, then send the music. |
-| Windows | iTunes + Express | Add Tracks to iTunes, import the playlist XML, and send the playlists with Garmin Express. |
-| Windows or Linux | MTP app | Copy the exported playlist folders into the device's Music folder. On Linux, the Files app can open the device as an MTP device. |
+| Apple Silicon Mac | `SyncAndRun-0.2.0-macos-arm64.dmg` | Open the DMG. Drag SyncAndRun to Applications. |
+| Ubuntu 24.04 x86_64 | `SyncAndRun-0.2.0-linux-x86_64.tar.gz` | Install the system packages below. Extract the archive and run `./install.sh`. |
 
-Garmin documents [local folders and music libraries in Express](https://support.garmin.com/sv-SE/?faq=1ZDlVH09XB1169yYD5FIWA), [iTunes playlist visibility](https://support.garmin.com/en-US/?faq=iBiZBj3Cer5py2x29trVN8), and [supported MP3 and M3U8 files](https://support.garmin.com/en-US/?faq=JyNEOTsZaR3KMXqej3oQp5). [Express runs on Windows and macOS, not Linux](https://support.garmin.com/en-US/navionics/faq/4QVp7mKSIA1LDk5fc1OHX8/). Apple says to [add tracks before importing a playlist XML on Mac](https://support.apple.com/es-es/guide/music/-mus27cd5060f/mac) or [in iTunes on Windows](https://support.apple.com/en-ie/guide/itunes/itns2998/windows).
+The Mac package includes the audio and USB libraries that it needs. It has a local signature, but Apple has not notarized it. If macOS blocks the first launch, open System Settings, select Privacy & Security, and select Open Anyway. [Apple explains this step](https://support.apple.com/en-gb/102445). The Mac package targets Apple Silicon and macOS 13 or later.
 
-Garmin music watches share the documented MP3 and M3U8 formats, but direct USB
-playlist behavior has only been checked with SyncAndRun on a Forerunner 955 Solar.
-See the [model compatibility guide](docs/GARMIN-COMPATIBILITY.md) for candidate
-families, transfer routes, and the device acceptance procedure.
-
-SyncAndRun offers MP3 at 64, 96, 128, 192, and 256 kbps, plus 320 kbps for Plex and Local folder.
-Jellyfin limits stereo MP3 transcoding to 256 kbps. The size shown is an estimate. The Linux Rust app shows the connected device’s model, firmware, and free space. An earlier two-folder MTP export was recognized as playlists on a personal Forerunner 955. A later Linux transfer verified 20 MP3 files at 320 kbps; the playlist appeared on the watch and a track played after a plain M3U8 was copied. See [validation](docs/VALIDATION.md).
-
-## Linux: Rust desktop and CLI
-
-The native Linux app uses Rust and GPUI. A CLI uses the same profile and export
-engine. See [native build instructions and CLI usage](docs/RUST.md).
-Plug in a Garmin music device and choose **Direct to device**. No export folder
-is needed. The app buffers one MP3 at a time in memory and transfers it with
-libmtp. Choose **Add playlists. Keep old music.** to keep earlier music.
-Choose **Replace old music with these playlists.** to send and check the new
-music before removing older recognized music from the device’s Music folder.
-The app also lets you inspect and remove individual music items. Replacement
-needs enough space for both old and new music. You cannot undo the removal. See
-[direct MTP behavior and validation](docs/DIRECT-MTP.md).
-
-For folder exports, choose **Export to folder** and a music library folder,
-or confirm the default at `~/Music/SyncAndRun`. **Clear library after transfer**
-removes unchanged app-generated local files while keeping other files.
+On Ubuntu 24.04, install the runtime packages before you run the app:
 
 ```sh
-cargo build --locked --workspace
-cargo run --locked -p syncandrun-desktop
-cargo run --locked -p syncandrun-cli -- --help
+sudo apt-get update
+sudo apt-get install libmtp9 libssl3t64 libfontconfig1 libxkbcommon0 \
+  libxkbcommon-x11-0 libwayland-client0 libxcb1 libxcb-shape0 \
+  libxcb-xfixes0 libx11-xcb1 libvulkan1 mesa-vulkan-drivers \
+  xdg-desktop-portal xdg-desktop-portal-gtk ffmpeg
 ```
 
-Install the Linux system dependencies listed in the native guide first. Existing
-Electron profiles retain their encrypted Plex connection and historical SQLite
-migrations. Close Electron before opening the same profile in Rust.
+Extract the Linux archive, open its `SyncAndRun-0.2.0-linux-x86_64` folder, and run `./install.sh`. The installer copies the app, CLI, icon, and desktop entry into `~/.local`. Open SyncAndRun from your app launcher. The Linux app needs a graphical session with a working Vulkan driver.
 
-The Electron implementation remains available for macOS/Windows and migration
-comparison. Its source build instructions are in [development](docs/DEVELOPMENT.md).
-No native Rust installer is published. See [validation](docs/VALIDATION.md) for
-what has been checked separately from real-device acceptance.
+## Use the app
 
-The former Connect IQ app and self-hosted sync service are retired. Their source
-remains in Git history. Automatic reconciliation of previously transferred watch music
-remains outside this version.
+1. Open SyncAndRun and choose Plex, Jellyfin, or Local folder.
+2. Sign in or choose a folder that contains MP3 or FLAC files.
+3. Choose the playlists and MP3 quality that you want.
+4. Connect a Garmin music watch in USB transfer mode.
+5. Select Direct to device and choose Add playlists or Replace old music.
+6. Select Transfer to device. Wait for the file checks to finish before you unplug the watch.
 
-SyncAndRun is GPL-3.0 software derived from [SubMusic](https://github.com/memen45/SubMusic). Its history and attribution are preserved in [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md). It is unofficial and is not affiliated with Plex, Jellyfin, Garmin, or SubMusic's maintainers. Use [GitHub Issues](https://github.com/ryancummings/syncandrun/issues) and pull requests to contribute.
+Replace old music removes recognized music from the watch after the new playlists pass read-back checks. This action cannot be undone. Choose Add playlists if you want to keep the watch's existing music.
+
+You can select Export to folder when you want to copy files with another MTP app. Copy the exported playlist folders into the watch's `Music` folder, then eject the watch. The app can also show and remove individual items from that folder.
+
+If the app does not see the watch, close other apps that use its USB connection. Then select Scan for device. The app also checks for a device automatically and removes a disconnected watch from the display. See [device help](docs/DIRECT-MTP.md) and the [model guide](docs/GARMIN-COMPATIBILITY.md).
+
+## Privacy and compatibility
+
+SyncAndRun keeps one owner's connections in a local profile. It encrypts saved Plex and Jellyfin credentials. The app has no analytics, cloud relay, or background service. Keep profile backups and exported music private. See [Privacy](PRIVACY.md) and [Security](SECURITY.md).
+
+Direct transfer and playback were checked with synthetic music on a Forerunner 955 Solar under Linux. The Mac app detected that watch and read its storage, but a Mac transfer and on-watch playback still need a physical check. Other models need separate checks. See [Validation](docs/VALIDATION.md).
+
+The Mac and Linux apps use the same Rust code and interface. Windows support is a future plan. This repository contains no Windows app package.
+
+## Build and contribute
+
+See [development](docs/DEVELOPMENT.md) for build commands, [architecture](docs/ARCHITECTURE.md) for the design, and [contributing](CONTRIBUTING.md) for issues and pull requests. The CLI is documented in [the native guide](docs/RUST.md).
+
+SyncAndRun is GPL-3.0 software derived from [SubMusic](https://github.com/memen45/SubMusic). It is unofficial and is not affiliated with Plex, Jellyfin, Garmin, or the SubMusic maintainers. See [the notices](NOTICE.md) for attribution.

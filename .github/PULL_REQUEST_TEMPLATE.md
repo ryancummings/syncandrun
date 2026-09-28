@@ -1,11 +1,11 @@
 ## Result
 
-Describe the user-visible change and why it is needed.
+Describe the change that a user will see and why it helps.
 
 ## Verification
 
-List checks run and results. State separately whether a package was launched on its target OS and whether music was played on a physical watch. Identify checks not run and why.
+List the commands that you ran and their results. Name checks that you could not run. State separately whether the package launched on its target system and whether a physical watch listed and played the music.
 
 ## Compatibility and recovery
 
-Describe effects on existing profiles, exported files, security, and upgrade/recovery. Confirm attachments and logs contain no real credentials, media, or private library data.
+Describe effects on existing profiles, exported files, security, and recovery. Make sure that logs and attachments contain no real credentials, music, or private library details.

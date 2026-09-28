@@ -1,12 +1,3 @@
-# Node and browser tooling
-node_modules/
-companion/node_modules/
-companion/dist/
-companion/coverage/
-playwright-report/
-test-results/
-*.tsbuildinfo
-
 # Local configuration and credentials
 .env
 cloudflared-token
@@ -17,10 +8,8 @@ cloudflared-token
 *.der
 developer_key*
 
-# Generated desktop output
+# Generated packages
 build/
-desktop/companion/
-desktop/release/
 bin/
 
 # Local profile data

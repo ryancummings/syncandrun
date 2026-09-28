@@ -1,27 +1,25 @@
-.PHONY: build test e2e desktop-test pack-linux pack-mac pack-win secret-scan verify
+.PHONY: build test lint smoke package-mac package-linux secret-scan verify
 
 build:
-	corepack pnpm --dir companion build
+	cargo build --locked --workspace
 
 test:
-	corepack pnpm --dir companion test
+	cargo test --locked --workspace
 
-e2e: build
-	corepack pnpm --dir companion e2e
+lint:
+	cargo fmt --all -- --check
+	cargo clippy --locked --workspace --all-targets -- -D warnings
 
-desktop-test:
-	corepack pnpm --dir desktop test
+smoke: build
+	python3 scripts/native-smoke.py
 
-pack-linux: build
-	corepack pnpm --dir desktop pack:linux
+package-linux:
+	python3 scripts/package-linux.py
 
-pack-mac: build
-	corepack pnpm --dir desktop pack:mac
-
-pack-win: build
-	corepack pnpm --dir desktop pack:win
+package-mac:
+	python3 scripts/package-macos.py
 
 secret-scan:
 	sh scripts/scan-secrets.sh
 
-verify: build test e2e desktop-test secret-scan
+verify: lint test smoke secret-scan
