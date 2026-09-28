@@ -102,6 +102,12 @@ Other files are preserved. A conflicting unmanaged file or edited generated file
 stops synchronization. Failed or cancelled downloads remain in a uniquely named
 `.incomplete` folder. The CLI continues to create a new dated export each run.
 
+For direct watch transfer, the Playlists page shows verified tracks and bytes,
+an average rate, elapsed time, and an estimated time left. The rate updates
+after each verified MP3; the final removal step has no reliable time estimate.
+Use the Watch music tab to inspect or remove content inside the watch's Music
+folder. The list reloads after each removal.
+
 ## Existing profiles
 
 Close Electron before using the same profile in Rust. The default searches

@@ -51,6 +51,10 @@ pub fn discover_with_unavailable() -> Result<Discovery> {
 pub struct TransferProgress {
     pub tracks: Progress,
     pub phase: &'static str,
+    /// Verified MP3 bytes. This excludes playlist files and unfinished tracks.
+    pub bytes: u64,
+    /// An estimate based on track duration and selected bitrate.
+    pub estimated_bytes: u64,
 }
 #[derive(Debug, Serialize)]
 pub struct TransferResult {
@@ -346,6 +350,8 @@ fn transfer_to_with_layout<R: Read>(
                             expected: estimate.tracks,
                         },
                         phase,
+                        bytes: result.bytes,
+                        estimated_bytes: estimate.bytes,
                     })
                 };
                 notify("Downloading MP3");
@@ -384,6 +390,8 @@ fn transfer_to_with_layout<R: Read>(
                         expected: estimate.tracks,
                     },
                     phase: "Transferred",
+                    bytes: result.bytes,
+                    estimated_bytes: estimate.bytes,
                 });
             }
             check_cancel(cancel)?;
@@ -432,6 +440,8 @@ fn transfer_to_with_layout<R: Read>(
                     expected: estimate.tracks,
                 },
                 phase: "Removing old music",
+                bytes: result.bytes,
+                estimated_bytes: estimate.bytes,
             });
         }
     }
@@ -613,6 +623,8 @@ mod tests {
         next: u32,
         free: u64,
         fail_upload: bool,
+        fail_upload_after: Option<usize>,
+        uploads: usize,
         corrupt: bool,
         disconnected: bool,
         fail_delete_after: Option<usize>,
@@ -642,6 +654,8 @@ mod tests {
                 next: 3,
                 free: 1_000_000_000,
                 fail_upload: false,
+                fail_upload_after: None,
+                uploads: 0,
                 corrupt: false,
                 disconnected: false,
                 fail_delete_after: None,
@@ -684,8 +698,14 @@ mod tests {
         }
         fn upload(&mut self, parent: u32, name: &str, bytes: &[u8], _: &AtomicBool) -> Result<u32> {
             ensure!(!self.fail_upload, "Upload failed");
+            ensure!(
+                self.fail_upload_after
+                    .is_none_or(|limit| self.uploads < limit),
+                "Upload failed"
+            );
             let id = self.folder(parent, name)?;
             self.entries.get_mut(&id).unwrap().data = Some(bytes.to_vec());
+            self.uploads += 1;
             Ok(id)
         }
         fn verify(&mut self, id: u32, bytes: &[u8], _: &AtomicBool) -> Result<()> {
@@ -731,6 +751,27 @@ mod tests {
         Ok(Cursor::new(
             [vec![255, 251, 144, 0], vec![0; 1024]].concat(),
         ))
+    }
+    fn overlapping_playlists() -> Vec<Playlist> {
+        let first = plan().remove(0).tracks.remove(0);
+        let mut middle = first.clone();
+        middle.id = "fake-2".into();
+        middle.title = "Middle song".into();
+        let mut last = first.clone();
+        last.id = "fake-3".into();
+        last.title = "Last song".into();
+        vec![
+            Playlist {
+                id: "first".into(),
+                title: "First list".into(),
+                tracks: vec![first.clone(), middle.clone()],
+            },
+            Playlist {
+                id: "second".into(),
+                title: "Second list".into(),
+                tracks: vec![middle, last, first],
+            },
+        ]
     }
     #[test]
     fn garmin_rewritten_playlists_preserve_names_order_and_repeats() {
@@ -999,6 +1040,88 @@ mod tests {
                 .count(),
             4
         );
+    }
+    #[test]
+    fn shared_layout_keeps_partial_overlap_and_playlist_order() {
+        let mut target = Fake::default();
+        let mut downloaded = Vec::new();
+        let result = transfer_to_with_layout(
+            &mut target,
+            &overlapping_playlists(),
+            192,
+            &AtomicBool::new(false),
+            |track, bitrate| {
+                downloaded.push((track.id.clone(), bitrate));
+                audio(track, bitrate)
+            },
+            |_| {},
+            (TransferMode::Add, Layout::Shared),
+        )
+        .unwrap();
+        assert_eq!(result.tracks, 3);
+        assert_eq!(
+            downloaded,
+            [
+                ("fake-1".into(), 192),
+                ("fake-2".into(), 192),
+                ("fake-3".into(), 192)
+            ]
+        );
+        let folder = target
+            .entries
+            .iter()
+            .find(|(_, e)| e.parent == 1 && e.data.is_none())
+            .unwrap()
+            .0;
+        let files: Vec<_> = target
+            .entries
+            .values()
+            .filter(|e| e.parent == *folder)
+            .collect();
+        assert_eq!(files.iter().filter(|e| e.name.ends_with(".mp3")).count(), 3);
+        let lines = |name: &str| -> Vec<String> {
+            String::from_utf8(
+                files
+                    .iter()
+                    .find(|e| e.name == name)
+                    .unwrap()
+                    .data
+                    .clone()
+                    .unwrap(),
+            )
+            .unwrap()
+            .lines()
+            .map(str::to_owned)
+            .collect()
+        };
+        let first = lines("First list.m3u8");
+        let second = lines("Second list.m3u8");
+        assert_eq!((first.len(), second.len()), (2, 3));
+        assert_eq!(first[0], second[2]);
+        assert_eq!(first[1], second[0]);
+        assert_ne!(second[1], first[0]);
+        assert_ne!(second[1], first[1]);
+    }
+    #[test]
+    fn shared_layout_failure_in_second_playlist_removes_only_new_objects() {
+        let mut target = Fake {
+            fail_upload_after: Some(4),
+            ..Default::default()
+        };
+        let error = transfer_to_with_layout(
+            &mut target,
+            &overlapping_playlists(),
+            192,
+            &AtomicBool::new(false),
+            audio,
+            |_| {},
+            (TransferMode::Add, Layout::Shared),
+        )
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("files were removed"));
+        assert_eq!(target.uploads, 4);
+        assert_eq!(target.entries.len(), 2);
+        assert_eq!(target.entries[&2].data, Some(vec![42]));
     }
     #[test]
     fn replacement_rejects_unknown_content_before_transfer() {

@@ -23,7 +23,10 @@ use syncandrun_core::{
 enum Event {
     Watches(Result<Discovery, String>),
     MusicItems(Vec<device::MusicItem>),
-    MusicRemoved(usize),
+    MusicRemoved {
+        count: usize,
+        items: Result<Vec<device::MusicItem>, String>,
+    },
     WatchProgress(device::TransferProgress),
     Transferred(device::TransferResult),
     Loaded {
@@ -89,7 +92,7 @@ struct Desktop {
     watches: Vec<Watch>,
     selected_watch: Option<String>,
     watch_status: String,
-    managing_watch: bool,
+    page: Page,
     music_items: Vec<device::MusicItem>,
     replace_watch_music: bool,
     scanning: bool,
@@ -98,7 +101,6 @@ struct Desktop {
     connected: bool,
     playlists: Vec<PlaylistSummary>,
     selected: HashSet<String>,
-    settings: bool,
     server: Option<(String, String, String)>,
     overview: Option<LibraryOverview>,
     connection_status: String,
@@ -112,12 +114,22 @@ struct Desktop {
     output: Option<PathBuf>,
     status: String,
     progress: Option<Progress>,
+    watch_progress: Option<device::TransferProgress>,
+    watch_done: bool,
+    watch_finished_elapsed: Option<Duration>,
+    last_stats_tick: Instant,
     export_started: Option<Instant>,
     busy: bool,
     cancel: Arc<AtomicBool>,
     sender: mpsc::Sender<Event>,
     receiver: mpsc::Receiver<Event>,
     preference_sender: mpsc::Sender<Preferences>,
+}
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Page {
+    Playlists,
+    WatchMusic,
+    Settings,
 }
 enum Modal {
     CreateDefault(PathBuf),
@@ -160,7 +172,7 @@ impl Desktop {
             watches: Vec::new(),
             selected_watch: None,
             watch_status: "Looking for a Garmin watch…".into(),
-            managing_watch: false,
+            page: Page::Playlists,
             music_items: Vec::new(),
             replace_watch_music: false,
             scanning: false,
@@ -169,7 +181,6 @@ impl Desktop {
             connected: false,
             playlists: vec![],
             selected: HashSet::new(),
-            settings: false,
             server: None,
             overview: None,
             connection_status: "Checking…".into(),
@@ -183,6 +194,10 @@ impl Desktop {
             output: None,
             status: "Opening profile…".into(),
             progress: None,
+            watch_progress: None,
+            watch_done: false,
+            watch_finished_elapsed: None,
+            last_stats_tick: Instant::now(),
             export_started: None,
             busy: false,
             cancel: Arc::new(AtomicBool::new(false)),
@@ -215,6 +230,13 @@ impl Desktop {
                         let mut changed = false;
                         while let Ok(event) = view.receiver.try_recv() {
                             view.apply(event);
+                            changed = true;
+                        }
+                        if view.busy
+                            && view.watch_progress.is_some()
+                            && view.last_stats_tick.elapsed() >= Duration::from_secs(1)
+                        {
+                            view.last_stats_tick = Instant::now();
                             changed = true;
                         }
                         if view.usb_enabled
@@ -288,6 +310,9 @@ impl Desktop {
     ) {
         self.output = None;
         self.progress = None;
+        self.watch_progress = None;
+        self.watch_done = false;
+        self.watch_finished_elapsed = None;
         self.export_started = Some(Instant::now());
         self.job(
             "Refreshing selected playlists for the watch…",
@@ -414,6 +439,10 @@ impl Desktop {
                             } else {
                                 None
                             };
+                            self.music_items.clear();
+                            if self.selected_watch.is_none() && self.page == Page::WatchMusic {
+                                self.page = Page::Playlists;
+                            }
                         }
                         let mut status = if watches.is_empty() && !discovery.unavailable.is_empty()
                         {
@@ -433,6 +462,10 @@ impl Desktop {
                     Err(error) => {
                         self.watches.clear();
                         self.selected_watch = None;
+                        self.music_items.clear();
+                        if self.page == Page::WatchMusic {
+                            self.page = Page::Playlists;
+                        }
                         self.watch_status = error;
                     }
                 }
@@ -442,21 +475,37 @@ impl Desktop {
                 self.music_items = items;
                 self.status = "Watch music list refreshed.".into();
             }
-            Event::MusicRemoved(count) => {
-                self.music_items.clear();
-                self.status =
-                    format!("Removed {count} music objects. Scan watch music to refresh the list.");
-            }
+            Event::MusicRemoved { count, items } => match items {
+                Ok(items) => {
+                    self.music_items = items;
+                    self.status =
+                        format!("Removed {count} music objects. Watch music is up to date.");
+                }
+                Err(_) => {
+                    self.music_items.clear();
+                    self.status = format!(
+                        "Removed {count} music objects, but could not reload Music. Select Refresh watch music to try again."
+                    );
+                }
+            },
             Event::WatchProgress(p) => {
                 self.status = format!(
                     "{} · {} of {} tracks",
                     p.phase, p.tracks.completed, p.tracks.expected
                 );
-                self.progress = Some(p.tracks);
+                self.progress = Some(p.tracks.clone());
+                self.watch_progress = Some(p);
                 return;
             }
             Event::Transferred(result) => {
                 self.progress = None;
+                self.watch_done = true;
+                self.watch_finished_elapsed = self.export_started.map(|started| started.elapsed());
+                if let Some(progress) = &mut self.watch_progress {
+                    progress.phase = "Complete";
+                    progress.tracks.completed = result.tracks;
+                    progress.bytes = result.bytes;
+                }
                 self.music_items.clear();
                 self.status = format!(
                     "Transferred and verified {} tracks in {} playlists; removed {} old music objects. Disconnect USB to let Garmin index the music.",
@@ -542,6 +591,11 @@ impl Desktop {
             }
             Event::Failed(message) => {
                 self.progress = None;
+                if let Some(progress) = &mut self.watch_progress {
+                    progress.phase = "Stopped";
+                    self.watch_finished_elapsed =
+                        self.export_started.map(|started| started.elapsed());
+                }
                 self.music_items.clear();
                 self.status = message;
             }
@@ -674,9 +728,9 @@ impl Desktop {
                 if !self.busy && Some(watch.key()) == self.selected_watch =>
             {
                 self.job("Removing watch music…", move |_, cancel, _| {
-                    Ok(Event::MusicRemoved(device::remove_music_item(
-                        &watch, id, &name, &cancel,
-                    )?))
+                    let count = device::remove_music_item(&watch, id, &name, &cancel)?;
+                    let items = device::music_items(&watch).map_err(|error| error.to_string());
+                    Ok(Event::MusicRemoved { count, items })
                 });
             }
             Some(Modal::CreateDefault(path))
@@ -722,6 +776,20 @@ fn panel() -> Div {
         .border_1()
         .border_color(rgb(0x31443a))
         .bg(rgb(0x18251e))
+}
+fn data_size(bytes: u64) -> String {
+    if bytes >= 1_000_000 {
+        format!("{:.1} MB", bytes as f64 / 1_000_000.)
+    } else {
+        format!("{:.1} KB", bytes as f64 / 1_000.)
+    }
+}
+fn clock_time(duration: Duration) -> String {
+    format!(
+        "{}m {:02}s",
+        duration.as_secs() / 60,
+        duration.as_secs() % 60
+    )
 }
 impl Render for Desktop {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -782,45 +850,23 @@ impl Render for Desktop {
                     if !v.busy {
                         v.selected_watch = Some(key.clone());
                         v.music_items.clear();
+                        if v.page == Page::WatchMusic {
+                            v.inspect_watch_music();
+                        }
                         cx.notify();
                     }
                 }),
             ));
         }
-        if self.selected_watch.is_some() {
-            watch_card = watch_card.child(
-                button(
-                    "manage-watch",
-                    if self.managing_watch {
-                        "Hide watch music"
-                    } else {
-                        "Manage watch music"
-                    },
-                    active,
-                )
-                .text_sm()
-                .on_click(cx.listener(|v, _, _, cx| {
-                    v.managing_watch = !v.managing_watch;
-                    if v.managing_watch {
-                        v.inspect_watch_music();
-                    }
-                    cx.notify();
-                })),
-            );
-        }
         let mut content = div().flex().flex_col().gap_3();
-        if self.managing_watch {
-            content = content.child(div().text_2xl().child("Manage watch music"))
-                .child(div().text_sm().child("Only the selected watch’s Music folder is shown. Remove items individually or return to playlists to replace all music. Activities and Garmin system data are outside this scope."))
+        if self.page == Page::WatchMusic {
+            content = content.child(div().text_2xl().child("Watch music"))
+                .child(div().text_sm().child("This page shows the selected watch’s Music folder. Use Playlists to add or replace music. Activities and Garmin files outside Music stay on the watch."))
                 .child(button("refresh-watch-music", "Refresh watch music", active).on_click(cx.listener(|v, _, _, cx| { v.inspect_watch_music(); cx.notify(); })));
             for (i, item) in self.music_items.iter().enumerate() {
                 let name = item.name.clone();
                 let id = item.id;
-                let size = if item.bytes >= 1_000_000 {
-                    format!("{:.1} MB", item.bytes as f64 / 1_000_000.)
-                } else {
-                    format!("{:.1} KB", item.bytes as f64 / 1_000.)
-                };
+                let size = data_size(item.bytes);
                 let label = format!(
                     "{} {} · {}",
                     if item.folder { "Folder:" } else { "File:" },
@@ -908,7 +954,7 @@ impl Render for Desktop {
                         }),
                     ));
             }
-        } else if self.settings {
+        } else if self.page == Page::Settings {
             let server_name = self
                 .overview
                 .as_ref()
@@ -1339,7 +1385,9 @@ impl Render for Desktop {
                         })),
                 )
                 .child(layout.gap_4().child(playlist_panel).child(export_panel));
-            if let Some(progress) = &self.progress {
+            if let Some(progress) = &self.progress
+                && !self.direct
+            {
                 let fraction = if progress.expected == 0 {
                     1.
                 } else {
@@ -1388,8 +1436,7 @@ impl Render for Desktop {
         }
         let mut footer = div().flex().gap_3();
         if self.connected
-            && !self.managing_watch
-            && !self.settings
+            && self.page == Page::Playlists
             && self.login.is_none()
             && self.choice.is_none()
         {
@@ -1435,6 +1482,119 @@ impl Render for Desktop {
                 },
             ));
         }
+        let mut transfer_details = div();
+        if let Some(progress) = &self.watch_progress {
+            let elapsed = self
+                .watch_finished_elapsed
+                .or_else(|| self.export_started.map(|start| start.elapsed()))
+                .unwrap_or_default();
+            let fraction = if progress.tracks.expected == 0 {
+                0.
+            } else {
+                (progress.tracks.completed as f32 / progress.tracks.expected as f32).min(1.)
+            };
+            let rate = if progress.bytes == 0 || elapsed.as_secs_f64() < 1. {
+                "Waiting for the first track".into()
+            } else {
+                format!(
+                    "{}/s average",
+                    data_size((progress.bytes as f64 / elapsed.as_secs_f64()) as u64)
+                )
+            };
+            let eta = if self.watch_done {
+                "Complete".into()
+            } else if progress.phase == "Stopped" {
+                "Stopped".into()
+            } else if progress.phase == "Removing old music" {
+                "Unknown during removal".into()
+            } else if progress.tracks.completed == 0 {
+                "After the first track".into()
+            } else if progress.tracks.completed >= progress.tracks.expected {
+                "Finishing playlists".into()
+            } else {
+                clock_time(Duration::from_secs_f64(
+                    elapsed.as_secs_f64()
+                        * (progress
+                            .tracks
+                            .expected
+                            .saturating_sub(progress.tracks.completed))
+                            as f64
+                        / progress.tracks.completed as f64,
+                ))
+            };
+            transfer_details = panel()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(
+                    div()
+                        .text_lg()
+                        .child(format!("Watch transfer · {}", progress.phase)),
+                )
+                .child(div().text_sm().child(format!(
+                    "{} of {} tracks verified · {} verified · about {} estimated",
+                    progress.tracks.completed,
+                    progress.tracks.expected,
+                    data_size(progress.bytes),
+                    data_size(progress.estimated_bytes)
+                )))
+                .child(div().text_sm().child(format!(
+                    "Rate: {rate} · Elapsed: {} · Time left: {eta}",
+                    clock_time(elapsed)
+                )))
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(rgb(0x91a69a))
+                        .child("Rate counts verified MP3 bytes and updates after each track."),
+                )
+                .child(
+                    div()
+                        .h(px(8.))
+                        .w_full()
+                        .rounded_md()
+                        .bg(rgb(0x263b2d))
+                        .child(
+                            div()
+                                .h_full()
+                                .w(relative(fraction))
+                                .rounded_md()
+                                .bg(rgb(0x60bc83)),
+                        ),
+                );
+        }
+        let navigation = div().flex().gap_2().children(
+            [
+                (Page::Playlists, "Playlists"),
+                (Page::WatchMusic, "Watch music"),
+                (Page::Settings, "Settings"),
+            ]
+            .into_iter()
+            .enumerate()
+            .map(|(index, (page, label))| {
+                let selected = self.page == page;
+                let enabled = active && (page != Page::WatchMusic || self.selected_watch.is_some());
+                button(
+                    ("page", index),
+                    format!("{}{}", if selected { "✓ " } else { "" }, label),
+                    enabled,
+                )
+                .bg(rgb(if selected { 0x24543b } else { 0x203027 }))
+                .border_color(rgb(if selected { 0x60bc83 } else { 0x31443a }))
+                .on_click(cx.listener(move |v, _, _, cx| {
+                    if v.modal.is_none()
+                        && !v.busy
+                        && (page != Page::WatchMusic || v.selected_watch.is_some())
+                    {
+                        v.page = page;
+                        if page == Page::WatchMusic {
+                            v.inspect_watch_music();
+                        }
+                        cx.notify();
+                    }
+                }))
+            }),
+        );
         let mut shell = div()
             .size_full()
             .relative()
@@ -1446,51 +1606,33 @@ impl Render for Desktop {
             .flex_col()
             .gap_5()
             .child(
-                div()
-                    .flex()
-                    .justify_between()
-                    .items_center()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(div().text_3xl().child("SyncAndRun"))
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(rgb(0x9acdb1))
-                                    .child("PLEX → MP3 → GARMIN"),
-                            ),
-                    )
-                    .child(
-                        button(
-                            "settings",
-                            if self.settings {
-                                "Back to playlists"
-                            } else {
-                                "Settings"
-                            },
-                            active,
-                        )
-                        .on_click(cx.listener(|v, _, _, cx| {
-                            if v.modal.is_none() && !v.busy {
-                                v.settings = !v.settings;
-                                cx.notify();
-                            }
-                        })),
-                    ),
+                div().flex().items_center().child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(div().text_3xl().child("SyncAndRun"))
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(rgb(0x9acdb1))
+                                .child("PLEX → MP3 → GARMIN"),
+                        ),
+                ),
             )
+            .child(navigation)
             .when(self.usb_enabled, |shell| shell.child(watch_card))
-            .child(if compact {
+            .child(
                 div()
                     .id("content")
                     .flex_1()
                     .overflow_y_scroll()
-                    .child(content)
-            } else {
-                div().id("content").overflow_y_scroll().child(content)
-            })
+                    .child(content),
+            )
+            .when(
+                self.page == Page::Playlists && self.watch_progress.is_some(),
+                |shell| shell.child(transfer_details),
+            )
             .when(
                 self.status != "Ready to export."
                     && self.status != "Connect your Plex account to get started.",

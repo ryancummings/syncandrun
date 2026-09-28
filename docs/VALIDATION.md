@@ -1,5 +1,23 @@
 # Validation
 
+## Transfer details and page navigation (2026-09-27)
+
+The desktop now has Playlists, Watch music, and Settings tabs. Watch transfer
+details stay below the playlist page: verified tracks and bytes, estimated
+size, average verified-byte rate, elapsed time, and an estimated time left.
+After an item is removed from watch Music, the app reloads the remaining items
+automatically. A failed reload says so and offers Refresh watch music.
+
+Two new synthetic tests cover partly overlapping shared-track playlists and
+cleanup after an upload fails during the second playlist. The workspace has 32
+passing core tests. The isolated native GUI passed the Settings, folder-picker
+export, confirmed library purge, and default-library confirmation flows on a
+physical Xwayland session.
+An isolated window was also inspected floating at 1100 × 850, where a Settings
+tab click landed correctly. These UI checks did not use the watch. The real app
+was opened as a floating window for manual inspection; the revised progress
+display and automatic watch-list reload have not yet been checked on hardware.
+
 ## Watch music management and shared tracks (2026-09-27)
 
 The updated CLI replaced recognized content inside Music on a Forerunner 955
