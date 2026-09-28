@@ -19,7 +19,7 @@ jobs:
       - run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - run: cargo build --locked --workspace
       - run: python3 scripts/native-smoke.py
-      - run: python3 scripts/package-linux.py --skip-build
+      - run: python3 scripts/package-linux.py
       - run: tar -tzf build/linux/SyncAndRun-*-linux-x86_64.tar.gz | head -n 20
       - run: |
           package_dir=$(find build/linux -maxdepth 1 -type d -name 'SyncAndRun-*-linux-x86_64' | head -n 1)
