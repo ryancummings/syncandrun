@@ -786,21 +786,21 @@ fn button(
         .py_2()
         .rounded_md()
         .border_1()
-        .border_color(rgb(0x38443d))
-        .bg(rgb(if enabled { 0x223c31 } else { 0x202621 }))
-        .text_color(rgb(if enabled { 0xe9f5ed } else { 0x7b877f }))
+        .border_color(rgb(0x48453d))
+        .bg(rgb(if enabled { 0x34312a } else { 0x302e28 }))
+        .text_color(rgb(if enabled { 0xf1ede4 } else { 0x918e85 }))
         .when(enabled, |d| {
-            d.cursor_pointer().hover(|s| s.bg(rgb(0x315843)))
+            d.cursor_pointer().hover(|s| s.bg(rgb(0x484138)))
         })
         .child(label.into())
 }
 fn panel() -> Div {
     div()
         .p_5()
-        .rounded_lg()
+        .rounded_sm()
         .border_1()
-        .border_color(rgb(0x31443a))
-        .bg(rgb(0x18251e))
+        .border_color(rgb(0x3b3932))
+        .bg(rgb(0x25241f))
 }
 fn data_size(bytes: u64) -> String {
     if bytes >= 1_000_000 {
@@ -855,7 +855,7 @@ impl Render for Desktop {
             .child(
                 div()
                     .text_sm()
-                    .text_color(rgb(0xa8cbb4))
+                    .text_color(rgb(0xc6c0b3))
                     .child(self.watch_status.clone()),
             );
         for (i, watch) in self.watches.iter().enumerate() {
@@ -1028,14 +1028,14 @@ impl Render for Desktop {
                         .text_color(rgb(if self.connected { 0xa8d6b5 } else { 0xd8b980 }))
                         .child(self.connection_status.clone()),
                 )
-                .child(div().text_sm().text_color(rgb(0x91a69a)).child("Address"))
+                .child(div().text_sm().text_color(rgb(0xaaa79d)).child("Address"))
                 .child(div().text_sm().truncate().child(server_address.to_owned()))
-                .child(div().text_sm().text_color(rgb(0x91a69a)).child("Server ID"))
+                .child(div().text_sm().text_color(rgb(0xaaa79d)).child("Server ID"))
                 .child(div().text_sm().truncate().child(server_id.to_owned()))
                 .child(
                     div()
                         .text_sm()
-                        .text_color(rgb(0x91a69a))
+                        .text_color(rgb(0xaaa79d))
                         .child(format!("Plex version · {server_version}")),
                 )
                 .child(
@@ -1053,9 +1053,9 @@ impl Render for Desktop {
                     .w(px(170.))
                     .p_3()
                     .rounded_md()
-                    .bg(rgb(0x22382b))
+                    .bg(rgb(0x302c24))
                     .child(div().text_2xl().child(value))
-                    .child(div().text_sm().text_color(rgb(0xa8cbb4)).child(label))
+                    .child(div().text_sm().text_color(rgb(0xc6c0b3)).child(label))
             };
             let statistics = if compact {
                 div()
@@ -1090,8 +1090,8 @@ impl Render for Desktop {
                 .when(!compact, |card| card.h(px(410.)))
                 .child(div().text_xl().child("Plex music library"))
                 .child(div().text_lg().child(library_name.to_owned()))
-                .child(div().text_sm().text_color(rgb(0x91a69a)).child(format!("Library ID · {library_id}")))
-                .child(div().text_sm().text_color(rgb(0x9fb8a7)).child(
+                .child(div().text_sm().text_color(rgb(0xaaa79d)).child(format!("Library ID · {library_id}")))
+                .child(div().text_sm().text_color(rgb(0xb8b3a8)).child(
                     "SyncAndRun reads playlists and tracks from Plex. It does not change your Plex library."
                 ))
                 .child(statistics);
@@ -1117,14 +1117,14 @@ impl Render for Desktop {
                 .unwrap_or_else(|| "No library folder selected".into());
             let mut management = panel().flex().flex_col().gap_3()
                 .child(div().text_xl().child("Export folder on this computer"))
-                .child(div().text_color(rgb(0xa8cbb4)).child(folder))
+                .child(div().text_color(rgb(0xc6c0b3)).child(folder))
                 .child(button("folder", "Change export folder", active).on_click(
                     cx.listener(|view, _, _, cx| view.choose_folder(cx))
                 ))
-                .child(div().text_sm().text_color(rgb(0x9fb8a7)).child(
+                .child(div().text_sm().text_color(rgb(0xb8b3a8)).child(
                     "Each export creates a folder and playlist file for every selected playlist. Later exports update files made by SyncAndRun. They remove old files only if you did not change them. Your other files stay."
                 ))
-                .child(div().text_sm().text_color(rgb(0x9fb8a7)).child(
+                .child(div().text_sm().text_color(rgb(0xb8b3a8)).child(
                     "After copying music to your watch, you can clear unchanged files made by SyncAndRun. Changed and unrelated files stay."
                 ));
             if self
@@ -1146,7 +1146,7 @@ impl Render for Desktop {
                         .child(div().text_2xl().child("Settings"))
                         .child(
                             div()
-                                .text_color(rgb(0x9fb8a7))
+                                .text_color(rgb(0xb8b3a8))
                                 .child("Connection and library details."),
                         ),
                 )
@@ -1162,13 +1162,14 @@ impl Render for Desktop {
                         .gap_4()
                         .w(px(540.))
                         .child(div().text_xl().child("Connect Plex"))
-                        .child(div().text_color(rgb(0x9fb8a7)).child(
+                        .child(div().text_color(rgb(0xb8b3a8)).child(
                             "Choose your Plex playlists and make MP3 files for your Garmin watch.",
                         ))
                         .child(
                             button("login", "Sign in with Plex →", active)
-                                .bg(rgb(0x21825a))
-                                .border_color(rgb(0x4caa78))
+                                .bg(rgb(0xbd8338))
+                                .border_color(rgb(0xe0a454))
+                                .text_color(rgb(0x171510))
                                 .on_click(cx.listener(|view, _, _, cx| {
                                     view.sign_in();
                                     cx.notify();
@@ -1204,8 +1205,8 @@ impl Render for Desktop {
                 );
                 let item = button(("playlist", i), label, active && selectable)
                     .w_full()
-                    .bg(rgb(if checked { 0x28543e } else { 0x20352a }))
-                    .border_color(rgb(if checked { 0x69b989 } else { 0x31443a }))
+                    .bg(rgb(if checked { 0x594529 } else { 0x34312a }))
+                    .border_color(rgb(if checked { 0xd7a05a } else { 0x3b3932 }))
                     .on_click(cx.listener(move |view, _, _, cx| {
                         if !view.busy && selectable {
                             if !view.selected.remove(&id) {
@@ -1251,14 +1252,14 @@ impl Render for Desktop {
                 .child(
                     div()
                         .text_sm()
-                        .text_color(rgb(0xa8cbb4))
+                        .text_color(rgb(0xc6c0b3))
                         .child(format!("Selected · {}", selected.len())),
                 )
                 .child(syncing)
                 .child(
                     div()
                         .text_sm()
-                        .text_color(rgb(0xa8cbb4))
+                        .text_color(rgb(0xc6c0b3))
                         .child(format!("Available · {}", available_count)),
                 )
                 .child(available);
@@ -1273,8 +1274,8 @@ impl Render for Desktop {
                         format!("{}{}", bitrate, if selected { " ✓" } else { "" }),
                         active,
                     )
-                    .bg(rgb(if selected { 0x28543e } else { 0x20352a }))
-                    .border_color(rgb(if selected { 0x69b989 } else { 0x31443a }))
+                    .bg(rgb(if selected { 0x594529 } else { 0x34312a }))
+                    .border_color(rgb(if selected { 0xd7a05a } else { 0x3b3932 }))
                     .on_click(cx.listener(move |view, _, _, cx| {
                         if !view.busy {
                             view.bitrate = bitrate;
@@ -1298,35 +1299,51 @@ impl Render for Desktop {
                     )
                 })
                 .unwrap_or_else(|| "Choose a library folder".into());
+            let can_export = active
+                && !self.selected.is_empty()
+                && if self.direct {
+                    self.selected_watch.is_some() && !self.scanning
+                } else {
+                    self.destination.is_some()
+                };
             let export_panel = panel().flex().flex_col().gap_4()
                 .child(div().text_xl().child("Transfer settings"))
-                .child(div().p_3().rounded_md().border_1().border_color(rgb(0x42614d)).flex().flex_col().gap_2()
-                    .child(div().text_sm().text_color(rgb(0xa8cbb4)).child("1. Choose where to send music"))
+                .child(div().p_3().rounded_md().border_1().border_color(rgb(0x4f4a3f)).flex().flex_col().gap_2()
+                    .child(div().text_sm().text_color(rgb(0xc6c0b3)).child("1. Choose where to send music"))
                     .children([(true, "Direct to watch"), (false, "Export to folder")].into_iter().map(|(direct, label)| {
                         button(if direct { "direct-mode" } else { "folder-mode" }, format!("{}{}", if self.direct == direct { "✓ " } else { "○ " }, label), active)
-                            .bg(rgb(if self.direct == direct { 0x24543b } else { 0x203027 }))
+                            .bg(rgb(if self.direct == direct { 0x594529 } else { 0x302e28 }))
                             .on_click(cx.listener(move |v, _, _, cx| { if !v.busy { v.direct = direct; v.output = None; v.save_preferences(); cx.notify(); } }))
                     })))
-                .when(self.direct, |panel| panel.child(div().p_3().rounded_md().border_1().border_color(rgb(0x42614d)).flex().flex_col().gap_2()
-                    .child(div().text_sm().text_color(rgb(0xa8cbb4)).child("2. Choose what happens to music on the watch"))
-                    .child(button("add-watch-music", format!("{} Add playlists. Keep old music.", if self.replace_watch_music { "○" } else { "✓" }), active).bg(rgb(if self.replace_watch_music { 0x203027 } else { 0x24543b })).on_click(cx.listener(|v, _, _, cx| { v.replace_watch_music = false; cx.notify(); })))
-                    .child(button("replace-watch-music", format!("{} Replace old music with these playlists.", if self.replace_watch_music { "✓" } else { "○" }), active).bg(rgb(if self.replace_watch_music { 0x24543b } else { 0x203027 })).on_click(cx.listener(|v, _, _, cx| { v.replace_watch_music = true; cx.notify(); })))
-                    .child(div().text_sm().text_color(rgb(0xa8cbb4)).child("Replace sends and checks new music first. Then it deletes old music from the watch’s Music folder. The watch needs space for both copies until deletion ends."))))
+                .when(self.direct, |panel| panel.child(div().p_3().rounded_md().border_1().border_color(rgb(0x4f4a3f)).flex().flex_col().gap_2()
+                    .child(div().text_sm().text_color(rgb(0xc6c0b3)).child("2. Choose what happens to music on the watch"))
+                    .child(button("add-watch-music", format!("{} Add playlists. Keep old music.", if self.replace_watch_music { "○" } else { "✓" }), active).bg(rgb(if self.replace_watch_music { 0x302e28 } else { 0x594529 })).on_click(cx.listener(|v, _, _, cx| { v.replace_watch_music = false; cx.notify(); })))
+                    .child(button("replace-watch-music", format!("{} Replace old music with these playlists.", if self.replace_watch_music { "✓" } else { "○" }), active).bg(rgb(if self.replace_watch_music { 0x594529 } else { 0x302e28 })).on_click(cx.listener(|v, _, _, cx| { v.replace_watch_music = true; cx.notify(); })))
+                    .child(div().text_sm().text_color(rgb(0xc6c0b3)).child("Replace sends and checks new music first. Then it deletes old music from the watch’s Music folder. The watch needs space for both copies until deletion ends."))))
                 .child(div().flex().flex_col().gap_2()
-                    .child(div().text_sm().text_color(rgb(0xa8cbb4)).child("MP3 quality"))
+                    .child(div().text_sm().text_color(rgb(0xc6c0b3)).child("MP3 quality"))
                     .child(qualities)
-                    .child(div().text_sm().text_color(rgb(0x91a69a)).child("192 kbps is a good balance of sound and size.")))
-                .child(div().p_4().rounded_md().bg(rgb(0x22382b))
+                    .child(div().text_sm().text_color(rgb(0xaaa79d)).child("192 kbps is a good balance of sound and size.")))
+                .child(div().p_4().rounded_md().bg(rgb(0x302c24))
                     .child(div().text_lg().child(format!("{} playlists  ·  {} tracks", selected.len(), tracks)))
-                    .child(div().text_sm().text_color(rgb(0xa8cbb4)).child(format!("About {:.0} MB at {} kbps", estimate, self.bitrate))))
+                    .child(div().text_sm().text_color(rgb(0xc6c0b3)).child(format!("About {:.0} MB at {} kbps", estimate, self.bitrate))))
                 .when(!self.direct, |panel| panel.child(div().flex().flex_col().gap_2()
-                    .child(div().text_sm().text_color(rgb(0xa8cbb4)).child("Music library folder"))
+                    .child(div().text_sm().text_color(rgb(0xc6c0b3)).child("Music library folder"))
                     .child(div().text_sm().child(folder))
                     .child(button("main-folder", "Change folder", active).on_click(
                         cx.listener(|view, _, _, cx| view.choose_folder(cx))
                     ))))
-                .child(div().text_sm().text_color(rgb(0x91a69a))
-                    .child(if self.direct { "Keep the watch connected until the transfer finishes." } else { "Copy the exported playlist folders into your watch’s Music folder with an MTP app." }));
+                .child(div().text_sm().text_color(rgb(0xaaa79d))
+                    .child(if self.direct { "Keep the watch connected until the transfer finishes." } else { "Copy the exported playlist folders into your watch’s Music folder with an MTP app." }))
+                .child(button("export", if self.direct { "Transfer to watch →" } else { "Export music →" }, can_export)
+                    .w_full()
+                    .bg(rgb(if can_export { 0xbd8338 } else { 0x302e28 }))
+                    .text_color(rgb(if can_export { 0x171510 } else { 0x918e85 }))
+                    .border_color(rgb(if can_export { 0xe0a454 } else { 0x48453d }))
+                    .on_click(cx.listener(|v, _, window, cx| {
+                        v.create_files(window, cx);
+                        cx.notify();
+                    })));
             let export_panel = if compact {
                 export_panel.w_full()
             } else {
@@ -1344,7 +1361,7 @@ impl Render for Desktop {
                         .flex_col()
                         .gap_1()
                         .child(div().text_2xl().child("Your music"))
-                        .child(div().text_color(rgb(0x9fb8a7)).child(if compact {
+                        .child(div().text_color(rgb(0xb8b3a8)).child(if compact {
                             "Choose playlists, then scroll down for transfer settings."
                         } else {
                             "Choose playlists and MP3 quality, then send them to your watch."
@@ -1389,48 +1406,18 @@ impl Render for Desktop {
                             .h(px(10.))
                             .w_full()
                             .rounded_md()
-                            .bg(rgb(0x263b2d))
+                            .bg(rgb(0x3b3932))
                             .child(
                                 div()
                                     .h_full()
                                     .w(relative(fraction))
                                     .rounded_md()
-                                    .bg(rgb(0x60bc83)),
+                                    .bg(rgb(0xd7a05a)),
                             ),
                     );
             }
         }
         let mut footer = div().flex().gap_3();
-        if self.connected
-            && self.page == Page::Playlists
-            && self.login.is_none()
-            && self.choice.is_none()
-        {
-            let can_export = active
-                && !self.selected.is_empty()
-                && if self.direct {
-                    self.selected_watch.is_some() && !self.scanning
-                } else {
-                    self.destination.is_some()
-                };
-            footer = footer.child(
-                button(
-                    "export",
-                    if self.direct {
-                        "Transfer to watch →"
-                    } else {
-                        "Export music →"
-                    },
-                    can_export,
-                )
-                .bg(rgb(if can_export { 0x21825a } else { 0x202621 }))
-                .border_color(rgb(if can_export { 0x4caa78 } else { 0x38443d }))
-                .on_click(cx.listener(|v, _, window, cx| {
-                    v.create_files(window, cx);
-                    cx.notify();
-                })),
-            );
-        }
         if self.busy {
             footer = footer.child(button("cancel", "Cancel", true).on_click(cx.listener(
                 |v, _, _, cx| {
@@ -1511,7 +1498,7 @@ impl Render for Desktop {
                 .child(
                     div()
                         .text_sm()
-                        .text_color(rgb(0x91a69a))
+                        .text_color(rgb(0xaaa79d))
                         .child("Rate counts verified MP3 bytes and updates after each track."),
                 )
                 .child(
@@ -1519,13 +1506,13 @@ impl Render for Desktop {
                         .h(px(8.))
                         .w_full()
                         .rounded_md()
-                        .bg(rgb(0x263b2d))
+                        .bg(rgb(0x3b3932))
                         .child(
                             div()
                                 .h_full()
                                 .w(relative(fraction))
                                 .rounded_md()
-                                .bg(rgb(0x60bc83)),
+                                .bg(rgb(0xd7a05a)),
                         ),
                 );
         }
@@ -1545,8 +1532,8 @@ impl Render for Desktop {
                     format!("{}{}", if selected { "✓ " } else { "" }, label),
                     enabled,
                 )
-                .bg(rgb(if selected { 0x24543b } else { 0x203027 }))
-                .border_color(rgb(if selected { 0x60bc83 } else { 0x31443a }))
+                .bg(rgb(if selected { 0x594529 } else { 0x302e28 }))
+                .border_color(rgb(if selected { 0xd7a05a } else { 0x3b3932 }))
                 .on_click(cx.listener(move |v, _, _, cx| {
                     if v.modal.is_none()
                         && !v.busy
@@ -1564,9 +1551,9 @@ impl Render for Desktop {
         let mut shell = div()
             .size_full()
             .relative()
-            .bg(rgb(0x101a15))
-            .text_color(rgb(0xe7eee9))
-            .font_family("DejaVu Sans")
+            .bg(rgb(0x1b1a17))
+            .text_color(rgb(0xeeeae0))
+            .font_family("IBM Plex Sans")
             .p_8()
             .flex()
             .flex_col()
@@ -1577,11 +1564,17 @@ impl Render for Desktop {
                         .flex()
                         .flex_col()
                         .gap_1()
-                        .child(div().text_3xl().child("SyncAndRun"))
+                        .child(
+                            div()
+                                .text_3xl()
+                                .font_weight(FontWeight::BLACK)
+                                .child("SYNCANDRUN"),
+                        )
                         .child(
                             div()
                                 .text_sm()
-                                .text_color(rgb(0x9acdb1))
+                                .text_color(rgb(0xd7a05a))
+                                .font_family("IBM Plex Mono")
                                 .child("PLEX → MP3 → GARMIN"),
                         ),
                 ),
@@ -1608,12 +1601,25 @@ impl Render for Desktop {
                         div()
                             .p_4()
                             .rounded_md()
-                            .bg(rgb(0x1c2921))
+                            .bg(rgb(0x2b2923))
                             .child(self.status.clone()),
                     )
                 },
             )
-            .child(footer);
+            .child(footer)
+            .child(
+                div()
+                    .pt_3()
+                    .border_t_1()
+                    .border_color(rgb(0x3b3932))
+                    .flex()
+                    .justify_between()
+                    .text_xs()
+                    .text_color(rgb(0xaaa79d))
+                    .font_family("IBM Plex Mono")
+                    .child("SYNCANDRUN  /  PERSONAL MUSIC EXPORT")
+                    .child("GPL-3.0"),
+            );
         if let Some(modal) = &self.modal {
             let (title, detail, confirm): (&str, String, &str) = match modal {
                 Modal::CreateDefault(_) => (
@@ -1644,7 +1650,7 @@ impl Render for Desktop {
                     .right_0()
                     .bottom_0()
                     .left_0()
-                    .bg(rgba(0x07110bdc))
+                    .bg(rgba(0x11100edc))
                     .flex()
                     .items_center()
                     .justify_center()
@@ -1657,15 +1663,16 @@ impl Render for Desktop {
                             .flex_col()
                             .gap_4()
                             .child(div().text_2xl().child(title))
-                            .child(div().text_color(rgb(0xa8cbb4)).child(detail))
+                            .child(div().text_color(rgb(0xc6c0b3)).child(detail))
                             .child(
                                 div()
                                     .flex()
                                     .gap_3()
                                     .child(
                                         button("modal-confirm", confirm, true)
-                                            .bg(rgb(0x21825a))
-                                            .border_color(rgb(0x4caa78))
+                                            .bg(rgb(0xbd8338))
+                                            .border_color(rgb(0xe0a454))
+                                            .text_color(rgb(0x171510))
                                             .on_click(cx.listener(|view, _, _, cx| {
                                                 view.confirm_modal();
                                                 cx.notify();
