@@ -38,6 +38,7 @@ def main():
         'libmp3lame', '-b:a', '192k', '-f', 'mp3', 'pipe:1'])
 
     class Plex(smoke.Plex):
+        playlist_title_prefix = 'Shared test playlist' if args.shared_tracks else 'Separate test playlist'
         def do_GET(self):
             if '/start.mp3' in self.path:
                 assert self.headers.get('X-Plex-Token') == 'synthetic-server-token'

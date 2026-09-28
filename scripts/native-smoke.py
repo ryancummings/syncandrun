@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class Plex(http.server.BaseHTTPRequestHandler):
     playlist_count = 2
+    playlist_title_prefix = 'Synthetic playlist'
     def log_message(self, *_):
         pass
 
@@ -40,7 +41,7 @@ class Plex(http.server.BaseHTTPRequestHandler):
             items = None
             body = json.dumps(dict(MediaContainer=dict(size=0, totalSize=42))).encode()
         elif path == '/playlists':
-            items = [dict(ratingKey=str(i * 10), playlistType='audio', title=f'Synthetic playlist {i}', leafCount=3, duration=540000)
+            items = [dict(ratingKey=str(i * 10), playlistType='audio', title=f'{self.playlist_title_prefix} {i}', leafCount=3, duration=540000)
                      for i in range(1, self.playlist_count + 1)]
         elif path.startswith('/playlists/'):
             track = dict(ratingKey='1', type='track', librarySectionID=1, title='Synthetic song', grandparentTitle='Test artist', parentTitle='Test album', duration=180000)
