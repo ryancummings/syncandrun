@@ -242,6 +242,7 @@ impl Desktop {
                         if view.usb_enabled
                             && !view.busy
                             && !view.scanning
+                            && view.watches.is_empty()
                             && view.last_scan.elapsed() >= Duration::from_secs(8)
                         {
                             view.scan_watches();
