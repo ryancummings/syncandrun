@@ -34,6 +34,10 @@ enum Event {
     WatchDiagnostics(WatchDiagnostics),
     SourceAvailability([bool; 3]),
     Watches(Result<Discovery, String>),
+    WatchPresence {
+        observed: Vec<String>,
+        connected: Result<Vec<String>, String>,
+    },
     MusicItems(Vec<device::MusicItem>),
     MusicRemoved {
         count: usize,
@@ -122,6 +126,8 @@ struct Desktop {
     replace_watch_music: bool,
     scanning: bool,
     last_scan: Instant,
+    presence_checking: bool,
+    last_presence_check: Instant,
     last_monitor_tick: Instant,
     monitor_started: Instant,
     direct: bool,
@@ -240,6 +246,8 @@ impl Desktop {
             replace_watch_music: false,
             scanning: false,
             last_scan: Instant::now(),
+            presence_checking: false,
+            last_presence_check: Instant::now(),
             last_monitor_tick: Instant::now(),
             monitor_started: Instant::now(),
             direct: true,
@@ -353,6 +361,15 @@ impl Desktop {
                             view.scan_watches();
                             changed = true;
                         }
+                        if view.usb_enabled
+                            && !view.busy
+                            && !view.scanning
+                            && !view.presence_checking
+                            && !view.watches.is_empty()
+                            && view.last_presence_check.elapsed() >= Duration::from_secs(2)
+                        {
+                            view.check_watch_presence();
+                        }
                         if changed {
                             cx.notify();
                         }
@@ -376,6 +393,20 @@ impl Desktop {
         std::thread::spawn(move || {
             let result = device::discover_with_unavailable().map_err(|e| e.to_string());
             let _ = sender.send(Event::Watches(result));
+        });
+    }
+    fn check_watch_presence(&mut self) {
+        self.presence_checking = true;
+        self.last_presence_check = Instant::now();
+        let watches = self.watches.clone();
+        let observed = watches.iter().map(Watch::key).collect();
+        let sender = self.sender.clone();
+        std::thread::spawn(move || {
+            let connected = device::connected_keys(&watches).map_err(|error| error.to_string());
+            let _ = sender.send(Event::WatchPresence {
+                observed,
+                connected,
+            });
         });
     }
     fn run_watch_diagnostics(&mut self) {
@@ -712,6 +743,49 @@ impl Desktop {
                         }
                         self.watch_status = error;
                     }
+                }
+                return;
+            }
+            Event::WatchPresence {
+                observed,
+                connected,
+            } => {
+                self.presence_checking = false;
+                if self.busy
+                    || self.scanning
+                    || self.watches.iter().map(Watch::key).collect::<Vec<_>>() != observed
+                {
+                    return;
+                }
+                if let Ok(connected) = connected
+                    && connected.len() < self.watches.len()
+                {
+                    let connected: HashSet<_> = connected.into_iter().collect();
+                    self.watches
+                        .retain(|watch| connected.contains(&watch.key()));
+                    if !self
+                        .watches
+                        .iter()
+                        .any(|watch| Some(watch.key()) == self.selected_watch)
+                    {
+                        self.selected_watch = if self.watches.len() == 1 {
+                            Some(self.watches[0].key())
+                        } else {
+                            None
+                        };
+                        self.music_items.clear();
+                        self.watch_music_pending = false;
+                        if self.selected_watch.is_none() && self.page == Page::WatchMusic {
+                            self.page = Page::Playlists;
+                        }
+                    }
+                    self.watch_status = if self.watches.is_empty() {
+                        "Garmin device disconnected. Reconnect it or select Scan for device."
+                    } else {
+                        "Garmin device ready for music transfer"
+                    }
+                    .into();
+                    self.last_scan = Instant::now();
                 }
                 return;
             }
@@ -1331,7 +1405,11 @@ impl Render for Desktop {
                         .flex_col()
                         .gap_1()
                         .child(div().text_xs().text_color(rgb(0xd7a05a)).child(
-                            "Scanning for Garmin devices · detection may take about 30 seconds",
+                            if self.scanning {
+                                "Scanning for Garmin devices · detection may take about 30 seconds"
+                            } else {
+                                "Waiting for a Garmin device · select Scan for device to check now"
+                            },
                         ))
                         .child(
                             div()

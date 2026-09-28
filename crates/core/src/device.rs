@@ -47,6 +47,11 @@ pub fn discover_with_unavailable() -> Result<Discovery> {
     usb::discover()
 }
 
+/// Check USB presence without opening or claiming the watch's MTP interface.
+pub fn connected_keys(watches: &[Watch]) -> Result<Vec<String>> {
+    usb::connected_keys(watches)
+}
+
 #[derive(Clone, Debug)]
 pub struct TransferProgress {
     pub tracks: Progress,

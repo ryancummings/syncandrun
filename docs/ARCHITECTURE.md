@@ -52,6 +52,9 @@ A process mutex serializes discovery and transfer sessions. Worker threads
 poll for Garmin USB devices, identify model/firmware/storage, and release the
 connection after each scan. Transfers reopen and check the selected device’s
 identity before writing. Raw serial numbers are not displayed or persisted.
+While a watch is listed and the app is idle, a worker checks raw USB presence
+every two seconds without opening its MTP interface. A missing device is removed
+from the UI; full MTP discovery resumes while no usable watch is listed.
 
 Provider MP3 streams pass through the same tag/validation writer as folder exports,
 into a bounded 256 MiB memory buffer. MTP needs the exact length before upload;

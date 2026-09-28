@@ -19,10 +19,14 @@ transfer or on-watch playback was claimed. A disposable profile and generated
 audio were used. The native Mac CLI exported that audio as an MP3 plus M3U8
 playlist. No saved personal connection or real music library was opened.
 
-Forty core tests and the macOS diagnostic test pass; workspace build, formatting,
+Forty-one core tests and the macOS diagnostic test pass; workspace build, formatting,
 and strict Clippy pass. The core suite includes fake Plex/Jellyfin services,
 encrypted-profile migration, and fake MTP transfer/rollback checks. A physical
 Mac transfer and post-disconnect watch playback remain separate acceptance checks.
+The desktop now also checks raw USB presence while idle so it can clear a
+disconnected watch without repeatedly opening MTP. A synthetic two-watch test
+covers dropping only the missing device. The UI transition still needs a
+physical unplug check on macOS and Linux.
 
 ## Local folder source (2026-09-28)
 
