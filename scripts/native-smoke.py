@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class Plex(http.server.BaseHTTPRequestHandler):
     playlist_count = 2
+    playlist_title_prefix = 'Synthetic playlist'
     def log_message(self, *_):
         pass
 
@@ -40,7 +41,7 @@ class Plex(http.server.BaseHTTPRequestHandler):
             items = None
             body = json.dumps(dict(MediaContainer=dict(size=0, totalSize=42))).encode()
         elif path == '/playlists':
-            items = [dict(ratingKey=str(i * 10), playlistType='audio', title=f'Synthetic playlist {i}', leafCount=3, duration=540000)
+            items = [dict(ratingKey=str(i * 10), playlistType='audio', title=f'{self.playlist_title_prefix} {i}', leafCount=3, duration=540000)
                      for i in range(1, self.playlist_count + 1)]
         elif path.startswith('/playlists/'):
             track = dict(ratingKey='1', type='track', librarySectionID=1, title='Synthetic song', grandparentTitle='Test artist', parentTitle='Test album', duration=180000)
@@ -113,18 +114,20 @@ def run(args):
             assert 'Connected' in result.stdout
             print('Native CLI smoke passed: profile, playlists, refresh, estimates, three export routes, backup restore.')
             if args.gui:
+                (profile / 'desktop-preferences.json').write_text(json.dumps(dict(
+                    selected=['plex:playlist:10', 'plex:playlist:20'], bitrate=192, direct=False)))
                 if args.gui_playlists:
                     Plex.playlist_count = args.gui_playlists
                     (profile / 'desktop-preferences.json').write_text(json.dumps(dict(
                         selected=[f'plex:playlist:{i * 10}' for i in range(1, (args.gui_selected if args.gui_selected is not None else args.gui_playlists) + 1)],
-                        bitrate=192)))
+                        bitrate=192, direct=False)))
                 with (root / 'gui.log').open('w') as log:
                     gui_env = os.environ.copy()
                     if args.gui_default_export:
                         synthetic_home = root / 'home'
                         synthetic_home.mkdir()
                         gui_env['HOME'] = str(synthetic_home)
-                    app = subprocess.Popen([str(gui), '--profile', str(profile)], stdout=log, stderr=log, env=gui_env)
+                    app = subprocess.Popen([str(gui), '--profile', str(profile), '--no-usb'], stdout=log, stderr=log, env=gui_env)
                     try:
                         if args.gui_manual:
                             print(f'Synthetic GUI process {app.pid} ready for inspection.', flush=True)
@@ -136,20 +139,27 @@ def run(args):
                         window = None
                         for _ in range(100):
                             assert app.poll() is None, 'Native app exited before window appeared'
-                            result = subprocess.run(['xdotool', 'search', '--onlyvisible', '--name', '^SyncAndRun$'], capture_output=True, text=True)
+                            result = subprocess.run(['xdotool', 'search', '--onlyvisible', '--pid', str(app.pid)], capture_output=True, text=True)
                             if result.returncode == 0:
                                 window = result.stdout.strip().splitlines()[0]
                                 break
                             time.sleep(.1)
                         assert window, 'Native window did not appear'
                         time.sleep(5)
+                        geometry = dict(line.split('=', 1) for line in subprocess.check_output(
+                            ['xdotool', 'getwindowgeometry', '--shell', window], text=True).splitlines())
+                        window_height = int(geometry['HEIGHT'])
+                        footer_y = window_height - 55
+                        confirm_y = window_height // 2 + 62
                         if args.gui_settings or args.gui_export:
-                            subprocess.run(['xdotool', 'mousemove', '--window', window, '990', '70', 'click', '1'], check=True)
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, '345', '149', 'click', '1'], check=True)
                             time.sleep(.5)
                         if args.gui_export:
                             gui_destination = root / 'gui-exports'
                             gui_destination.mkdir()
-                            subprocess.run(['xdotool', 'mousemove', '--window', window, '100', '535', 'click', '1'], check=True)
+                            if window_height < 1000:
+                                subprocess.run(['xdotool', 'mousemove', '--window', window, '600', '520', 'click', '--repeat', '5', '--delay', '80', '5'], check=True)
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, '120', str(496 if window_height < 1000 else 820), 'click', '1'], check=True)
                             time.sleep(2)
                             subprocess.run(['xdotool', 'key', 'alt+Home'], check=True)
                             time.sleep(.5)
@@ -163,38 +173,39 @@ def run(args):
                                 geometry = dict(line.split('=', 1) for line in subprocess.check_output(['xdotool', 'getwindowgeometry', '--shell', dialog], text=True).splitlines())
                                 subprocess.run(['xdotool', 'mousemove', '--window', dialog, str(int(geometry['WIDTH']) - 90), str(int(geometry['HEIGHT']) - 25), 'click', '1'], check=True)
                             time.sleep(1)
-                            subprocess.run(['xdotool', 'mousemove', '--window', window, '990', '70', 'click', '1'], check=True)
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, '80', '149', 'click', '1'], check=True)
                         # Exercise playlist movement before exporting.
                         if not args.gui_settings:
-                            subprocess.run(['xdotool', 'mousemove', '--window', window, '55', '471', 'click', '1'], check=True)
-                            subprocess.run(['xdotool', 'mousemove', '--window', window, '150', '200', 'click', '1'], check=True)
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, '120', '454', 'click', '1'], check=True)
+                            if not args.gui_export:
+                                subprocess.run(['xdotool', 'mousemove', '--window', window, '120', '454', 'click', '1'], check=True)
                         time.sleep(.5)
                         if args.gui_default_export:
                             default_library = synthetic_home / 'Music' / 'SyncAndRun'
                             assert not default_library.exists(), 'Default library existed before confirmation'
-                            subprocess.run(['xdotool', 'mousemove', '--window', window, '160', '805', 'click', '1'], check=True)
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, '160', str(footer_y), 'click', '1'], check=True)
                             time.sleep(.5)
                             assert not default_library.exists(), 'Default library was created before confirmation'
                             if args.prompt_screenshot:
-                                subprocess.run(['import', '-window', 'root', str(args.prompt_screenshot)], check=True)
-                            subprocess.run(['xdotool', 'mousemove', '--window', window, '540', '445', 'click', '1'], check=True)
+                                subprocess.run(['import', '-window', window, str(args.prompt_screenshot)], check=True)
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, '465', str(confirm_y), 'click', '1'], check=True)
                             for _ in range(100):
                                 if (default_library / '.syncandrun-files.json').exists():
                                     break
                                 time.sleep(.1)
                             if len(list(default_library.rglob('*.mp3'))) != 3 and args.screenshot:
-                                subprocess.run(['import', '-window', 'root', str(args.screenshot)], check=True)
+                                subprocess.run(['import', '-window', window, str(args.screenshot)], check=True)
                             assert len(list(default_library.rglob('*.mp3'))) == 3, 'Confirmed default library export failed'
                             print('Native GPUI default library confirmation and export passed.')
                         if args.gui_export:
-                            subprocess.run(['xdotool', 'mousemove', '--window', window, '160', '805', 'click', '1'], check=True)
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, '160', str(footer_y), 'click', '1'], check=True)
                             for _ in range(100):
                                 outputs = list(gui_destination.rglob('*.mp3'))
                                 if len(outputs) == 3:
                                     break
                                 time.sleep(.1)
                             if len(outputs) != 3 and args.screenshot:
-                                subprocess.run(['import', '-window', 'root', str(args.screenshot)], check=True)
+                                subprocess.run(['import', '-window', window, str(args.screenshot)], check=True)
                             assert len(outputs) == 3, 'Desktop export or playlist selection did not complete through the portal picker'
                             assert (gui_destination / '.syncandrun-files.json').exists(), 'Desktop library manifest was not created'
                             preferences = json.loads((profile / 'desktop-preferences.json').read_text())
@@ -203,18 +214,21 @@ def run(args):
                             print('Native GPUI export passed through the GTK portal folder picker.')
                             if args.gui_purge:
                                 (gui_destination / 'notes.txt').write_text('keep me')
-                                subprocess.run(['xdotool', 'mousemove', '--window', window, '470', '805', 'click', '1'], check=True)
+                                subprocess.run(['xdotool', 'mousemove', '--window', window, '345', '149', 'click', '1'], check=True)
+                                if window_height < 1000:
+                                    subprocess.run(['xdotool', 'mousemove', '--window', window, '600', '520', 'click', '--repeat', '8', '--delay', '80', '5'], check=True)
+                                subprocess.run(['xdotool', 'mousemove', '--window', window, '130', str(965 if window_height >= 1000 else 550), 'click', '1'], check=True)
                                 time.sleep(.5)
                                 assert len(list(gui_destination.rglob('*.mp3'))) == 3, 'Music was cleared before confirmation'
                                 if args.prompt_screenshot:
-                                    subprocess.run(['import', '-window', 'root', str(args.prompt_screenshot)], check=True)
-                                subprocess.run(['xdotool', 'mousemove', '--window', window, '540', '445', 'click', '1'], check=True)
+                                    subprocess.run(['import', '-window', window, str(args.prompt_screenshot)], check=True)
+                                subprocess.run(['xdotool', 'mousemove', '--window', window, '465', str(confirm_y), 'click', '1'], check=True)
                                 for _ in range(100):
                                     if not (gui_destination / '.syncandrun-files.json').exists():
                                         break
                                     time.sleep(.1)
                                 if list(gui_destination.rglob('*.mp3')) and args.screenshot:
-                                    subprocess.run(['import', '-window', 'root', str(args.screenshot)], check=True)
+                                    subprocess.run(['import', '-window', window, str(args.screenshot)], check=True)
                                 assert not list(gui_destination.rglob('*.mp3')), 'Generated music survived purge'
                                 assert (gui_destination / 'notes.txt').read_text() == 'keep me', 'Purge touched unrelated files'
                                 print('Native GPUI library purge passed after confirmation.')

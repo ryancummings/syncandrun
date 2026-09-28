@@ -63,7 +63,7 @@ pub fn estimate(plan: &[Playlist], bitrate: u16, route: Route) -> Result<Estimat
         .div_ceil(8);
     Ok(Estimate { tracks, bytes })
 }
-fn safe_name(value: &str) -> String {
+pub(crate) fn safe_name(value: &str) -> String {
     let clean: String = value
         .nfc()
         .map(|c| {
@@ -100,7 +100,7 @@ fn unique(base: String, used: &mut HashSet<String>) -> String {
     }
     name
 }
-fn filename(track: &Track, used: &mut HashSet<String>) -> String {
+pub(crate) fn filename(track: &Track, used: &mut HashSet<String>) -> String {
     let hash = format!("{:x}", Sha256::digest(track.id.as_bytes()));
     format!(
         "{}.mp3",
@@ -163,56 +163,7 @@ fn write_track(
             .write(true)
             .create_new(true)
             .open(&temp)?;
-        output.write_all(&id3(track))?;
-        let mut header = [0u8; 10];
-        read_audio(&mut source, &mut header)?;
-        let mut first_audio = header.to_vec();
-        if &header[..3] == b"ID3" {
-            ensure!(
-                [2, 3, 4].contains(&header[3]) && header[6..10].iter().all(|b| b & 128 == 0),
-                "Invalid source ID3 tag"
-            );
-            let mut skip = ((header[6] as usize) << 21)
-                | ((header[7] as usize) << 14)
-                | ((header[8] as usize) << 7)
-                | header[9] as usize;
-            if header[3] == 4 && header[5] & 16 != 0 {
-                skip += 10;
-            }
-            ensure!(skip <= 16 * 1024 * 1024, "Source ID3 tag is too large");
-            let mut buffer = [0u8; 16384];
-            while skip > 0 {
-                check_cancel(cancel)?;
-                let n = skip.min(buffer.len());
-                read_audio(&mut source, &mut buffer[..n])?;
-                skip -= n;
-            }
-            first_audio = vec![0; 4];
-            read_audio(&mut source, &mut first_audio)?;
-        }
-        // MPEG Layer III sync, version, layer, bitrate and sampling frequency fields.
-        ensure!(
-            first_audio[0] == 255
-                && first_audio[1] & 0xe0 == 0xe0
-                && first_audio[1] & 0x18 != 0x08
-                && first_audio[1] & 0x06 == 0x02
-                && first_audio[2] & 0xf0 != 0
-                && first_audio[2] & 0xf0 != 0xf0
-                && first_audio[2] & 0x0c != 0x0c,
-            "Plex returned audio that is not MP3"
-        );
-        output.write_all(&first_audio)?;
-        let mut buffer = [0u8; 65536];
-        loop {
-            check_cancel(cancel)?;
-            let n = source
-                .read(&mut buffer)
-                .map_err(|_| anyhow::anyhow!("Plex audio download was interrupted"))?;
-            if n == 0 {
-                break;
-            }
-            output.write_all(&buffer[..n])?;
-        }
+        write_audio(track, &mut source, &mut output, cancel)?;
         output.sync_all()?;
         fs::rename(&temp, path)?;
         Ok(())
@@ -221,6 +172,65 @@ fn write_track(
         let _ = fs::remove_file(&temp);
     }
     result
+}
+/// Shared tagging and MP3 validation for disk exports and memory-to-MTP transfers.
+pub(crate) fn write_audio(
+    track: &Track,
+    mut source: impl Read,
+    mut output: impl Write,
+    cancel: &AtomicBool,
+) -> Result<()> {
+    output.write_all(&id3(track))?;
+    let mut header = [0u8; 10];
+    read_audio(&mut source, &mut header)?;
+    let mut first_audio = header.to_vec();
+    if &header[..3] == b"ID3" {
+        ensure!(
+            [2, 3, 4].contains(&header[3]) && header[6..10].iter().all(|b| b & 128 == 0),
+            "Invalid source ID3 tag"
+        );
+        let mut skip = ((header[6] as usize) << 21)
+            | ((header[7] as usize) << 14)
+            | ((header[8] as usize) << 7)
+            | header[9] as usize;
+        if header[3] == 4 && header[5] & 16 != 0 {
+            skip += 10;
+        }
+        ensure!(skip <= 16 * 1024 * 1024, "Source ID3 tag is too large");
+        let mut buffer = [0u8; 16384];
+        while skip > 0 {
+            check_cancel(cancel)?;
+            let n = skip.min(buffer.len());
+            read_audio(&mut source, &mut buffer[..n])?;
+            skip -= n;
+        }
+        first_audio = vec![0; 4];
+        read_audio(&mut source, &mut first_audio)?;
+    }
+    // MPEG Layer III sync, version, layer, bitrate and sampling frequency fields.
+    ensure!(
+        first_audio[0] == 255
+            && first_audio[1] & 0xe0 == 0xe0
+            && first_audio[1] & 0x18 != 0x08
+            && first_audio[1] & 0x06 == 0x02
+            && first_audio[2] & 0xf0 != 0
+            && first_audio[2] & 0xf0 != 0xf0
+            && first_audio[2] & 0x0c != 0x0c,
+        "Plex returned audio that is not MP3"
+    );
+    output.write_all(&first_audio)?;
+    let mut buffer = [0u8; 65536];
+    loop {
+        check_cancel(cancel)?;
+        let n = source
+            .read(&mut buffer)
+            .map_err(|_| anyhow::anyhow!("Plex audio download was interrupted"))?;
+        if n == 0 {
+            break;
+        }
+        output.write_all(&buffer[..n])?;
+    }
+    Ok(())
 }
 fn write_new(path: &Path, bytes: &[u8]) -> Result<()> {
     let mut f = OpenOptions::new().write(true).create_new(true).open(path)?;

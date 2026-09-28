@@ -11,7 +11,7 @@ Install Rust using rustup. The repository pins the toolchain and GPUI release.
 On Ubuntu 24.04, install the native build and runtime dependencies:
 
 ```sh
-sudo apt-get install build-essential clang pkg-config libssl-dev \
+sudo apt-get install build-essential clang pkg-config libmtp-dev libssl-dev \
   libfontconfig1-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
   libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev libx11-xcb-dev \
   libvulkan1 mesa-vulkan-drivers xdg-desktop-portal xdg-desktop-portal-gtk
@@ -20,16 +20,26 @@ cargo run --locked -p syncandrun-desktop
 ```
 
 The window needs a Linux graphical session and a working Vulkan driver. Folder
-selection uses the desktop portal. Create a SyncAndRun music library folder
-wherever you want, then select it on the main page or in Settings. If you do not
-choose one, the app offers `~/Music/SyncAndRun` and asks before creating
-it on the first export. Click playlists to move them between Available and
-Syncing, choose MP3 quality, then **Export selected playlists to MP3**. The app
-stages one folder and `.m3u8` file per selected playlist directly in the library
-folder. Copy those playlist folders into the watch's Music folder using Files or
-another MTP application. After transfer, **Clear library after transfer** removes
-only unchanged app-generated files after confirmation. The app does not transfer
-files to the watch itself.
+selection for folder exports uses the desktop portal.
+
+Plug in a Garmin music watch in USB/MTP mode. The app shows model, firmware,
+and free space. Choose playlists and quality, leave **Direct to watch** selected,
+and click **Transfer to watch**. No local output folder is required. Close or
+unmount the watch in Files and other MTP applications if they hold the connection.
+The app checks free space and verifies files by reading them back over USB.
+The default adds new folders. Select **Replace watch music** for a confirmed,
+permanent replacement of recognized content within the watch’s Music folder.
+Use **Watch music** to inspect or remove one item. Replacement stages and
+verifies new music first, so it needs enough free space for both old and new
+content. Unknown files under Music block replacement. Cancellation or USB failure
+during removal can leave a mix of old and new music; removed files cannot be
+restored. Activities and Garmin system data are outside the deletion scope. Disconnect USB
+after completion so the watch can index the music. See [direct MTP details](DIRECT-MTP.md).
+
+Choose **Export to folder** to retain the local library workflow. Create and
+select a folder, or confirm `~/Music/SyncAndRun` on the first export. Copy its
+playlist folders with Files or another MTP app. **Clear library after transfer**
+removes only unchanged app-generated local files after confirmation.
 
 For optimized binaries, use `cargo build --locked --release --workspace`.
 For just the CLI, `cargo build --locked -p syncandrun-cli` avoids GPUI and its
@@ -43,14 +53,35 @@ Examples assume the binaries are on PATH. After a development build, use
 `cargo install --locked --path crates/cli`.
 
 ```sh
+syncandrun devices
 syncandrun login
 syncandrun status
 syncandrun playlists --json
 syncandrun refresh --playlist plex:playlist:123
 syncandrun estimate --bitrate 192
+syncandrun transfer --playlist plex:playlist:123 --bitrate 192
+syncandrun transfer --playlist plex:playlist:123 --replace-music --yes-replace-music
+syncandrun transfer --playlist plex:playlist:123 --shared-tracks
 syncandrun export --destination /path/to/music --bitrate 192
 syncandrun backup --destination /path/to/private-backups
 ```
+
+`devices` identifies connected Garmin storage without opening a Plex profile.
+`transfer` uses the only connected watch, or accepts `--device bus:number:storage_id`
+from `devices` when several targets are present, even if another Garmin is busy.
+Busy or inaccessible Garmins are reported separately. It refreshes the playlist selection
+and uses the same direct transfer engine as the GUI.
+
+`--shared-tracks` puts each track in one new Music folder and places multiple
+M3U8 playlists beside it. It stores a repeated track once per run. It is an
+opt-in add mode: USB read-back passed on a Forerunner 955 Solar, both synthetic
+playlists appeared after the MTP playlist-type fix, and their generated tone
+played from every entry. It cannot be combined with `--replace-music` yet.
+
+The default separate-folder direct transfer was also checked on a Forerunner
+955 Solar with two distinctly named synthetic playlists. Both appeared under
+My Music and all four generated track entries played the short tone. Real Plex
+media and other Garmin models still need their own checks.
 
 `login` opens the browser and then asks for a server and music library by number.
 It deliberately does not print authentication links or accept tokens in command
@@ -75,6 +106,12 @@ removes obsolete generated files when they have not been edited outside the app.
 Other files are preserved. A conflicting unmanaged file or edited generated file
 stops synchronization. Failed or cancelled downloads remain in a uniquely named
 `.incomplete` folder. The CLI continues to create a new dated export each run.
+
+For direct watch transfer, the Playlists page shows verified tracks and bytes,
+an average rate, elapsed time, and an estimated time left. The rate updates
+after each verified MP3; the final removal step has no reliable time estimate.
+Use the Watch music tab to inspect or remove content inside the watch's Music
+folder. The list reloads after each removal.
 
 ## Existing profiles
 
@@ -129,3 +166,16 @@ session bus, as supplied by the command above.
 Inspect the screenshot. An Xvfb launch with software Vulkan is Linux rendering
 evidence, not a physical GPU, real Plex sign-in, or watch playback
 acceptance test. See [validation](VALIDATION.md).
+
+For isolated GUI testing, `syncandrun-desktop --no-usb --profile /path/to/disposable-profile`
+disables physical USB discovery. The automated smoke script supplies this flag
+and selects folder export. Physical acceptance is explicitly opt-in:
+
+```sh
+python3 scripts/watch-smoke.py --write-watch
+```
+
+This requires Node, ffmpeg, and a connected watch. It serves generated audio from
+memory using fake Plex and a disposable profile, transfers two playlists, and
+checks that no local MP3s were created. `--gui` leaves the synthetic desktop open
+for manual interaction; it requires an X display and xdotool. It is not a CI test.

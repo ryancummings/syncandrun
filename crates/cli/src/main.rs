@@ -6,6 +6,7 @@ use std::{
     sync::{Arc, atomic::AtomicBool},
 };
 use syncandrun_core::{
+    device,
     export::{self, Route},
     plex::{self, Plex},
     profile::{self, Profile},
@@ -22,6 +23,27 @@ struct Args {
 }
 #[derive(Subcommand)]
 enum Command {
+    /// Identify connected Garmin watches and writable storage over USB MTP
+    Devices,
+    /// Transfer playlists directly to a Garmin watch, without a local export folder
+    Transfer {
+        #[arg(long = "playlist")]
+        playlists: Vec<String>,
+        #[arg(long, default_value = "192")]
+        bitrate: u16,
+        /// Device key from the devices command (required when several are connected)
+        #[arg(long)]
+        device: Option<String>,
+        /// Replace recognized content in the watch Music folder after verification
+        #[arg(long, requires = "yes_replace_music")]
+        replace_music: bool,
+        /// Confirm permanent removal of other watch music during --replace-music
+        #[arg(long)]
+        yes_replace_music: bool,
+        /// Share one track file across playlists (tested on Forerunner 955)
+        #[arg(long, conflicts_with = "replace_music")]
+        shared_tracks: bool,
+    },
     /// Sign in using your browser, then choose a server and music library
     Login,
     /// Show connection state without revealing credentials
@@ -86,6 +108,36 @@ fn ids(profile: &Profile, supplied: Vec<String>) -> Result<Vec<String>> {
     }
 }
 fn run(args: Args) -> Result<()> {
+    if matches!(args.command, Command::Devices) {
+        let scan = device::discover_with_unavailable()?;
+        if scan.watches.is_empty() {
+            println!(
+                "{}",
+                if scan.unavailable.is_empty() {
+                    "No Garmin watch connected."
+                } else {
+                    "No usable Garmin watch found."
+                }
+            );
+        }
+        for watch in scan.watches {
+            println!(
+                "{}  {}  firmware {}  {:.2} GB free / {:.2} GB",
+                watch.key(),
+                watch.model,
+                watch.firmware,
+                watch.free_bytes as f64 / 1e9,
+                watch.total_bytes as f64 / 1e9
+            );
+        }
+        for unavailable in scan.unavailable {
+            eprintln!(
+                "{}:{}  {}",
+                unavailable.bus, unavailable.number, unavailable.reason
+            );
+        }
+        return Ok(());
+    }
     let path = args.profile.map(Ok).unwrap_or_else(profile::default_path)?;
     let mut profile = Profile::open(path)?;
     let plex = Plex::new(&profile)?;
@@ -93,6 +145,60 @@ fn run(args: Args) -> Result<()> {
     let signal = cancel.clone();
     ctrlc::set_handler(move || signal.store(true, std::sync::atomic::Ordering::Relaxed))?;
     match args.command {
+        Command::Devices => unreachable!(),
+        Command::Transfer {
+            playlists,
+            bitrate,
+            device: key,
+            replace_music,
+            yes_replace_music: _,
+            shared_tracks,
+        } => {
+            let scan = device::discover_with_unavailable()?;
+            for unavailable in scan.unavailable {
+                eprintln!(
+                    "{}:{}  {}",
+                    unavailable.bus, unavailable.number, unavailable.reason
+                );
+            }
+            let watches = scan.watches;
+            let watch = match key {
+                Some(key) => watches
+                    .iter()
+                    .find(|w| w.key() == key)
+                    .context("Selected watch is not connected")?,
+                None => {
+                    ensure!(
+                        watches.len() == 1,
+                        "Connect one Garmin watch, or use --device bus:number:storage_id from devices"
+                    );
+                    &watches[0]
+                }
+            };
+            let selected = ids(&profile, playlists)?;
+            let plan = plex.refresh(&mut profile, &selected, &cancel)?;
+            let connection = profile
+                .connection()?
+                .context("Run syncandrun login first")?;
+            let source = |t: &syncandrun_core::Track, b| plex.audio(&connection, t, b);
+            let progress = |p: device::TransferProgress| {
+                eprintln!(
+                    "{}: {}/{} tracks",
+                    p.phase, p.tracks.completed, p.tracks.expected
+                )
+            };
+            let result = if replace_music {
+                device::replace_music(watch, &plan, bitrate, &cancel, source, progress)?
+            } else if shared_tracks {
+                device::transfer_shared(watch, &plan, bitrate, &cancel, source, progress)?
+            } else {
+                device::transfer(watch, &plan, bitrate, &cancel, source, progress)?
+            };
+            println!(
+                "Transferred and verified {} tracks in {} playlists on {}; removed {} old music objects.",
+                result.tracks, result.playlists, watch.model, result.removed
+            );
+        }
         Command::Login => {
             eprintln!(
                 "Opening Plex in your browser. Complete sign-in there; this command will wait."
