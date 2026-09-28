@@ -272,16 +272,16 @@ fn transfer_to_with_layout<R: Read>(
     ensure!(estimate.tracks > 0, "Choose at least one nonempty playlist");
     check_cancel(cancel)?;
     let storage = target.storage()?;
-    ensure!(storage.writable, "Watch storage is read-only");
+    ensure!(storage.writable, "Device storage is read-only");
     ensure!(
         estimate.bytes.saturating_add(1024 * 1024) <= storage.free,
-        "Not enough free space on the watch for this selection"
+        "Not enough free space on the device for this selection"
     );
     let root = target.list(0)?;
     let music = root.iter().find(|o| o.name.eq_ignore_ascii_case("Music"));
     ensure!(
         music.is_none_or(|o| o.folder),
-        "Watch Music entry is not a folder"
+        "Device Music entry is not a folder"
     );
     let music = match music {
         Some(m) => m.id,
@@ -360,7 +360,7 @@ fn transfer_to_with_layout<R: Read>(
                 check_cancel(cancel)?;
                 ensure!(
                     audio.0.len() as u64 + 65536 <= target.storage()?.free,
-                    "Watch storage filled up during transfer"
+                    "Device storage filled up during transfer"
                 );
                 let name = export::filename(
                     track,
@@ -370,10 +370,10 @@ fn transfer_to_with_layout<R: Read>(
                         &mut used
                     },
                 );
-                notify("Sending to watch");
+                notify("Sending to device");
                 let id = target.upload(folder, &name, &audio.0, cancel)?;
                 created.push(id);
-                notify("Verifying on watch");
+                notify("Verifying on device");
                 target.verify(id, &audio.0, cancel)?;
                 if layout == Layout::Shared {
                     shared_tracks.insert(track.id.clone(), name.clone());
@@ -415,7 +415,7 @@ fn transfer_to_with_layout<R: Read>(
         for id in created.into_iter().rev() {
             incomplete |= target.delete(id).is_err();
         }
-        return Err(error).context(if incomplete { "Transfer stopped. Some new files could not be removed. Reconnect the watch and remove incomplete SAR folders from Music before retrying." } else { "Transfer stopped. Files that finished copying were removed. An unfinished file may remain on the watch." });
+        return Err(error).context(if incomplete { "Transfer stopped. Some new files could not be removed. Reconnect the device and remove incomplete SAR folders from Music before retrying." } else { "Transfer stopped. Files that finished copying were removed. An unfinished file may remain on the device." });
     }
     if mode == TransferMode::Replace {
         // Staging succeeded. From here on deletion is irreversible. A failure or
@@ -423,13 +423,13 @@ fn transfer_to_with_layout<R: Read>(
         for id in old_objects {
             if cancel.load(Ordering::Relaxed) {
                 anyhow::bail!(
-                    "Replacement stopped after removing {} old music objects. New playlists remain; some old music may remain. Scan the watch before retrying.",
+                    "Replacement stopped after removing {} old music objects. New playlists remain; some old music may remain. Scan the device before retrying.",
                     result.removed
                 );
             }
             if target.delete(id).is_err() {
                 anyhow::bail!(
-                    "Replacement stopped after removing {} old music objects. New playlists remain; some old music may remain. Scan the watch before retrying.",
+                    "Replacement stopped after removing {} old music objects. New playlists remain; some old music may remain. Scan the device before retrying.",
                     result.removed
                 );
             }
@@ -455,7 +455,7 @@ fn music_root(target: &mut impl Target) -> Result<Option<u32>> {
         .find(|o| o.name.eq_ignore_ascii_case("Music"));
     ensure!(
         entry.as_ref().is_none_or(|o| o.folder),
-        "Watch Music entry is not a folder"
+        "Device Music entry is not a folder"
     );
     Ok(entry.map(|o| o.id))
 }
@@ -558,7 +558,7 @@ fn music_items_from(target: &mut impl Target) -> Result<Vec<MusicItem>> {
 pub fn remove_music_item(watch: &Watch, id: u32, name: &str, cancel: &AtomicBool) -> Result<usize> {
     check_cancel(cancel)?;
     let mut target = usb::Usb::open(watch)?;
-    let root = music_root(&mut target)?.context("Watch Music folder is missing")?;
+    let root = music_root(&mut target)?.context("Device Music folder is missing")?;
     let matches: Vec<_> = target
         .list(root)?
         .into_iter()
@@ -566,14 +566,14 @@ pub fn remove_music_item(watch: &Watch, id: u32, name: &str, cancel: &AtomicBool
         .collect();
     ensure!(
         matches.len() == 1,
-        "Music item changed; scan the watch again"
+        "Music item changed; scan the device again"
     );
     let ids = deletion_plan(&mut target, &matches)?;
     let mut removed = 0;
     for id in ids {
         if cancel.load(Ordering::Relaxed) || target.delete(id).is_err() {
             anyhow::bail!(
-                "Removal stopped after deleting {removed} music objects. This cannot be undone; scan the watch to see what remains."
+                "Removal stopped after deleting {removed} music objects. This cannot be undone; scan the device to see what remains."
             );
         }
         removed += 1;
@@ -584,7 +584,7 @@ pub fn remove_music_item(watch: &Watch, id: u32, name: &str, cancel: &AtomicBool
 // Garmin canonicalizes M3U8 paths and letter case. Compare ordered references.
 fn verify_playlist(expected: &[u8], received: &[u8]) -> Result<()> {
     let expected = std::str::from_utf8(expected).context("Invalid generated playlist")?;
-    let received = std::str::from_utf8(received).context("Watch returned an invalid playlist")?;
+    let received = std::str::from_utf8(received).context("Device returned an invalid playlist")?;
     let normalize = |text: &str| -> Vec<String> {
         text.trim_start_matches('\u{feff}')
             .lines()
@@ -603,7 +603,7 @@ fn verify_playlist(expected: &[u8], received: &[u8]) -> Result<()> {
                     a.rsplit('/').next() == b.rsplit('/').next()
                 }
             }),
-        "Watch playlist verification failed: track paths or order differ"
+        "Device playlist verification failed: track paths or order differ"
     );
     Ok(())
 }
@@ -812,6 +812,58 @@ mod tests {
         let old: Vec<_> = target.entries.keys().copied().collect();
         transfer_to(&mut target, &plan(), 320, &cancel, audio, |_| {}).unwrap();
         assert!(old.iter().all(|id| target.entries.contains_key(id)));
+    }
+    #[test]
+    fn local_flac_playlist_reaches_fake_watch() {
+        let temp = tempfile::tempdir().unwrap();
+        let music = temp.path().join("Synthetic album");
+        std::fs::create_dir(&music).unwrap();
+        assert!(
+            std::process::Command::new("ffmpeg")
+                .args([
+                    "-nostdin",
+                    "-loglevel",
+                    "error",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "sine=frequency=440:duration=2",
+                    "-c:a",
+                    "flac",
+                    "-y"
+                ])
+                .arg(music.join("tone.flac"))
+                .status()
+                .unwrap()
+                .success()
+        );
+        let cancel = AtomicBool::new(false);
+        let plan = crate::local::discover(&music, &cancel).unwrap();
+        let mut target = Fake::default();
+        let result = transfer_to(
+            &mut target,
+            &plan,
+            192,
+            &cancel,
+            |track, bitrate| crate::local::audio(&music, track, bitrate),
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!((result.tracks, result.playlists), (1, 1));
+        assert!(target.entries.values().any(|entry| {
+            entry.name.ends_with(".mp3")
+                && entry
+                    .data
+                    .as_ref()
+                    .is_some_and(|bytes| bytes.starts_with(b"ID3\x03"))
+        }));
+        assert!(
+            target
+                .entries
+                .values()
+                .any(|entry| entry.name.ends_with(".m3u8")
+                    && entry.data.as_ref().is_some_and(|bytes| !bytes.is_empty()))
+        );
     }
     #[test]
     fn failed_download_upload_and_verification_roll_back_only_new_files() {

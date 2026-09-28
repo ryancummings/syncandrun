@@ -1,19 +1,24 @@
 use anyhow::{Context, Result, ensure};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::{
-    io::{self, Write},
+    io::{self, IsTerminal, Write},
     path::PathBuf,
     sync::{Arc, atomic::AtomicBool},
 };
 use syncandrun_core::{
     device,
     export::{self, Route},
+    jellyfin::Jellyfin,
     plex::{self, Plex},
-    profile::{self, Profile},
+    profile::{self, Profile, Provider},
+    provider::MusicSource,
 };
 
 #[derive(Parser)]
-#[command(version, about = "Export Plex music playlists for a Garmin watch")]
+#[command(
+    version,
+    about = "Export Plex, Jellyfin, or local music for a Garmin device"
+)]
 struct Args {
     /// Profile folder containing secret and data/syncandrun.sqlite
     #[arg(long, global = true)]
@@ -23,9 +28,9 @@ struct Args {
 }
 #[derive(Subcommand)]
 enum Command {
-    /// Identify connected Garmin watches and writable storage over USB MTP
+    /// Identify connected Garmin devices and writable storage over USB MTP
     Devices,
-    /// Transfer playlists directly to a Garmin watch, without a local export folder
+    /// Transfer playlists directly to a Garmin device, without a local export folder
     Transfer {
         #[arg(long = "playlist")]
         playlists: Vec<String>,
@@ -46,6 +51,26 @@ enum Command {
     },
     /// Sign in using your browser, then choose a server and music library
     Login,
+    /// Sign in to Jellyfin and choose a music library (password is never an argument)
+    LoginJellyfin {
+        #[arg(long)]
+        server: String,
+        #[arg(long)]
+        username: String,
+        /// Read the password from one line of standard input, for automation
+        #[arg(long)]
+        password_stdin: bool,
+        /// Choose a known music library ID instead of prompting
+        #[arg(long)]
+        library: Option<String>,
+    },
+    /// Choose a local MP3/FLAC folder and make it the active music source
+    LocalFolder { folder: PathBuf },
+    /// Switch to a saved connection; clears playlist selection and snapshots
+    Source {
+        #[arg(value_enum)]
+        provider: SourceName,
+    },
     /// Show connection state without revealing credentials
     Status,
     /// List available audio playlists and their IDs
@@ -87,6 +112,33 @@ enum Command {
         destination: PathBuf,
     },
 }
+#[derive(Clone, Copy, ValueEnum)]
+enum SourceName {
+    Plex,
+    Jellyfin,
+    Local,
+}
+
+fn read_password(from_stdin: bool) -> Result<String> {
+    if from_stdin {
+        let mut password = String::new();
+        io::stdin().read_line(&mut password)?;
+        if password.ends_with('\n') {
+            password.pop();
+            if password.ends_with('\r') {
+                password.pop();
+            }
+        }
+        Ok(password)
+    } else {
+        ensure!(
+            io::stdin().is_terminal(),
+            "Use an interactive terminal, or --password-stdin to read the password securely"
+        );
+        rpassword::prompt_password("Jellyfin password: ").context("Cannot read password")
+    }
+}
+
 fn choose(labels: &[String], what: &str) -> Result<usize> {
     ensure!(!labels.is_empty(), "No {what} available");
     for (i, label) in labels.iter().enumerate() {
@@ -114,9 +166,9 @@ fn run(args: Args) -> Result<()> {
             println!(
                 "{}",
                 if scan.unavailable.is_empty() {
-                    "No Garmin watch connected."
+                    "No Garmin device connected."
                 } else {
-                    "No usable Garmin watch found."
+                    "No usable Garmin device found."
                 }
             );
         }
@@ -140,7 +192,7 @@ fn run(args: Args) -> Result<()> {
     }
     let path = args.profile.map(Ok).unwrap_or_else(profile::default_path)?;
     let mut profile = Profile::open(path)?;
-    let plex = Plex::new(&profile)?;
+    let source = MusicSource::new(&profile)?;
     let cancel = Arc::new(AtomicBool::new(false));
     let signal = cancel.clone();
     ctrlc::set_handler(move || signal.store(true, std::sync::atomic::Ordering::Relaxed))?;
@@ -154,6 +206,7 @@ fn run(args: Args) -> Result<()> {
             yes_replace_music: _,
             shared_tracks,
         } => {
+            profile.active_provider()?.validate_bitrate(bitrate)?;
             let scan = device::discover_with_unavailable()?;
             for unavailable in scan.unavailable {
                 eprintln!(
@@ -166,21 +219,18 @@ fn run(args: Args) -> Result<()> {
                 Some(key) => watches
                     .iter()
                     .find(|w| w.key() == key)
-                    .context("Selected watch is not connected")?,
+                    .context("Selected Garmin device is not connected")?,
                 None => {
                     ensure!(
                         watches.len() == 1,
-                        "Connect one Garmin watch, or use --device bus:number:storage_id from devices"
+                        "Connect one Garmin device, or use --device bus:number:storage_id from devices"
                     );
                     &watches[0]
                 }
             };
             let selected = ids(&profile, playlists)?;
-            let plan = plex.refresh(&mut profile, &selected, &cancel)?;
-            let connection = profile
-                .connection()?
-                .context("Run syncandrun login first")?;
-            let source = |t: &syncandrun_core::Track, b| plex.audio(&connection, t, b);
+            let plan = source.refresh(&mut profile, &selected, &cancel)?;
+            let audio = |t: &syncandrun_core::Track, b| source.audio(&profile, t, b);
             let progress = |p: device::TransferProgress| {
                 eprintln!(
                     "{}: {}/{} tracks",
@@ -188,11 +238,11 @@ fn run(args: Args) -> Result<()> {
                 )
             };
             let result = if replace_music {
-                device::replace_music(watch, &plan, bitrate, &cancel, source, progress)?
+                device::replace_music(watch, &plan, bitrate, &cancel, audio, progress)?
             } else if shared_tracks {
-                device::transfer_shared(watch, &plan, bitrate, &cancel, source, progress)?
+                device::transfer_shared(watch, &plan, bitrate, &cancel, audio, progress)?
             } else {
-                device::transfer(watch, &plan, bitrate, &cancel, source, progress)?
+                device::transfer(watch, &plan, bitrate, &cancel, audio, progress)?
             };
             println!(
                 "Transferred and verified {} tracks in {} playlists on {}; removed {} old music objects.",
@@ -200,6 +250,7 @@ fn run(args: Args) -> Result<()> {
             );
         }
         Command::Login => {
+            let plex = Plex::new(&profile)?;
             eprintln!(
                 "Opening Plex in your browser. Complete sign-in there; this command will wait."
             );
@@ -224,19 +275,66 @@ fn run(args: Args) -> Result<()> {
             plex.connect(&mut profile, &login, &choice, &choice.libraries[n].key)?;
             println!("Connected to Plex.");
         }
-        Command::Status => println!(
-            "{}",
-            if profile.connection()?.is_some() {
-                "Connected to Plex"
+        Command::LoginJellyfin {
+            server,
+            username,
+            password_stdin,
+            library,
+        } => {
+            let password = read_password(password_stdin)?;
+            let jellyfin = Jellyfin::new(&profile)?;
+            let login = jellyfin.authenticate(&server, &username, &password, &cancel);
+            drop(password);
+            let login = login?;
+            let library_id = match library {
+                Some(id) => id,
+                None if login.libraries.len() == 1 => login.libraries[0].id.clone(),
+                None => {
+                    let n = choose(
+                        &login
+                            .libraries
+                            .iter()
+                            .map(|l| l.title.clone())
+                            .collect::<Vec<_>>(),
+                        "music library",
+                    )?;
+                    login.libraries[n].id.clone()
+                }
+            };
+            jellyfin.connect(&mut profile, &login, &library_id)?;
+            println!("Connected to Jellyfin.");
+        }
+        Command::Source { provider } => {
+            let provider = match provider {
+                SourceName::Plex => Provider::Plex,
+                SourceName::Jellyfin => Provider::Jellyfin,
+                SourceName::Local => Provider::Local,
+            };
+            profile.set_active_provider(provider)?;
+            println!(
+                "Using {}. Choose playlists again before exporting.",
+                provider.label()
+            );
+        }
+        Command::LocalFolder { folder } => {
+            profile.set_local_folder(&folder)?;
+            println!("Local folder selected. Choose playlists again before exporting.");
+        }
+        Command::Status => {
+            let provider = profile.active_provider()?;
+            let connected = match provider {
+                Provider::Plex => profile.connection()?.is_some(),
+                Provider::Jellyfin => profile.jellyfin_connection()?.is_some(),
+                Provider::Local => profile.local_folder()?.is_some(),
+            };
+            if connected {
+                println!("Connected to {}", provider.label());
             } else {
-                "Not connected; run syncandrun login"
+                println!("Not connected; run syncandrun login or login-jellyfin");
             }
-        ),
+        }
         Command::Playlists { json } => {
-            let connection = profile
-                .connection()?
-                .context("Run syncandrun login first")?;
-            let playlists = plex.playlists(&connection, &cancel)?;
+            let playlists = source.playlists(&profile, &cancel)?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&playlists)?);
             } else {
@@ -252,7 +350,7 @@ fn run(args: Args) -> Result<()> {
         }
         Command::Refresh { playlists } => {
             let selected = ids(&profile, playlists)?;
-            let plan = plex.refresh(&mut profile, &selected, &cancel)?;
+            let plan = source.refresh(&mut profile, &selected, &cancel)?;
             println!("Refreshed {} playlists.", plan.len());
         }
         Command::Estimate {
@@ -260,6 +358,7 @@ fn run(args: Args) -> Result<()> {
             bitrate,
             route,
         } => {
+            profile.active_provider()?.validate_bitrate(bitrate)?;
             let plan = profile.plan(&ids(&profile, playlists)?)?;
             println!(
                 "{}",
@@ -273,31 +372,25 @@ fn run(args: Args) -> Result<()> {
             route,
             offline_plan,
         } => {
-            ensure!(
-                syncandrun_core::BITRATES.contains(&bitrate),
-                "Unsupported MP3 bitrate"
-            );
+            profile.active_provider()?.validate_bitrate(bitrate)?;
             let selected = ids(&profile, playlists)?;
             let plan = if offline_plan {
                 profile.plan(&selected)?
             } else {
-                plex.refresh(&mut profile, &selected, &cancel)?
+                source.refresh(&mut profile, &selected, &cancel)?
             };
-            let connection = profile
-                .connection()?
-                .context("Run syncandrun login first")?;
             let output = export::export(
                 &plan,
                 bitrate,
                 route,
                 &destination,
                 &cancel,
-                |t, b| plex.audio(&connection, t, b),
+                |t, b| source.audio(&profile, t, b),
                 |p| eprintln!("{}/{} tracks", p.completed, p.expected),
             )?;
             println!("{}", output.display());
             eprintln!(
-                "Files ready. Copy the exported playlist folders to the watch's Music folder with an MTP app."
+                "Files ready. Copy the exported playlist folders to the device's Music folder with an MTP app."
             );
         }
         Command::Backup { destination } => {

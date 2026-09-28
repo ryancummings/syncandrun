@@ -1,9 +1,9 @@
 # Direct Garmin transfer and desktop portability
 
-On Linux, the Rust desktop app detects Garmin watches over USB MTP, shows their model,
+On Linux, the Rust desktop app detects Garmin music devices over USB MTP, shows their model,
 firmware and free storage, and sends selected Plex playlists directly to Music.
-Choose **Direct to watch**, select the watch if there is more than one, and click
-**Transfer to watch**. No local export folder or mounted filesystem is involved.
+Choose **Direct to device**, select the device if there is more than one, and click
+**Transfer to device**. No local export folder or mounted filesystem is involved.
 
 ## Reused open-source code
 
@@ -20,12 +20,12 @@ Choose **Direct to watch**, select the watch if there is more than one, and clic
   that combination even for Linux. Using libmtp avoids patching the UI framework.
 
 Install `libmtp-dev` on Debian/Ubuntu or `libmtp` on Arch, including the package’s
-USB permission rules. No daemon or MCP server is needed: the watch uses **Media
+USB permission rules. No daemon or MCP server is needed: the device uses **Media
 Transfer Protocol (MTP)**. A busy-device message usually means Files, another MTP
 app, or another SyncAndRun process owns the USB interface. Close or unmount it
-there, then use **Scan for watch**. The app scans periodically until it finds a usable
-watch. It also scans after a transfer or removal so the free-space display updates.
-Use **Scan for watch** after disconnecting or changing watches.
+there, then use **Scan for device**. The app scans periodically until it finds a usable
+device. It also scans after a transfer or removal so the free-space display updates.
+Use **Scan for device** after disconnecting or changing devices.
 
 ## macOS development references
 
@@ -35,7 +35,7 @@ has not built or run that app there.
 
 | Project | Relevant evidence | Use for SyncAndRun |
 | --- | --- | --- |
-| [Garmin MTP CLI](https://github.com/Likenttt/garmin-mtp-cli) | Garmin-specific file reads and writes through libmtp; its build instructions use Homebrew on macOS and describe device contention with Garmin Express and other MTP apps. | Closest reference for opening a Garmin watch directly through the library SyncAndRun already uses. |
+| [Garmin MTP CLI](https://github.com/Likenttt/garmin-mtp-cli) | Garmin-specific file reads and writes through libmtp; its build instructions use Homebrew on macOS and describe device contention with Garmin Express and other MTP apps. | Closest reference for opening a Garmin device directly through the library SyncAndRun already uses. |
 | [OpenMTP](https://github.com/ganeshrvel/openmtp) | macOS file manager with explicit Garmin support. An earlier SyncAndRun export copied with OpenMTP appeared as playlists on a Forerunner 955; see [validation](VALIDATION.md). | Established manual-transfer fallback and a Mac device-access comparison. Its file manager does not implement SyncAndRun's transfer verification. |
 | [HifiMule](https://github.com/HifiMule/HifiMule) | Music-sync app advertising Garmin profiles, MTP through libmtp, and macOS support. Its maintainer requests Mac and device feedback. | Product and device-flow comparison; do not treat its stated support as physical acceptance for SyncAndRun. |
 | [mtp-rs](https://github.com/vdavid/mtp-rs/blob/main/crates/mtp-rs/README.md) | Pure Rust MTP library with Garmin handling. Its macOS notes describe USB ownership conflicts, including `ptpcamerad`; it does not implement MTP playlist operations. | Alternative transport to revisit if libmtp proves unsuitable, subject to the dependency conflict above and physical tests. |
@@ -120,6 +120,8 @@ exports folders for manual transfer; it has no direct MTP implementation.
 Automatic matching of playlist identities across transfers is not implemented.
 The `0:` music volume and playlist handling have been checked on the Forerunner
 955 Solar; other Garmin models and storage layouts need physical acceptance.
+See the [model compatibility guide](GARMIN-COMPATIBILITY.md) for Garmin's
+documented families and a reproducible synthetic acceptance procedure.
 
 ## Evidence and reproduction
 

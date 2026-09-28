@@ -46,6 +46,7 @@ pub struct PlaylistSummary {
 
 /// Read-only details for the saved music library. Individual totals may be
 /// unavailable on older Plex servers or when a count endpoint is disabled.
+#[derive(Clone)]
 pub struct LibraryOverview {
     pub server_name: Option<String>,
     pub server_version: Option<String>,
