@@ -1,4 +1,8 @@
 mod input;
+#[cfg(not(target_os = "macos"))]
+mod watch_diagnostics;
+#[cfg(target_os = "macos")]
+#[path = "watch_diagnostics_macos.rs"]
 mod watch_diagnostics;
 
 use anyhow::{Context as _, Result, ensure};
@@ -973,9 +977,7 @@ impl Desktop {
                         view.save_preferences();
                     }
                     Ok(Ok(_)) => {}
-                    _ => view.status =
-                        "Could not open the folder picker. Check that a desktop portal is running."
-                            .into(),
+                    _ => view.status = "Could not open the folder picker.".into(),
                 }
                 cx.notify();
             });
@@ -1005,9 +1007,7 @@ impl Desktop {
                         });
                     }
                     Ok(Ok(_)) => {}
-                    _ => view.status =
-                        "Could not open the folder picker. Check that a desktop portal is running."
-                            .into(),
+                    _ => view.status = "Could not open the folder picker.".into(),
                 }
                 cx.notify();
             });
@@ -2551,7 +2551,7 @@ fn main() {
             )
             .is_err()
         {
-            eprintln!("Could not open the Linux window. Check the display and Vulkan driver.");
+            eprintln!("Could not open the SyncAndRun window.");
             cx.quit();
         }
         cx.activate(true);

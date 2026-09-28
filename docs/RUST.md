@@ -1,4 +1,4 @@
-# Native Linux app and CLI
+# Native Linux and macOS app and CLI
 
 The Rust workspace contains `syncandrun-core` (Plex, Jellyfin, profiles, and exports),
 `syncandrun-desktop` (GPUI), and `syncandrun-cli` (the `syncandrun` command).
@@ -22,6 +22,24 @@ cargo run --locked -p syncandrun-desktop
 
 The window needs a Linux graphical session and a working Vulkan driver. Folder
 selection for folder exports uses the desktop portal.
+
+On Apple Silicon macOS, install Xcode, Homebrew `rustup`, `pkgconf`, `libmtp`,
+and `ffmpeg`. Install the Xcode Metal Toolchain component if it is absent. Use
+the pinned Rust toolchain in `rust-toolchain.toml`. Build a drag-install DMG:
+
+```sh
+xcodebuild -downloadComponent MetalToolchain
+brew install rustup pkgconf libmtp ffmpeg
+PATH="$(brew --prefix rustup)/bin:$PATH" python3 scripts/package-macos.py
+```
+
+The script builds a release GPUI app, bundles libmtp and the Local folder audio
+tools with their libraries, applies an ad hoc local signature, and creates
+`build/macos/SyncAndRun-<version>-macos-arm64.dmg`. Open the DMG and drag
+SyncAndRun to Applications. The app uses the existing Electron profile under
+`~/Library/Application Support` when present. Close Electron before opening
+the native app against that profile. The DMG is not notarized for public
+distribution. An Intel Mac package has not been built.
 
 For a Local folder source, choose **Local folder** and select a folder of MP3 or
 FLAC files. Direct files form a playlist named after that folder; nested folders
@@ -52,7 +70,7 @@ removes only unchanged app-generated local files after confirmation.
 For optimized binaries, use `cargo build --locked --release --workspace`.
 For just the CLI, `cargo build --locked -p syncandrun-cli` avoids GPUI and its
 Linux graphics dependencies. Binaries are in `target/debug` or `target/release`.
-No Rust installer or release artifact is published.
+No public release artifact is published.
 
 ## CLI
 

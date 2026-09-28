@@ -1,6 +1,6 @@
 # Direct Garmin transfer and desktop portability
 
-On Linux, the Rust desktop app detects Garmin music devices over USB MTP, shows their model,
+On Linux and macOS, the Rust desktop app detects Garmin music devices over USB MTP, shows their model,
 firmware and free storage, and sends selected Plex playlists directly to Music.
 Choose **Direct to device**, select the device if there is more than one, and click
 **Transfer to device**. No local export folder or mounted filesystem is involved.
@@ -29,9 +29,8 @@ Use **Scan for device** after disconnecting or changing devices.
 
 ## macOS development references
 
-These projects are useful when bringing direct transfer to macOS. Their stated
-support does not establish that SyncAndRun's Rust app works on a Mac; this project
-has not built or run that app there.
+These projects informed the macOS port. Their stated support alone does not
+establish physical transfer acceptance for SyncAndRun.
 
 | Project | Relevant evidence | Use for SyncAndRun |
 | --- | --- | --- |
@@ -42,14 +41,12 @@ has not built or run that app there.
 
 [Homebrew packages libmtp for macOS](https://formulae.brew.sh/formula/libmtp),
 and [GPUI supports macOS](https://github.com/zed-industries/zed/blob/main/crates/gpui/README.md).
-Those are prerequisites, not a successful Mac build or device test. The first
-Mac check should use a connected watch to detect and list storage with libmtp,
-then test the Rust CLI with a disposable profile. Before claiming parity with
-Linux, verify upload, byte-for-byte read-back, playlist indexing and playback,
-cancel/disconnect cleanup, and recovery when another app owns the USB device.
-Also check app packaging of libmtp and its dependencies on both Mac architectures
-and preserve the existing Electron profile under macOS Application Support;
-the current Rust default profile path is Linux-oriented.
+The native app now builds and launches on Apple Silicon macOS. The CLI detected
+a connected Forerunner 955 Solar through libmtp after Garmin Express Service
+and OpenMTP released the USB interface. The locally signed DMG bundles libmtp
+and its dependencies, and the app uses the existing Electron profile location
+under Application Support. The physical Mac transfer, read-back, playlist
+indexing and playback checks are separate acceptance work; see [validation](VALIDATION.md).
 
 ## Windows development references
 

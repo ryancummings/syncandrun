@@ -17,12 +17,25 @@ const MAX_FILES: usize = 10_000;
 const MAX_DIRS: usize = 2_000;
 const MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024 * 1024;
 
+fn audio_tool(name: &str) -> PathBuf {
+    #[cfg(target_os = "macos")]
+    if let Ok(executable) = std::env::current_exe()
+        && let Some(directory) = executable.parent()
+    {
+        let bundled = directory.join(name);
+        if bundled.is_file() {
+            return bundled;
+        }
+    }
+    PathBuf::from(name)
+}
+
 fn cancelled(cancel: &AtomicBool) -> Result<()> {
     ensure!(!cancel.load(Ordering::Relaxed), "Music discovery cancelled");
     Ok(())
 }
 fn duration(path: &Path) -> Result<u64> {
-    let output = Command::new("ffprobe")
+    let output = Command::new(audio_tool("ffprobe"))
         .args([
             "-v",
             "error",
@@ -217,7 +230,7 @@ pub fn audio(root: &Path, track: &Track, bitrate: u16) -> Result<Box<dyn Read>> 
         extension.eq_ignore_ascii_case("mp3") || extension.eq_ignore_ascii_case("flac"),
         "Unsupported local audio format"
     );
-    let mut child = Command::new("ffmpeg")
+    let mut child = Command::new(audio_tool("ffmpeg"))
         .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
         .arg(&path)
         .args([
@@ -257,7 +270,7 @@ mod tests {
 
     fn tone(path: &Path, codec: &str) {
         assert!(
-            Command::new("ffmpeg")
+            Command::new(audio_tool("ffmpeg"))
                 .args([
                     "-nostdin",
                     "-loglevel",
@@ -324,7 +337,7 @@ mod tests {
         assert_ne!(original, fs::read(nested.join("two.mp3")).unwrap());
         let encoded = temp.path().join("encoded.mp3");
         fs::write(&encoded, &original).unwrap();
-        let output = Command::new("ffprobe")
+        let output = Command::new(audio_tool("ffprobe"))
             .args([
                 "-v",
                 "error",

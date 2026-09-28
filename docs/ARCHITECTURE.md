@@ -1,9 +1,9 @@
 # Architecture
 
-The Linux implementation is a Rust workspace. `syncandrun-core` owns the local
+The native Linux and macOS implementation is a Rust workspace. `syncandrun-core` owns the local
 profile, Plex and Jellyfin requests, and streaming export engine. The GPUI desktop app runs
 blocking work on worker threads and receives progress through a channel; the CLI
-calls the same core. No local HTTP server is started. Linux supports direct USB MTP transfer and the MTP folder
+calls the same core. No local HTTP server is started. Linux and macOS support direct USB MTP transfer and the MTP folder
 flow; the CLI also supports shared Tracks and Music/iTunes XML layouts.
 
 Rust preserves the existing SQLite migration sequence and credential encryption
@@ -71,6 +71,12 @@ Garmin rewrites playlist paths while retaining the old MTP object length on the
 validated Forerunner. Direct transfers therefore write canonical `0:/MUSIC/…`
 paths with CRLF up front. Folder exports retain their existing relative M3U8
 format. See [DIRECT-MTP.md](DIRECT-MTP.md) for evidence and limits.
+
+The macOS app uses the same GPUI screens and core transfer engine. Its profile
+defaults to Application Support so existing Electron credentials survive. The
+drag-install package carries libmtp, ffmpeg, ffprobe, and their dynamic libraries;
+the Linux build continues to use system packages. Watch troubleshooting uses
+platform-specific read-only USB checks.
 
 ## Retained Electron implementation
 

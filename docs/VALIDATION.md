@@ -1,5 +1,29 @@
 # Validation
 
+## Native macOS app (2026-09-28)
+
+On Apple Silicon macOS with Xcode 27 and Rust 1.98.1, the native GPUI app built,
+launched from a drag-install DMG, and displayed the same pages and Console
+styling as Linux. The DMG carries IBM Plex fonts, libmtp, ffmpeg, ffprobe, and
+their dynamic dependencies. The ad hoc signature passed strict `codesign`
+verification. The mounted app and bundled audio tools launched with Homebrew
+removed from `PATH`; bundled ffmpeg generated a synthetic 128 kbps MP3 and
+ffprobe read its codec and bitrate. The package is for Apple Silicon and has
+not been notarized or tested on Intel Macs.
+
+The CLI and packaged GUI both detected a connected Forerunner 955 Solar,
+firmware 2905, and read its free space after Garmin Express Service and OpenMTP
+released the USB interface. The packaged GUI showed a synthetic Local folder
+playlist and the ready watch. This was a read-only Mac watch check; no Mac
+transfer or on-watch playback was claimed. A disposable profile and generated
+audio were used. The native Mac CLI exported that audio as an MP3 plus M3U8
+playlist. No saved personal connection or real music library was opened.
+
+Forty core tests and the macOS diagnostic test pass; workspace build, formatting,
+and strict Clippy pass. The core suite includes fake Plex/Jellyfin services,
+encrypted-profile migration, and fake MTP transfer/rollback checks. A physical
+Mac transfer and post-disconnect watch playback remain separate acceptance checks.
+
 ## Local folder source (2026-09-28)
 
 Synthetic tests cover bounded, symlink-free MP3/FLAC discovery, profile switching

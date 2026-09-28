@@ -131,10 +131,7 @@ pub struct PlexConnection {
 }
 
 pub fn default_path() -> Result<PathBuf> {
-    let config = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|p| PathBuf::from(p).join(".config")))
-        .context("Set HOME or pass --profile")?;
+    let config = default_config_home()?;
     // Electron's package name determines its default userData folder.
     let legacy = config.join("syncandrun-desktop");
     let branded = config.join("SyncAndRun");
@@ -148,6 +145,24 @@ pub fn default_path() -> Result<PathBuf> {
     } else {
         legacy
     })
+}
+
+fn default_config_home() -> Result<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        // Electron stores its userData under Application Support on macOS.
+        // Reuse that location so native upgrades retain encrypted connections.
+        std::env::var_os("HOME")
+            .map(|home| PathBuf::from(home).join("Library/Application Support"))
+            .context("Set HOME or pass --profile")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
+            .context("Set HOME or pass --profile")
+    }
 }
 
 fn private_dir(path: &Path) -> Result<()> {
@@ -813,7 +828,8 @@ mod tests {
         let profile = Profile::open(root.path()).unwrap();
         assert!(Profile::open(root.path()).is_err());
         drop(profile);
-        assert!(Profile::open(root.path()).is_ok());
+        let reopened = Profile::open(root.path());
+        assert!(reopened.is_ok(), "{}", reopened.err().unwrap());
     }
     #[test]
     fn snapshots_preserve_repeated_entries_and_selection() {

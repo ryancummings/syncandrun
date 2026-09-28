@@ -1,10 +1,10 @@
 # SyncAndRun
 
-SyncAndRun is a personal desktop app that turns Plex, Jellyfin, or local music into MP3 files for a Garmin music device. On Linux, choose playlists and MP3 quality, then transfer directly to a connected device over USB MTP. Folder exports remain available on every desktop platform.
+SyncAndRun is a personal desktop app that turns Plex, Jellyfin, or local music into MP3 files for a Garmin music device. On Linux and macOS, choose playlists and MP3 quality, then transfer directly to a connected device over USB MTP. Folder exports remain available on every desktop platform.
 
 ![Electron desktop reference](docs/desktop-ui-implemented.png)
 
-The Linux app and CLI support Jellyfin sign-in with a server address, username,
+The native Linux and macOS app and CLI support Jellyfin sign-in with a server address, username,
 and password. Choose a music library and playlists, then use the same export or
 watch transfer controls as Plex. Credentials are encrypted in your local profile;
 the password is not saved. Settings lets you switch between saved Plex and
@@ -14,7 +14,7 @@ Jellyfin connections. The retained Electron app supports Plex only.
 
 | Computer | Choose in SyncAndRun | Then |
 | --- | --- | --- |
-| Linux (Rust app) | Direct to device | Select the detected Garmin, then **Transfer to device**. The app verifies the transferred files. |
+| Linux or macOS (Rust app) | Direct to device | Select the detected Garmin, then **Transfer to device**. The app verifies the transferred files. |
 | macOS | MTP app | Copy the exported playlist folders into the device's Music folder with OpenMTP or another MTP app. |
 | macOS | Music + Express | Add the exported Tracks folder to Music, import `Import playlists.xml`, then send the playlists with Garmin Express. |
 | Windows | Garmin Express | In Garmin Express, open the device's Music page. Use My Music to choose the saved local folder, then send the music. |
@@ -31,9 +31,9 @@ families, transfer routes, and the device acceptance procedure.
 SyncAndRun offers MP3 at 64, 96, 128, 192, and 256 kbps, plus 320 kbps for Plex and Local folder.
 Jellyfin limits stereo MP3 transcoding to 256 kbps. The size shown is an estimate. The Linux Rust app shows the connected device’s model, firmware, and free space. An earlier two-folder MTP export was recognized as playlists on a personal Forerunner 955. A later Linux transfer verified 20 MP3 files at 320 kbps; the playlist appeared on the watch and a track played after a plain M3U8 was copied. See [validation](docs/VALIDATION.md).
 
-## Linux: Rust desktop and CLI
+## Native Rust desktop and CLI
 
-The native Linux app uses Rust and GPUI. A CLI uses the same profile and export
+The native Linux and macOS app uses Rust and GPUI. A CLI uses the same profile and export
 engine. See [native build instructions and CLI usage](docs/RUST.md).
 Plug in a Garmin music device and choose **Direct to device**. No export folder
 is needed. The app buffers one MP3 at a time in memory and transfers it with
@@ -54,13 +54,16 @@ cargo run --locked -p syncandrun-desktop
 cargo run --locked -p syncandrun-cli -- --help
 ```
 
-Install the Linux system dependencies listed in the native guide first. Existing
+Install the platform dependencies listed in the native guide first. On macOS,
+`python3 scripts/package-macos.py` builds an Apple Silicon `.app` and drag-install
+DMG with libmtp, ffmpeg, and ffprobe bundled. The package is signed locally without
+notarization. Existing
 Electron profiles retain their encrypted Plex connection and historical SQLite
 migrations. Close Electron before opening the same profile in Rust.
 
-The Electron implementation remains available for macOS/Windows and migration
+The Electron implementation remains available for Windows and migration
 comparison. Its source build instructions are in [development](docs/DEVELOPMENT.md).
-No native Rust installer is published. See [validation](docs/VALIDATION.md) for
+See [validation](docs/VALIDATION.md) for
 what has been checked separately from real-device acceptance.
 
 The former Connect IQ app and self-hosted sync service are retired. Their source
