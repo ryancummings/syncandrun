@@ -797,7 +797,6 @@ impl Render for Desktop {
         window.set_rem_size(px(16.));
         let active = !self.busy && self.modal.is_none();
         let width: f32 = window.bounds().size.width.into();
-        let height: f32 = window.bounds().size.height.into();
         let compact = width < 1020.;
         let mut watch_card = panel()
             .py_3()
@@ -1162,39 +1161,8 @@ impl Render for Desktop {
             let seconds: u64 = selected.iter().map(|p| p.duration_seconds).sum();
             let estimate = seconds as f64 * self.bitrate as f64 * 1000.0 / 8.0 * 1.03 / 1_000_000.0;
             let available_count = self.playlists.len() - selected.len();
-            let row_height = 52.;
-            let available_limit = if compact {
-                (height * 0.38).clamp(250., 750.)
-            } else {
-                (height - 590.).clamp(250., 850.)
-            };
-            let selected_cap_rows = (height * 0.5 / row_height).floor().max(1.) as usize;
-            let base_selected_rows = 4.min(selected_cap_rows);
-            let selected_rows = selected
-                .len()
-                .max(base_selected_rows)
-                .min(selected_cap_rows);
-            let selected_growth = selected_rows - base_selected_rows;
-            let base_available_rows = self
-                .playlists
-                .len()
-                .max(1)
-                .min((available_limit / row_height).floor().max(1.) as usize);
-            let available_rows = base_available_rows.saturating_sub(selected_growth).max(1);
-            let available_height = available_rows as f32 * row_height;
-            let available_overflow = available_count > available_rows;
-            let selected_height = selected_rows as f32 * row_height;
-            let selected_overflow = selected.len() as f32 * row_height > selected_height;
             let mut available = div().id("available-playlists").flex().flex_col().gap_2();
             let mut syncing = div().id("syncing-playlists").flex().flex_col().gap_2();
-            available = available.h(px(available_height));
-            if available_overflow {
-                available = available.overflow_y_scroll();
-            }
-            syncing = syncing.h(px(selected_height));
-            if selected_overflow {
-                syncing = syncing.overflow_y_scroll();
-            }
             if self.playlists.is_empty() {
                 available =
                     available.child("No audio playlists found. Create one in Plex, then refresh.");
@@ -1240,6 +1208,7 @@ impl Render for Desktop {
                 .flex_col()
                 .gap_3()
                 .flex_1()
+                .min_w(px(0.))
                 .child(
                     div()
                         .flex()
@@ -1257,44 +1226,16 @@ impl Render for Desktop {
                 )
                 .child(
                     div()
-                        .flex()
-                        .justify_between()
-                        .items_center()
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(rgb(0xa8cbb4))
-                                .child(format!("Selected · {}", selected.len())),
-                        )
-                        .child(if selected_overflow {
-                            div()
-                                .text_sm()
-                                .text_color(rgb(0x91a69a))
-                                .child("Scroll to see more")
-                        } else {
-                            div()
-                        }),
+                        .text_sm()
+                        .text_color(rgb(0xa8cbb4))
+                        .child(format!("Selected · {}", selected.len())),
                 )
                 .child(syncing)
                 .child(
                     div()
-                        .flex()
-                        .justify_between()
-                        .items_center()
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(rgb(0xa8cbb4))
-                                .child(format!("Available · {}", available_count)),
-                        )
-                        .child(if !available_overflow {
-                            div()
-                        } else {
-                            div()
-                                .text_sm()
-                                .text_color(rgb(0x91a69a))
-                                .child("Scroll to browse")
-                        }),
+                        .text_sm()
+                        .text_color(rgb(0xa8cbb4))
+                        .child(format!("Available · {}", available_count)),
                 )
                 .child(available);
             let qualities = div()
@@ -1627,6 +1568,7 @@ impl Render for Desktop {
                 div()
                     .id("content")
                     .flex_1()
+                    .min_h(px(0.))
                     .overflow_y_scroll()
                     .child(content),
             )
