@@ -9,7 +9,7 @@ After an item is removed from watch Music, the app reloads the remaining items
 automatically. A failed reload says so and offers Refresh watch music.
 
 Two new synthetic tests cover partly overlapping shared-track playlists and
-cleanup after an upload fails during the second playlist. The workspace has 32
+cleanup after an upload fails during the second playlist. The workspace has 33
 passing core tests. The isolated native GUI passed the Settings, folder-picker
 export, confirmed library purge, and default-library confirmation flows on a
 physical Xwayland session.
@@ -33,8 +33,13 @@ the native Xwayland window.
 
 An opt-in shared-track run sent one generated MP3 and two M3U8 playlists in one
 folder. Both playlists passed USB read-back with references to the same track.
-The watch has not been disconnected and checked for playlist browsing or
-playback of this layout. The shared layout stays opt-in in the CLI.
+After disconnecting, Ryan reported that neither test playlist appeared on the
+watch. USB read-back alone does not establish that Garmin indexed the files.
+The shared layout failed on-watch acceptance and needs further investigation.
+One possible cause is the MTP object type: the first transfer labeled M3U8
+files as unknown. A candidate fix labels them as playlists, as GNOME GVfs does
+for M3U content. This candidate has passed synthetic tests but still needs a
+watch transfer and another on-watch check.
 
 Thirty synthetic core tests, strict Clippy, workspace build, and the CLI smoke
 passed. A physical GUI session used an isolated synthetic profile. Xvfb was

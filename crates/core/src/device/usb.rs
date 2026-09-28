@@ -313,6 +313,7 @@ impl Target for Usb {
         bytes: &[u8],
         cancel: &AtomicBool,
     ) -> Result<u32> {
+        let filetype = filetype_for_name(name);
         let name = CString::new(name)?;
         let file = unsafe { ffi::LIBMTP_new_file_t() };
         ensure!(!file.is_null(), "Could not allocate MTP file metadata");
@@ -326,11 +327,7 @@ impl Target for Usb {
             (*file).parent_id = parent;
             (*file).storage_id = self.storage;
             (*file).filesize = bytes.len() as u64;
-            (*file).filetype = if name.as_bytes().ends_with(b".mp3") {
-                ffi::LIBMTP_filetype_t_LIBMTP_FILETYPE_MP3
-            } else {
-                ffi::LIBMTP_filetype_t_LIBMTP_FILETYPE_UNKNOWN
-            };
+            (*file).filetype = filetype;
         }
         let mut state = Upload {
             bytes,
@@ -401,9 +398,35 @@ impl Target for Usb {
     }
 }
 
+fn filetype_for_name(name: &str) -> ffi::LIBMTP_filetype_t {
+    let lower = name.to_ascii_lowercase();
+    if lower.ends_with(".mp3") {
+        ffi::LIBMTP_filetype_t_LIBMTP_FILETYPE_MP3
+    } else if lower.ends_with(".m3u8") || lower.ends_with(".m3u") {
+        ffi::LIBMTP_filetype_t_LIBMTP_FILETYPE_PLAYLIST
+    } else {
+        ffi::LIBMTP_filetype_t_LIBMTP_FILETYPE_UNKNOWN
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn playlist_upload_uses_mtp_playlist_type() {
+        assert_eq!(
+            filetype_for_name("Test.M3U8"),
+            ffi::LIBMTP_filetype_t_LIBMTP_FILETYPE_PLAYLIST
+        );
+        assert_eq!(
+            filetype_for_name("Test.m3u"),
+            ffi::LIBMTP_filetype_t_LIBMTP_FILETYPE_PLAYLIST
+        );
+        assert_eq!(
+            filetype_for_name("Track.mp3"),
+            ffi::LIBMTP_filetype_t_LIBMTP_FILETYPE_MP3
+        );
+    }
     #[test]
     fn busy_device_does_not_discard_available_watch() {
         let scan = collect_watches([(1, 2, false), (1, 3, true)], |ok, bus, number| {

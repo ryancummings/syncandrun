@@ -40,7 +40,7 @@ enum Command {
         /// Confirm permanent removal of other watch music during --replace-music
         #[arg(long)]
         yes_replace_music: bool,
-        /// Store each track once in a shared folder with multiple playlists
+        /// Experimental: shared playlists did not appear on a Forerunner 955
         #[arg(long, conflicts_with = "replace_music")]
         shared_tracks: bool,
     },
