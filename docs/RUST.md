@@ -14,7 +14,8 @@ On Ubuntu 24.04, install the native build and runtime dependencies:
 sudo apt-get install build-essential clang pkg-config libmtp-dev libssl-dev \
   libfontconfig1-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
   libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev libx11-xcb-dev \
-  libvulkan1 mesa-vulkan-drivers xdg-desktop-portal xdg-desktop-portal-gtk
+  libvulkan1 mesa-vulkan-drivers xdg-desktop-portal xdg-desktop-portal-gtk \
+  ffmpeg
 cargo build --locked --workspace
 cargo run --locked -p syncandrun-desktop
 ```
@@ -22,19 +23,26 @@ cargo run --locked -p syncandrun-desktop
 The window needs a Linux graphical session and a working Vulkan driver. Folder
 selection for folder exports uses the desktop portal.
 
-Plug in a Garmin music watch in USB/MTP mode. The app shows model, firmware,
-and free space. Choose playlists and quality, leave **Direct to watch** selected,
-and click **Transfer to watch**. No local output folder is required. Close or
-unmount the watch in Files and other MTP applications if they hold the connection.
+For a Local folder source, choose **Local folder** and select a folder of MP3 or
+FLAC files. Direct files form a playlist named after that folder; nested folders
+with tracks form separate playlist groups. Both MP3 and FLAC audio require
+`ffmpeg` with `libmp3lame` and are converted to MP3 at the chosen quality.
+`ffprobe` reads durations for size estimates; the estimate is based on the
+selected output bitrate.
+
+Plug in a Garmin music device in USB/MTP mode. The app shows model, firmware,
+and free space. Choose playlists and quality, leave **Direct to device** selected,
+and click **Transfer to device**. No local output folder is required. Close or
+unmount the device in Files and other MTP applications if they hold the connection.
 The app checks free space and verifies files by reading them back over USB.
 The default adds new folders. Select **Replace watch music** for a confirmed,
-permanent replacement of recognized content within the watch’s Music folder.
-Use **Watch music** to inspect or remove one item. Replacement stages and
+permanent replacement of recognized content within the device’s Music folder.
+Use **Manage device content** to inspect or remove one item. Replacement stages and
 verifies new music first, so it needs enough free space for both old and new
 content. Unknown files under Music block replacement. Cancellation or USB failure
 during removal can leave a mix of old and new music; removed files cannot be
 restored. Activities and Garmin system data are outside the deletion scope. Disconnect USB
-after completion so the watch can index the music. See [direct MTP details](DIRECT-MTP.md).
+after completion so the device can index the music. See [direct MTP details](DIRECT-MTP.md).
 
 Choose **Export to folder** to retain the local library workflow. Create and
 select a folder, or confirm `~/Music/SyncAndRun` on the first export. Copy its
@@ -64,6 +72,8 @@ syncandrun transfer --playlist plex:playlist:123 --replace-music --yes-replace-m
 syncandrun transfer --playlist plex:playlist:123 --shared-tracks
 syncandrun export --destination /path/to/music --bitrate 192
 syncandrun backup --destination /path/to/private-backups
+syncandrun local-folder /path/to/your/music
+syncandrun source local
 ```
 
 `devices` identifies connected Garmin storage without opening a Plex profile.
@@ -139,7 +149,7 @@ stops synchronization. Failed or cancelled downloads remain in a uniquely named
 For direct watch transfer, the Playlists page shows verified tracks and bytes,
 an average rate, elapsed time, and an estimated time left. The rate updates
 after each verified MP3; the final removal step has no reliable time estimate.
-Use the Watch music tab to inspect or remove content inside the watch's Music
+Use the Manage watch content tab to inspect or remove content inside the watch's Music
 folder. The list reloads after each removal.
 
 ## Existing profiles

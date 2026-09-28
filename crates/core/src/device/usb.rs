@@ -43,7 +43,7 @@ fn raw_devices() -> Result<Vec<ffi::LIBMTP_raw_device_t>> {
         Ok(Vec::new())
     } else if code != ffi::LIBMTP_error_number_t_LIBMTP_ERROR_NONE {
         Err(anyhow::anyhow!(
-            "Could not scan USB devices. Check USB permissions and reconnect the watch."
+            "Could not scan USB devices. Check USB permissions and reconnect the Garmin device."
         ))
     } else if count > 0 && !raw.is_null() {
         Ok((0..count as usize)
@@ -74,7 +74,7 @@ impl Usb {
         let device = unsafe { ffi::LIBMTP_Open_Raw_Device_Uncached(raw) };
         ensure!(
             !device.is_null(),
-            "Garmin is connected but unavailable. Close Files or another MTP app, unmount the watch there, then retry. Check USB permissions if it remains unavailable."
+            "Garmin is connected but unavailable. Close Files or another MTP app, unmount the device there, then retry. Check USB permissions if it remains unavailable."
         );
         Ok(Self {
             device,
@@ -89,7 +89,7 @@ impl Usb {
         unsafe { ffi::LIBMTP_Clear_Errorstack(self.device) };
         ensure!(
             !failed,
-            "Could not {action} over USB. Reconnect the watch and close other MTP apps, then retry."
+            "Could not {action} over USB. Reconnect the device and close other MTP apps, then retry."
         );
         Ok(())
     }
@@ -104,7 +104,7 @@ impl Usb {
         );
         self.check(
             unsafe { ffi::LIBMTP_Get_Storage(self.device, 0) },
-            "read watch storage",
+            "read device storage",
         )?;
         let mut storage = unsafe { (*self.device).storage };
         let mut watches = Vec::new();
@@ -117,7 +117,7 @@ impl Usb {
                     storage_id: info.id,
                     fingerprint: fingerprint.clone(),
                     model: if model.is_empty() {
-                        "Garmin watch".into()
+                        "Garmin device".into()
                     } else {
                         model.clone()
                     },
@@ -139,13 +139,13 @@ impl Usb {
                     && r.bus_location == watch.bus
                     && r.devnum == watch.number
             })
-            .context("Watch disconnected. Reconnect it and scan again.")?;
+            .context("Garmin device disconnected. Reconnect it and scan again.")?;
         let mut usb = Self::from_raw(&mut raw, guard)?;
         ensure!(
             usb.watches(watch.bus, watch.number)?
                 .iter()
                 .any(|w| w.fingerprint == watch.fingerprint && w.storage_id == watch.storage_id),
-            "The connected watch changed. Scan and select it again."
+            "The connected Garmin device changed. Scan and select it again."
         );
         usb.storage = watch.storage_id;
         Ok(usb)
@@ -249,7 +249,7 @@ impl Target for Usb {
     fn storage(&mut self) -> Result<Storage> {
         self.check(
             unsafe { ffi::LIBMTP_Get_Storage(self.device, 0) },
-            "read watch storage",
+            "read device storage",
         )?;
         let mut item = unsafe { (*self.device).storage };
         while !item.is_null() {
@@ -262,7 +262,7 @@ impl Target for Usb {
             }
             item = info.next;
         }
-        bail!("Watch storage is no longer available")
+        bail!("Device storage is no longer available")
     }
     fn list(&mut self, parent: u32) -> Result<Vec<Object>> {
         let mut item = unsafe {
@@ -295,7 +295,7 @@ impl Target for Usb {
             };
             item = next;
         }
-        self.check(0, "list watch folders")?;
+        self.check(0, "list device folders")?;
         Ok(files)
     }
     fn folder(&mut self, parent: u32, name: &str) -> Result<u32> {
@@ -346,7 +346,7 @@ impl Target for Usb {
         };
         let id = unsafe { (*file).item_id };
         unsafe { ffi::LIBMTP_destroy_file_t(file) };
-        let result = self.check(code, "send music to the watch");
+        let result = self.check(code, "send music to the device");
         if result.is_err()
             || cancel.load(Ordering::Relaxed)
             || state.offset != bytes.len()
@@ -354,7 +354,7 @@ impl Target for Usb {
         {
             if id != 0 && self.delete(id).is_err() {
                 bail!(
-                    "Part of a music file could not be removed. Reconnect the watch and check its Music folder before retrying."
+                    "Part of a music file could not be removed. Reconnect the device and check its Music folder before retrying."
                 );
             }
             result?;
@@ -387,7 +387,7 @@ impl Target for Usb {
         } else {
             ensure!(
                 state.count == bytes.len() as u64 && state.hash.finalize() == Sha256::digest(bytes),
-                "Watch read-back verification failed"
+                "Device read-back verification failed"
             );
         }
         Ok(())

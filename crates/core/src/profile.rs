@@ -18,7 +18,7 @@ use std::{
 use uuid::Uuid;
 
 // These are the historical migrations, including inert watch tables. Never renumber them.
-const MIGRATIONS: [(&str, &str); 11] = [
+const MIGRATIONS: [(&str, &str); 12] = [
     ("initial", include_str!("migrations/001_initial.sql")),
     (
         "initialize_manifest_revision",
@@ -60,6 +60,10 @@ const MIGRATIONS: [(&str, &str); 11] = [
         "music_providers",
         include_str!("migrations/011_music_providers.sql"),
     ),
+    (
+        "local_folder",
+        include_str!("migrations/012_local_folder.sql"),
+    ),
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -67,18 +71,21 @@ const MIGRATIONS: [(&str, &str); 11] = [
 pub enum Provider {
     Plex,
     Jellyfin,
+    Local,
 }
 impl Provider {
     pub fn label(self) -> &'static str {
         match self {
             Self::Plex => "Plex",
             Self::Jellyfin => "Jellyfin",
+            Self::Local => "Local folder",
         }
     }
     pub fn bitrates(self) -> &'static [u16] {
         match self {
             Self::Plex => &crate::BITRATES,
             Self::Jellyfin => &crate::BITRATES[..5],
+            Self::Local => &crate::BITRATES,
         }
     }
     pub fn validate_bitrate(self, bitrate: u16) -> Result<()> {
@@ -93,6 +100,7 @@ impl Provider {
         match self {
             Self::Plex => "plex",
             Self::Jellyfin => "jellyfin",
+            Self::Local => "local",
         }
     }
 }
@@ -201,7 +209,7 @@ impl Profile {
             [],
             |r| r.get(0),
         )?;
-        ensure!(newest <= 11, "Profile belongs to a newer app version");
+        ensure!(newest <= 12, "Profile belongs to a newer app version");
         for (i, (name, sql)) in MIGRATIONS.iter().enumerate() {
             let version = i + 1;
             let tx = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
@@ -346,14 +354,28 @@ impl Profile {
         match value.as_str() {
             "plex" => Ok(Provider::Plex),
             "jellyfin" => Ok(Provider::Jellyfin),
+            "local" => Ok(Provider::Local),
             _ => bail!("Invalid music provider"),
         }
+    }
+    pub fn has_saved_provider(&self, provider: Provider) -> Result<bool> {
+        let query = match provider {
+            Provider::Plex => "SELECT 1 FROM plex_connection WHERE id=1",
+            Provider::Jellyfin => "SELECT 1 FROM jellyfin_connection WHERE id=1",
+            Provider::Local => "SELECT 1 FROM local_folder WHERE id=1",
+        };
+        Ok(self
+            .db
+            .query_row(query, [], |row| row.get::<_, i64>(0))
+            .optional()?
+            .is_some())
     }
     pub fn set_active_provider(&mut self, provider: Provider) -> Result<()> {
         ensure!(
             match provider {
                 Provider::Plex => self.connection()?.is_some(),
                 Provider::Jellyfin => self.jellyfin_connection()?.is_some(),
+                Provider::Local => self.local_folder()?.is_some(),
             },
             "Connect to this music provider first"
         );
@@ -364,6 +386,28 @@ impl Profile {
         tx.execute(
             "UPDATE music_provider SET provider=?,source_revision=? WHERE id=1",
             params![provider.stored(), Uuid::new_v4().to_string()],
+        )?;
+        tx.execute_batch("DELETE FROM playlist_snapshots; DELETE FROM track_metadata; UPDATE settings SET selected_playlist_ids='[]',manifest_revision=NULL WHERE id=1;")?;
+        tx.commit()?;
+        Ok(())
+    }
+    pub fn local_folder(&self) -> Result<Option<PathBuf>> {
+        let root: Option<String> = self
+            .db
+            .query_row("SELECT root FROM local_folder WHERE id=1", [], |r| r.get(0))
+            .optional()?;
+        Ok(root.map(PathBuf::from))
+    }
+    pub fn set_local_folder(&mut self, root: &Path) -> Result<()> {
+        let root = root
+            .canonicalize()
+            .context("Choose an existing local music folder")?;
+        ensure!(root.is_dir(), "Local music source must be a folder");
+        let tx = self.db.transaction()?;
+        tx.execute("INSERT INTO local_folder(id,root) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET root=excluded.root", [root.to_string_lossy().as_ref()])?;
+        tx.execute(
+            "UPDATE music_provider SET provider='local',source_revision=? WHERE id=1",
+            [Uuid::new_v4().to_string()],
         )?;
         tx.execute_batch("DELETE FROM playlist_snapshots; DELETE FROM track_metadata; UPDATE settings SET selected_playlist_ids='[]',manifest_revision=NULL WHERE id=1;")?;
         tx.commit()?;
@@ -596,6 +640,18 @@ mod tests {
         jellyfin.library_id = "other-library".into();
         profile.save_jellyfin_connection(&jellyfin).unwrap();
         assert_ne!(revision, profile.source_revision().unwrap());
+        profile.set_local_folder(root.path()).unwrap();
+        assert_eq!(profile.active_provider().unwrap(), Provider::Local);
+        assert!(profile.selected_ids().unwrap().is_empty());
+        assert_eq!(
+            profile.connection().unwrap().unwrap().token,
+            "fake-server-token"
+        );
+        assert_eq!(
+            profile.jellyfin_connection().unwrap().unwrap().token,
+            "fake-jellyfin-token"
+        );
+        profile.set_active_provider(Provider::Jellyfin).unwrap();
         let revision = profile.source_revision().unwrap();
         drop(profile);
         let profile = Profile::open(root.path()).unwrap();
@@ -611,7 +667,7 @@ mod tests {
     fn historical_sql_matches_the_original_migrations() {
         let original = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../companion/src/persistence/migrations");
-        for (i, (name, sql)) in MIGRATIONS.iter().enumerate() {
+        for (i, (name, sql)) in MIGRATIONS.iter().take(11).enumerate() {
             let source =
                 fs::read_to_string(original.join(format!("{:03}_{name}.ts", i + 1))).unwrap();
             let original_sql = source
@@ -682,7 +738,7 @@ mod tests {
                 .query_row("SELECT count(*) FROM schema_migrations", [], |r| r
                     .get::<_, u32>(0))
                 .unwrap(),
-            11
+            12
         );
         profile
             .save_connection("owner-1", &synthetic_connection())
@@ -741,7 +797,7 @@ mod tests {
         profile
             .db
             .execute(
-                "INSERT INTO schema_migrations VALUES(12,'future','now')",
+                "INSERT INTO schema_migrations VALUES(13,'future','now')",
                 [],
             )
             .unwrap();

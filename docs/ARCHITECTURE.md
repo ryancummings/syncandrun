@@ -24,6 +24,14 @@ sign-in and header authentication, with redirect rejection and bounded JSON
 responses. The saved connection pins the server and user identity. Playlist
 entries retain their order and repeats; IDs are prefixed by provider.
 
+Local folder is a third native source. Migration 012 saves the selected folder
+without changing Plex or Jellyfin credentials. Discovery ignores symlinks and
+caps depth, directory and file counts, and total source bytes. A folder that
+contains audio becomes one playlist group. IDs use relative folder paths so
+groups stay distinct. `ffprobe` supplies track durations; MP3 and FLAC files
+stream through `ffmpeg` at the selected MP3 bitrate into the common tag writer.
+The same verified MTP transfer engine handles all three sources.
+
 Migration 011 adds Jellyfin credentials and the active music provider without
 replacing Plex credentials, the Plex owner, or the ten historical migrations.
 Switching sources clears snapshots and selection so an export cannot apply a
@@ -52,7 +60,7 @@ new folders under Music, uploads and hashes each MP3 by reading it back, then
 publishes and validates the playlist. It deletes only objects created by the
 current attempt on cancellation or failure; unsuccessful cleanup is reported.
 A private target trait supplies an in-memory fake for failure tests. Discovery
-keeps writable watches when another Garmin is busy and reports unavailable
+keeps writable devices when another Garmin is busy and reports unavailable
 devices separately. Optional replacement validates the Music subtree, stages
 and verifies new playlists, then removes old recognized music objects. Unknown
 files stop replacement before upload. Deletion is confined to Music and cannot

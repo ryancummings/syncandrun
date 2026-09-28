@@ -51,6 +51,10 @@ fn key(s: &str) -> Result<()> {
     Ok(())
 }
 fn base(s: &str) -> Result<Url> {
+    ensure!(
+        s.starts_with("http://") || s.starts_with("https://"),
+        "Start the Jellyfin server address with http:// or https://"
+    );
     let mut u = Url::parse(s).map_err(|_| anyhow::anyhow!("Enter a valid Jellyfin server URL"))?;
     ensure!(
         ["http", "https"].contains(&u.scheme())
@@ -748,11 +752,20 @@ mod tests {
         assert!(client.verify(&connection(url)).is_err());
         server.join().unwrap();
         for invalid in [
+            "192.168.1.20:8096",
+            "music.example.org/jellyfin",
             "file:///tmp/test",
             "https://user:password@example.com",
             "https://example.com/?api_key=secret",
         ] {
             assert!(base(invalid).is_err());
         }
+        assert!(
+            base("192.168.1.20:8096")
+                .unwrap_err()
+                .to_string()
+                .contains("http:// or https://")
+        );
+        assert!(base("http://192.168.1.20:8096").is_ok());
     }
 }

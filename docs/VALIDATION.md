@@ -1,5 +1,16 @@
 # Validation
 
+## Local folder source (2026-09-28)
+
+Synthetic tests cover bounded, symlink-free MP3/FLAC discovery, profile switching
+without losing saved Plex or Jellyfin connections, duration-based size estimates,
+and conversion of both formats to the selected MP3 bitrate. A generated FLAC
+playlist passed transfer through the fake watch target, including MP3 and M3U8
+objects. The native desktop built and its Local folder page was inspected with
+an isolated profile containing a generated tone. No real library or NAS data
+was accessed. A physical watch transfer from the Local folder source has not
+been tested.
+
 ## Jellyfin in the Linux app and CLI (2026-09-28)
 
 A disposable Jellyfin 10.11.6 server with generated FLAC tones passed native

@@ -2,6 +2,7 @@
 pub mod device;
 pub mod export;
 pub mod jellyfin;
+pub mod local;
 pub mod plex;
 pub mod profile;
 pub mod provider;

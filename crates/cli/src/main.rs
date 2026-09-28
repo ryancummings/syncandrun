@@ -17,7 +17,7 @@ use syncandrun_core::{
 #[derive(Parser)]
 #[command(
     version,
-    about = "Export Plex or Jellyfin music playlists for a Garmin watch"
+    about = "Export Plex, Jellyfin, or local music for a Garmin device"
 )]
 struct Args {
     /// Profile folder containing secret and data/syncandrun.sqlite
@@ -28,9 +28,9 @@ struct Args {
 }
 #[derive(Subcommand)]
 enum Command {
-    /// Identify connected Garmin watches and writable storage over USB MTP
+    /// Identify connected Garmin devices and writable storage over USB MTP
     Devices,
-    /// Transfer playlists directly to a Garmin watch, without a local export folder
+    /// Transfer playlists directly to a Garmin device, without a local export folder
     Transfer {
         #[arg(long = "playlist")]
         playlists: Vec<String>,
@@ -64,6 +64,8 @@ enum Command {
         #[arg(long)]
         library: Option<String>,
     },
+    /// Choose a local MP3/FLAC folder and make it the active music source
+    LocalFolder { folder: PathBuf },
     /// Switch to a saved connection; clears playlist selection and snapshots
     Source {
         #[arg(value_enum)]
@@ -114,6 +116,7 @@ enum Command {
 enum SourceName {
     Plex,
     Jellyfin,
+    Local,
 }
 
 fn read_password(from_stdin: bool) -> Result<String> {
@@ -163,9 +166,9 @@ fn run(args: Args) -> Result<()> {
             println!(
                 "{}",
                 if scan.unavailable.is_empty() {
-                    "No Garmin watch connected."
+                    "No Garmin device connected."
                 } else {
-                    "No usable Garmin watch found."
+                    "No usable Garmin device found."
                 }
             );
         }
@@ -216,11 +219,11 @@ fn run(args: Args) -> Result<()> {
                 Some(key) => watches
                     .iter()
                     .find(|w| w.key() == key)
-                    .context("Selected watch is not connected")?,
+                    .context("Selected Garmin device is not connected")?,
                 None => {
                     ensure!(
                         watches.len() == 1,
-                        "Connect one Garmin watch, or use --device bus:number:storage_id from devices"
+                        "Connect one Garmin device, or use --device bus:number:storage_id from devices"
                     );
                     &watches[0]
                 }
@@ -305,6 +308,7 @@ fn run(args: Args) -> Result<()> {
             let provider = match provider {
                 SourceName::Plex => Provider::Plex,
                 SourceName::Jellyfin => Provider::Jellyfin,
+                SourceName::Local => Provider::Local,
             };
             profile.set_active_provider(provider)?;
             println!(
@@ -312,11 +316,16 @@ fn run(args: Args) -> Result<()> {
                 provider.label()
             );
         }
+        Command::LocalFolder { folder } => {
+            profile.set_local_folder(&folder)?;
+            println!("Local folder selected. Choose playlists again before exporting.");
+        }
         Command::Status => {
             let provider = profile.active_provider()?;
             let connected = match provider {
                 Provider::Plex => profile.connection()?.is_some(),
                 Provider::Jellyfin => profile.jellyfin_connection()?.is_some(),
+                Provider::Local => profile.local_folder()?.is_some(),
             };
             if connected {
                 println!("Connected to {}", provider.label());
@@ -381,7 +390,7 @@ fn run(args: Args) -> Result<()> {
             )?;
             println!("{}", output.display());
             eprintln!(
-                "Files ready. Copy the exported playlist folders to the watch's Music folder with an MTP app."
+                "Files ready. Copy the exported playlist folders to the device's Music folder with an MTP app."
             );
         }
         Command::Backup { destination } => {
