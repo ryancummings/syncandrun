@@ -1,8 +1,10 @@
 //! Shared local profile, Plex client and export engine. No HTTP listener is started.
 pub mod device;
 pub mod export;
+pub mod jellyfin;
 pub mod plex;
 pub mod profile;
+pub mod provider;
 
 use serde::{Deserialize, Serialize};
 

@@ -1,4 +1,6 @@
-use anyhow::{Context as _, Result};
+mod input;
+
+use anyhow::{Context as _, Result, ensure};
 use gpui::{prelude::*, *};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -16,8 +18,10 @@ use syncandrun_core::{
     BITRATES,
     device::{self, Discovery, Watch},
     export::{self, Progress},
+    jellyfin::{Jellyfin, JellyfinLogin},
     plex::{self, LibraryOverview, Login, PlaylistSummary, Plex, ServerChoice},
-    profile::{self, Profile},
+    profile::{self, Profile, Provider},
+    provider::MusicSource,
 };
 
 enum Event {
@@ -30,13 +34,17 @@ enum Event {
     WatchProgress(device::TransferProgress),
     Transferred(device::TransferResult),
     Loaded {
+        provider: Provider,
+        source_revision: String,
         connected: bool,
         playlists: Vec<PlaylistSummary>,
         selected: Vec<String>,
         server: Option<(String, String, String)>,
         overview: Option<LibraryOverview>,
     },
-    ConnectionUnavailable(String, (String, String, String)),
+    ConnectionUnavailable(Provider, String, String, (String, String, String)),
+    JellyfinSignedIn(JellyfinLogin),
+    SetupRequired(Provider),
     SignedIn(Login),
     Discovered(ServerChoice),
     Connected,
@@ -51,6 +59,10 @@ struct Preferences {
     #[serde(default = "direct_default")]
     direct: bool,
     selected: Vec<String>,
+    #[serde(default)]
+    provider: Option<Provider>,
+    #[serde(default)]
+    source_revision: String,
     #[serde(default)]
     library_folder: Option<PathBuf>,
     #[serde(
@@ -99,6 +111,14 @@ struct Desktop {
     last_scan: Instant,
     direct: bool,
     connected: bool,
+    provider: Provider,
+    preference_provider: Option<Provider>,
+    source_revision: String,
+    jellyfin_setup: bool,
+    jellyfin_login: Option<Arc<JellyfinLogin>>,
+    jellyfin_url: Entity<input::Input>,
+    jellyfin_user: Entity<input::Input>,
+    jellyfin_password: Entity<input::Input>,
     playlists: Vec<PlaylistSummary>,
     selected: HashSet<String>,
     server: Option<(String, String, String)>,
@@ -180,6 +200,14 @@ impl Desktop {
             last_scan: Instant::now(),
             direct: true,
             connected: false,
+            provider: Provider::Plex,
+            preference_provider: None,
+            source_revision: String::new(),
+            jellyfin_setup: false,
+            jellyfin_login: None,
+            jellyfin_url: cx.new(|cx| input::Input::new(false, cx)),
+            jellyfin_user: cx.new(|cx| input::Input::new(false, cx)),
+            jellyfin_password: cx.new(|cx| input::Input::new(true, cx)),
             playlists: vec![],
             selected: HashSet::new(),
             server: None,
@@ -214,6 +242,8 @@ impl Desktop {
             ..Default::default()
         });
         this.direct = prefs.direct;
+        this.preference_provider = prefs.provider;
+        this.source_revision = prefs.source_revision.clone();
         let chosen_library = chosen_library(&prefs);
         this.selected = prefs.selected.into_iter().collect();
         this.using_default_library = chosen_library.is_none();
@@ -318,14 +348,20 @@ impl Desktop {
         self.watch_done = false;
         self.watch_finished_elapsed = None;
         self.export_started = Some(Instant::now());
+        let expected_provider = self.provider;
+        let expected_revision = self.source_revision.clone();
         self.job(
             "Refreshing selected playlists for the watch…",
             move |path, cancel, sender| {
                 let mut profile = Profile::open(path)?;
-                let plex = Plex::new(&profile)?;
-                let plan = plex.refresh(&mut profile, &ids, &cancel)?;
-                let connection = profile.connection()?.context("Sign in to Plex first")?;
-                let source = |t: &syncandrun_core::Track, b| plex.audio(&connection, t, b);
+                ensure!(
+                    profile.active_provider()? == expected_provider
+                        && profile.source_revision()? == expected_revision,
+                    "The music connection changed. Refresh playlists before exporting."
+                );
+                let source = MusicSource::new(&profile)?;
+                let plan = source.refresh(&mut profile, &ids, &cancel)?;
+                let source = |t: &syncandrun_core::Track, b| source.audio(&profile, t, b);
                 let progress = |p| {
                     let _ = sender.send(Event::WatchProgress(p));
                 };
@@ -376,37 +412,95 @@ impl Desktop {
         });
     }
     fn load(&mut self) {
-        self.job("Loading Plex playlists…", |path, cancel, _| {
+        self.job("Loading music playlists…", |path, cancel, _| {
             let profile = Profile::open(path)?;
-            let plex = Plex::new(&profile)?;
-            let connection = profile.connection()?;
-            let playlists = if let Some(connection) = &connection {
-                match plex.playlists(connection, &cancel) {
+            let provider = profile.active_provider()?;
+            let source_revision = profile.source_revision()?;
+            let server = match provider {
+                Provider::Plex => profile
+                    .connection()?
+                    .map(|c| (c.base_uri, c.server_id, c.library_id)),
+                Provider::Jellyfin => profile
+                    .jellyfin_connection()?
+                    .map(|c| (c.base_uri, c.server_id, c.library_id)),
+            };
+            let (playlists, overview) = if let Some(server_info) = server.as_ref() {
+                let source = MusicSource::new(&profile)?;
+                let playlists = match source.playlists(&profile, &cancel) {
                     Ok(playlists) => playlists,
                     Err(error) => {
                         return Ok(Event::ConnectionUnavailable(
+                            provider,
+                            source_revision,
                             error.to_string(),
-                            (
-                                connection.base_uri.clone(),
-                                connection.server_id.clone(),
-                                connection.library_id.clone(),
-                            ),
+                            server_info.clone(),
                         ));
                     }
-                }
+                };
+                (playlists, source.library_overview(&profile).ok())
             } else {
-                vec![]
+                (vec![], None)
             };
-            let overview = connection
-                .as_ref()
-                .and_then(|connection| plex.library_overview(connection).ok());
             Ok(Event::Loaded {
-                connected: connection.is_some(),
+                provider,
+                source_revision,
+                connected: server.is_some(),
                 playlists,
                 selected: profile.selected_ids()?,
-                server: connection.map(|c| (c.base_uri, c.server_id, c.library_id)),
+                server,
                 overview,
             })
+        });
+    }
+    fn switch_provider(&mut self, provider: Provider, cx: &mut Context<Self>) {
+        if self.busy || self.modal.is_some() {
+            return;
+        }
+        if self.provider == provider
+            && self.connected
+            && !self.jellyfin_setup
+            && self.login.is_none()
+            && self.choice.is_none()
+            && self.jellyfin_login.is_none()
+        {
+            return;
+        }
+        self.login = None;
+        self.choice = None;
+        self.jellyfin_login = None;
+        self.jellyfin_setup = false;
+        self.jellyfin_password
+            .update(cx, |input, cx| input.clear(cx));
+        self.selected.clear();
+        self.playlists.clear();
+        self.has_saved_selection = false;
+        self.job("Switching music source…", move |path, _, _| {
+            let mut profile = Profile::open(path)?;
+            let saved = match provider {
+                Provider::Plex => profile.connection()?.is_some(),
+                Provider::Jellyfin => profile.jellyfin_connection()?.is_some(),
+            };
+            if !saved {
+                return Ok(Event::SetupRequired(provider));
+            }
+            profile.set_active_provider(provider)?;
+            Ok(Event::Connected)
+        });
+    }
+    fn jellyfin_sign_in(&mut self, cx: &mut Context<Self>) {
+        if self.busy {
+            return;
+        }
+        let url = self.jellyfin_url.read(cx).value().to_owned();
+        let username = self.jellyfin_user.read(cx).value().to_owned();
+        let password = self.jellyfin_password.read(cx).value().to_owned();
+        self.jellyfin_password
+            .update(cx, |input, cx| input.clear(cx));
+        self.job("Signing in to Jellyfin…", move |path, cancel, _| {
+            let profile = Profile::open(path)?;
+            Ok(Event::JellyfinSignedIn(
+                Jellyfin::new(&profile)?.authenticate(&url, &username, &password, &cancel)?,
+            ))
         });
     }
     fn save_preferences(&mut self) {
@@ -417,6 +511,8 @@ impl Desktop {
             .map(|p| p.id.clone())
             .collect();
         let prefs = Preferences {
+            provider: Some(self.provider),
+            source_revision: self.source_revision.clone(),
             direct: self.direct,
             selected,
             library_folder: if self.using_default_library {
@@ -543,12 +639,26 @@ impl Desktop {
                 return;
             }
             Event::Loaded {
+                provider,
+                source_revision,
                 connected,
                 playlists,
                 selected,
                 server,
                 overview,
             } => {
+                if self.preference_provider.unwrap_or(Provider::Plex) != provider
+                    || self.source_revision != source_revision
+                {
+                    self.selected.clear();
+                    self.has_saved_selection = false;
+                }
+                self.source_revision = source_revision;
+                self.provider = provider;
+                if !provider.bitrates().contains(&self.bitrate) {
+                    self.bitrate = 256;
+                }
+                self.preference_provider = Some(provider);
                 self.connected = connected;
                 self.playlists = playlists;
                 self.server = server;
@@ -556,7 +666,7 @@ impl Desktop {
                 self.connection_status = if connected {
                     "Connected and playlists loaded"
                 } else {
-                    "No Plex account connected"
+                    "No music account connected"
                 }
                 .into();
                 if !self.has_saved_selection {
@@ -565,9 +675,23 @@ impl Desktop {
                 self.status = if connected {
                     "Ready to export."
                 } else {
-                    "Connect your Plex account to get started."
+                    "Connect a music account to get started."
                 }
                 .into();
+            }
+            Event::SetupRequired(provider) => {
+                self.provider = provider;
+                self.connected = false;
+                self.server = None;
+                self.overview = None;
+                self.connection_status = "No music account connected".into();
+                self.jellyfin_setup = provider == Provider::Jellyfin;
+                self.status = "Connect a music account to get started.".into();
+                self.page = Page::Playlists;
+            }
+            Event::JellyfinSignedIn(login) => {
+                self.jellyfin_login = Some(Arc::new(login));
+                self.status = "Choose your Jellyfin music library.".into();
             }
             Event::SignedIn(login) => {
                 self.login = Some(Arc::new(login));
@@ -579,6 +703,10 @@ impl Desktop {
                 self.status = "Choose your music library.".into();
             }
             Event::Connected => {
+                self.selected.clear();
+                self.has_saved_selection = false;
+                self.jellyfin_setup = false;
+                self.jellyfin_login = None;
                 self.login = None;
                 self.choice = None;
                 self.connected = true;
@@ -598,11 +726,21 @@ impl Desktop {
                     result.removed, result.preserved_modified
                 );
             }
-            Event::ConnectionUnavailable(message, server) => {
+            Event::ConnectionUnavailable(provider, source_revision, message, server) => {
+                if self.provider != provider || self.source_revision != source_revision {
+                    self.selected.clear();
+                    self.playlists.clear();
+                }
+                self.source_revision = source_revision;
+                self.provider = provider;
+                if !provider.bitrates().contains(&self.bitrate) {
+                    self.bitrate = 256;
+                }
                 self.connected = true;
                 self.server = Some(server);
                 self.overview = None;
-                self.connection_status = "Saved connection; Plex is unreachable".into();
+                self.connection_status =
+                    format!("Saved connection; {} is unreachable", self.provider.label());
                 self.status =
                     format!("{message}. Your saved connection is intact. Use Refresh to retry.");
             }
@@ -700,13 +838,19 @@ impl Desktop {
         self.output = None;
         self.progress = None;
         self.export_started = Some(Instant::now());
+        let expected_provider = self.provider;
+        let expected_revision = self.source_revision.clone();
         self.job(
             "Refreshing the selected playlists…",
             move |path, cancel, sender| {
                 let mut profile = Profile::open(path)?;
-                let plex = Plex::new(&profile)?;
-                let plan = plex.refresh(&mut profile, &ids, &cancel)?;
-                let connection = profile.connection()?.context("Sign in to Plex first")?;
+                ensure!(
+                    profile.active_provider()? == expected_provider
+                        && profile.source_revision()? == expected_revision,
+                    "The music connection changed. Refresh playlists before exporting."
+                );
+                let source = MusicSource::new(&profile)?;
+                let plan = source.refresh(&mut profile, &ids, &cancel)?;
                 if create_default && !destination.exists() {
                     fs::create_dir_all(&destination)
                         .context("Could not create the default music library folder")?;
@@ -716,7 +860,7 @@ impl Desktop {
                     bitrate,
                     &destination,
                     &cancel,
-                    |t, b| plex.audio(&connection, t, b),
+                    |t, b| source.audio(&profile, t, b),
                     |p| {
                         let _ = sender.send(Event::Progress(p));
                     },
@@ -883,6 +1027,32 @@ impl Render for Desktop {
             ));
         }
         let mut content = div().flex().flex_col().gap_3();
+        if self.page != Page::WatchMusic {
+            let mut sources = div().flex().items_center().gap_2().child("Music source");
+            for (i, provider) in [Provider::Plex, Provider::Jellyfin].into_iter().enumerate() {
+                sources = sources.child(
+                    button(
+                        ("music-source", i),
+                        format!(
+                            "{}{}",
+                            if self.provider == provider {
+                                "✓ "
+                            } else {
+                                ""
+                            },
+                            provider.label()
+                        ),
+                        active,
+                    )
+                    .on_click(cx.listener(move |view, _, _, cx| {
+                        view.switch_provider(provider, cx);
+                        cx.notify();
+                    })),
+                );
+            }
+            content = content.child(sources);
+        }
+
         if self.page == Page::WatchMusic {
             content = content.child(div().text_2xl().child("Watch music"))
                 .child(div().text_sm().child("See files and folders directly inside the watch’s Music folder. Folder sizes include their contents. To add or replace music, open Playlists. Activities and Garmin files outside Music stay on the watch."))
@@ -920,6 +1090,79 @@ impl Render for Desktop {
                         ),
                 );
             }
+        } else if let Some(login) = self.jellyfin_login.clone() {
+            content = content.child(
+                div()
+                    .text_xl()
+                    .child(format!("Choose a music library on {}", login.server_name)),
+            );
+            if login.libraries.is_empty() {
+                content = content.child("No music libraries are available to this Jellyfin account. Check library access on your server.");
+            }
+            for (i, library) in login.libraries.iter().enumerate() {
+                let id = library.id.clone();
+                let login = login.clone();
+                content = content.child(
+                    button(("jellyfin-library", i), library.title.clone(), active).on_click(
+                        cx.listener(move |view, _, _, cx| {
+                            let login = login.clone();
+                            let id = id.clone();
+                            view.job("Saving Jellyfin connection…", move |path, _, _| {
+                                let mut profile = Profile::open(path)?;
+                                Jellyfin::new(&profile)?.connect(&mut profile, &login, &id)?;
+                                Ok(Event::Connected)
+                            });
+                            cx.notify();
+                        }),
+                    ),
+                );
+            }
+            content = content.child(button("jellyfin-back", "Back to sign in", active).on_click(
+                cx.listener(|view, _, _, cx| {
+                    if !view.busy {
+                        view.jellyfin_login = None;
+                        view.jellyfin_setup = true;
+                        cx.notify();
+                    }
+                }),
+            ));
+        } else if self.jellyfin_setup || (!self.connected && self.provider == Provider::Jellyfin) {
+            let inputs = [
+                self.jellyfin_url.clone(),
+                self.jellyfin_user.clone(),
+                self.jellyfin_password.clone(),
+            ];
+            let focus: Vec<_> = inputs.iter().map(|input| input.focus_handle(cx)).collect();
+            let mut form = panel().flex().flex_col().gap_3().max_w(px(620.))
+                .child(div().text_xl().child("Connect Jellyfin"))
+                .child(div().text_sm().child("Enter your Jellyfin server address and account. Use the full address, including a base path if your server has one."))
+                .child(div().text_sm().child("Server address (for example, https://music.example.org/jellyfin)"));
+            if active {
+                form = form
+                    .child(self.jellyfin_url.clone())
+                    .child("Username")
+                    .child(self.jellyfin_user.clone())
+                    .child("Password")
+                    .child(self.jellyfin_password.clone());
+            } else {
+                form = form.child("Signing in…");
+            }
+            form = form.child(div().text_sm().text_color(rgb(0xb8b3a8)).child("The saved access token is encrypted in your local profile. Your password is not saved."))
+                .child(button("jellyfin-login", "Sign in to Jellyfin", active).on_click(cx.listener(|view, _, _, cx| { view.jellyfin_sign_in(cx); cx.notify(); })))
+                .on_key_down(cx.listener(move |view, event: &KeyDownEvent, window, cx| {
+                    if view.busy { return; }
+                    if event.keystroke.key == "tab" {
+                        let current = focus.iter().position(|f| f.is_focused(window)).unwrap_or(0);
+                        let next = if event.keystroke.modifiers.shift { (current + focus.len() - 1) % focus.len() } else { (current + 1) % focus.len() };
+                        window.focus(&focus[next]);
+                        cx.stop_propagation();
+                    } else if event.keystroke.key == "enter" {
+                        view.jellyfin_sign_in(cx);
+                        cx.stop_propagation();
+                        cx.notify();
+                    }
+                }));
+            content = content.child(form);
         } else if let Some(choice) = self.choice.clone() {
             content = content.child(div().text_xl().child("Choose a music library"));
             if choice.libraries.is_empty() {
@@ -983,7 +1226,7 @@ impl Render for Desktop {
                 .overview
                 .as_ref()
                 .and_then(|o| o.server_name.as_deref())
-                .unwrap_or("Saved Plex server");
+                .unwrap_or("Saved music server");
             let server_version = self
                 .overview
                 .as_ref()
@@ -1020,7 +1263,11 @@ impl Render for Desktop {
                 .flex_1()
                 .min_w(px(0.))
                 .when(!compact, |card| card.h(px(410.)))
-                .child(div().text_xl().child("Plex server"))
+                .child(
+                    div()
+                        .text_xl()
+                        .child(format!("{} server", self.provider.label())),
+                )
                 .child(div().text_lg().child(server_name.to_owned()))
                 .child(
                     div()
@@ -1032,17 +1279,19 @@ impl Render for Desktop {
                 .child(div().text_sm().truncate().child(server_address.to_owned()))
                 .child(div().text_sm().text_color(rgb(0xaaa79d)).child("Server ID"))
                 .child(div().text_sm().truncate().child(server_id.to_owned()))
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(rgb(0xaaa79d))
-                        .child(format!("Plex version · {server_version}")),
-                )
+                .child(div().text_sm().text_color(rgb(0xaaa79d)).child(format!(
+                    "{} version · {server_version}",
+                    self.provider.label()
+                )))
                 .child(
                     button("account", "Connect or change account", active).on_click(cx.listener(
                         |view, _, _, cx| {
                             if view.modal.is_none() {
-                                view.sign_in();
+                                if view.provider == Provider::Jellyfin {
+                                    view.jellyfin_setup = true;
+                                } else {
+                                    view.sign_in();
+                                }
                                 cx.notify();
                             }
                         },
@@ -1088,11 +1337,11 @@ impl Render for Desktop {
             };
             let library_card = panel().flex().flex_col().gap_3().flex_1().min_w(px(0.))
                 .when(!compact, |card| card.h(px(410.)))
-                .child(div().text_xl().child("Plex music library"))
+                .child(div().text_xl().child(format!("{} music library", self.provider.label())))
                 .child(div().text_lg().child(library_name.to_owned()))
                 .child(div().text_sm().text_color(rgb(0xaaa79d)).child(format!("Library ID · {library_id}")))
                 .child(div().text_sm().text_color(rgb(0xb8b3a8)).child(
-                    "SyncAndRun reads playlists and tracks from Plex. It does not change your Plex library."
+                    format!("SyncAndRun reads playlists and tracks from {}. It does not change your music library.", self.provider.label())
                 ))
                 .child(statistics);
             let layout = if compact {
@@ -1189,8 +1438,10 @@ impl Render for Desktop {
             let mut available = div().id("available-playlists").flex().flex_col().gap_2();
             let mut syncing = div().id("syncing-playlists").flex().flex_col().gap_2();
             if self.playlists.is_empty() {
-                available =
-                    available.child("No audio playlists found. Create one in Plex, then refresh.");
+                available = available.child(format!(
+                    "No audio playlists found. Create one in {}, then refresh.",
+                    self.provider.label()
+                ));
             }
             for (i, playlist) in self.playlists.iter().enumerate() {
                 let id = playlist.id.clone();
@@ -1241,12 +1492,16 @@ impl Render for Desktop {
                         .items_center()
                         .child(div().text_xl().child("Playlists"))
                         .child(
-                            button("refresh", "Refresh from Plex", active)
-                                .text_sm()
-                                .on_click(cx.listener(|view, _, _, cx| {
-                                    view.load();
-                                    cx.notify();
-                                })),
+                            button(
+                                "refresh",
+                                format!("Refresh from {}", self.provider.label()),
+                                active,
+                            )
+                            .text_sm()
+                            .on_click(cx.listener(|view, _, _, cx| {
+                                view.load();
+                                cx.notify();
+                            })),
                         ),
                 )
                 .child(
@@ -1263,11 +1518,8 @@ impl Render for Desktop {
                         .child(format!("Available · {}", available_count)),
                 )
                 .child(available);
-            let qualities = div()
-                .flex()
-                .flex_wrap()
-                .gap_2()
-                .children(BITRATES.into_iter().map(|bitrate| {
+            let qualities = div().flex().flex_wrap().gap_2().children(
+                self.provider.bitrates().iter().copied().map(|bitrate| {
                     let selected = self.bitrate == bitrate;
                     button(
                         ("quality", bitrate as usize),
@@ -1283,7 +1535,8 @@ impl Render for Desktop {
                             cx.notify();
                         }
                     }))
-                }));
+                }),
+            );
             let folder = self
                 .destination
                 .as_ref()
@@ -1575,7 +1828,10 @@ impl Render for Desktop {
                                 .text_sm()
                                 .text_color(rgb(0xd7a05a))
                                 .font_family("IBM Plex Mono")
-                                .child("PLEX → MP3 → GARMIN"),
+                                .child(format!(
+                                    "{} → MP3 → GARMIN",
+                                    self.provider.label().to_uppercase()
+                                )),
                         ),
                 ),
             )
@@ -1595,7 +1851,7 @@ impl Render for Desktop {
             )
             .when(
                 self.status != "Ready to export."
-                    && self.status != "Connect your Plex account to get started.",
+                    && self.status != "Connect a music account to get started.",
                 |shell| {
                     shell.child(
                         div()

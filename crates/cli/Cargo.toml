@@ -14,3 +14,4 @@ anyhow.workspace = true
 serde_json.workspace = true
 clap = { version = "4", features = ["derive"] }
 ctrlc = "3"
+rpassword = "7"

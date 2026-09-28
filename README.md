@@ -1,8 +1,14 @@
 # SyncAndRun
 
-SyncAndRun is a personal desktop app that turns Plex music playlists into local MP3 files for a Garmin music watch. On Linux, choose playlists and MP3 quality, then transfer directly to a connected watch over USB MTP. Folder exports remain available on every desktop platform.
+SyncAndRun is a personal desktop app that turns Plex or Jellyfin music playlists into local MP3 files for a Garmin music watch. On Linux, choose playlists and MP3 quality, then transfer directly to a connected watch over USB MTP. Folder exports remain available on every desktop platform.
 
 ![Electron desktop reference](docs/desktop-ui-implemented.png)
+
+The Linux app and CLI support Jellyfin sign-in with a server address, username,
+and password. Choose a music library and playlists, then use the same export or
+watch transfer controls as Plex. Credentials are encrypted in your local profile;
+the password is not saved. Settings lets you switch between saved Plex and
+Jellyfin connections. The retained Electron app supports Plex only.
 
 ## Move music to a watch
 
@@ -17,7 +23,8 @@ SyncAndRun is a personal desktop app that turns Plex music playlists into local 
 
 Garmin documents [local folders and music libraries in Express](https://support.garmin.com/sv-SE/?faq=1ZDlVH09XB1169yYD5FIWA), [iTunes playlist visibility](https://support.garmin.com/en-US/?faq=iBiZBj3Cer5py2x29trVN8), and [supported MP3 and M3U8 files](https://support.garmin.com/en-US/?faq=JyNEOTsZaR3KMXqej3oQp5). [Express runs on Windows and macOS, not Linux](https://support.garmin.com/en-US/navionics/faq/4QVp7mKSIA1LDk5fc1OHX8/). Apple says to [add tracks before importing a playlist XML on Mac](https://support.apple.com/es-es/guide/music/-mus27cd5060f/mac) or [in iTunes on Windows](https://support.apple.com/en-ie/guide/itunes/itns2998/windows).
 
-SyncAndRun offers MP3 at 64, 96, 128, 192, 256, and 320 kbps. The size shown is an estimate. The Linux Rust app shows the connected watch’s model, firmware, and free space. An earlier two-folder MTP export was recognized as playlists on a personal Forerunner 955. A later Linux transfer verified 20 MP3 files at 320 kbps; the playlist appeared on the watch and a track played after a plain M3U8 was copied. See [validation](docs/VALIDATION.md).
+SyncAndRun offers MP3 at 64, 96, 128, 192, and 256 kbps, plus 320 kbps for Plex.
+Jellyfin limits stereo MP3 transcoding to 256 kbps. The size shown is an estimate. The Linux Rust app shows the connected watch’s model, firmware, and free space. An earlier two-folder MTP export was recognized as playlists on a personal Forerunner 955. A later Linux transfer verified 20 MP3 files at 320 kbps; the playlist appeared on the watch and a track played after a plain M3U8 was copied. See [validation](docs/VALIDATION.md).
 
 ## Linux: Rust desktop and CLI
 
@@ -52,7 +59,7 @@ No native Rust installer is published. See [validation](docs/VALIDATION.md) for
 what has been checked separately from real-device acceptance.
 
 The former Connect IQ app and self-hosted sync service are retired. Their source
-remains in Git history. Jellyfin and automatic reconciliation of previously transferred watch music
-remain outside this version.
+remains in Git history. Automatic reconciliation of previously transferred watch music
+remains outside this version.
 
-SyncAndRun is GPL-3.0 software derived from [SubMusic](https://github.com/memen45/SubMusic). Its history and attribution are preserved in [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md). It is unofficial and is not affiliated with Plex, Garmin, or SubMusic's maintainers. Use [GitHub Issues](https://github.com/ryancummings/syncandrun/issues) and pull requests to contribute.
+SyncAndRun is GPL-3.0 software derived from [SubMusic](https://github.com/memen45/SubMusic). Its history and attribution are preserved in [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md). It is unofficial and is not affiliated with Plex, Jellyfin, Garmin, or SubMusic's maintainers. Use [GitHub Issues](https://github.com/ryancummings/syncandrun/issues) and pull requests to contribute.

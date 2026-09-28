@@ -13,6 +13,8 @@ import { artworkOriginFingerprintMigration } from "./migrations/009_artwork_orig
 
 import { ownerAuthorizationMigration } from "./migrations/010_owner_authorization.js";
 
+import { musicProvidersMigration } from "./migrations/011_music_providers.js";
+
 const migrations = [
   initialMigration,
   initializeManifestRevisionMigration,
@@ -23,7 +25,8 @@ const migrations = [
   enableArtworkManifestMigration,
   deviceManagementMigration,
   artworkOriginFingerprintMigration,
-  ownerAuthorizationMigration
+  ownerAuthorizationMigration,
+  musicProvidersMigration
 ] as const;
 
 export class CompanionDatabase {

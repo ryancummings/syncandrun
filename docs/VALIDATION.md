@@ -1,5 +1,48 @@
 # Validation
 
+## Jellyfin in the Linux app and CLI (2026-09-28)
+
+A disposable Jellyfin 10.11.6 server with generated FLAC tones passed native
+CLI authentication, music library and playlist discovery, refresh, and MP3
+exports at 64, 96, 128, 192, and 256 kbps. `ffprobe` confirmed the MP3 codec and
+exact bitrate. MTP folder exports preserved track order; Express and Music layouts shared
+two track files, and Music XML preserved both playlist sequences. Repeated
+entries are covered by synthetic API tests; Jellyfin's playlist API removes
+duplicates when creating playlists. Restoring a backup retained the encrypted
+connection and could list playlists. Wrong passwords and a second account
+were rejected without replacing the saved owner's connection.
+
+Jellyfin 10.11.6 caps stereo MP3 at 256 kbps in its
+[audio encoding helper](https://github.com/jellyfin/jellyfin/blob/v10.11.6/MediaBrowser.Controller/MediaEncoding/EncodingHelper.cs).
+The app therefore hides 320 kbps for Jellyfin, and the CLI rejects it before
+creating output. Testing also found transcode reuse across quality changes;
+each request now supplies a unique playback session ID. All five bitrate
+checks passed after this fix. Plex retains its 320 kbps option.
+
+The native desktop launched on a physical Linux graphical session with an
+isolated profile and USB access disabled. Typed URL, username, and password
+entry, password masking, Tab navigation, Enter submission, music library
+selection, and loading both generated playlists passed. The full GUI folder-export
+interaction was not run; folder exports were verified through the CLI. No production profile
+or library was opened. The real-server smoke test is reproducible with
+`scripts/jellyfin-smoke.py`; its container and data are disposable.
+
+Workspace build, formatting, strict Clippy, and 38 Rust tests pass. The retained
+companion build and 100 tests pass, with migration/readiness tests rerun after
+the source revision column was added.
+
+Synthetic tests cover Jellyfin pagination, repeated entries, library filtering,
+base-path URLs, redirect rejection, identity checks, cancellation, encrypted
+connection storage, provider switching, source revision tracking, and legacy
+Plex profile migration. The existing Plex CLI smoke still passes all three
+export layouts and backup restoration. The retained Electron implementation
+remains Plex-only; its migration list includes the additive provider schema
+so it can reopen a profile switched back to Plex.
+
+Jellyfin uses the existing direct MTP engine. A physical watch transfer and
+playback from Jellyfin have not been tested; earlier watch results below are
+separate evidence. macOS and Windows Jellyfin support is not implemented.
+
 ## On-watch playlist and playback acceptance (2026-09-27)
 
 On a Forerunner 955 Solar running firmware 2905, the corrected direct MTP

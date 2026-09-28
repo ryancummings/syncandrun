@@ -1,6 +1,6 @@
 # Native Linux app and CLI
 
-The Rust workspace contains `syncandrun-core` (Plex, profiles, and exports),
+The Rust workspace contains `syncandrun-core` (Plex, Jellyfin, profiles, and exports),
 `syncandrun-desktop` (GPUI), and `syncandrun-cli` (the `syncandrun` command).
 Neither binary needs Node, Electron, a browser renderer, or a local HTTP service
 at runtime. Plex sign-in opens the system browser and polls Plex directly.
@@ -88,10 +88,39 @@ It deliberately does not print authentication links or accept tokens in command
 arguments. It needs access to a browser on the same desktop session. On a headless
 host, use an existing profile with its matching secret.
 
+For Jellyfin, use **Connect Jellyfin** in the desktop or:
+
+```sh
+syncandrun login-jellyfin --server http://your-server:8096 --username your-user
+syncandrun playlists --json
+syncandrun refresh --playlist jellyfin:playlist:YOUR_PLAYLIST_ID
+syncandrun export --destination /path/to/music --bitrate 192
+syncandrun source plex
+syncandrun source jellyfin
+```
+
+The CLI prompts for a hidden password and chooses the sole music library, or
+asks you to select one. `--library ID` selects a library explicitly.
+For automation, `--password-stdin` reads one password line from standard input;
+keep passwords out of command arguments and shell history. Server addresses may
+include a reverse proxy base path. The server must allow this user to stream and
+transcode audio. A remote server should use HTTPS.
+
+Plex and Jellyfin connections are saved separately. Switching sources clears
+playlist snapshots and selection; choose playlists again afterward. Reconnecting
+Jellyfin must use the same server and user as the saved connection. To use an
+unrelated Jellyfin account or server, choose a separate `--profile` directory.
+The retained Electron app remains Plex-only and does not offer provider switching.
+Before reopening this profile in Electron, switch to Plex in the native app and
+close it. Use separate profiles if you run the two implementations independently.
+Older Rust versions reject the newer profile schema; make a backup before an
+upgrade if you need to roll back.
+
 Repeat `--playlist` to select multiple playlists; omit it to reuse the saved
 selection. Export refreshes the selection first. `--offline-plan` uses saved
-snapshots, but audio downloads still need Plex. Available bitrates are 64, 96,
-128, 192, 256, and 320 kbps. `--route mtp` creates separate playlist folders;
+snapshots, but audio downloads still need the selected server. Available bitrates are 64, 96,
+128, 192, and 256 kbps; Plex also supports 320 kbps. Jellyfin limits stereo MP3
+transcoding to 256 kbps, so requesting 320 kbps returns an explicit error. `--route mtp` creates separate playlist folders;
 `--route express` shares a Tracks folder; `--route music` also writes Music/iTunes
 playlist XML. Express and Music/iTunes transfer acceptance remain unverified.
 CLI output deliberately displays library metadata only for discovery commands;
@@ -126,7 +155,8 @@ syncandrun-desktop --profile /path/to/profile
 
 The profile contains `secret` and `data/syncandrun.sqlite`. Rust uses the exact
 secret bytes, the original HKDF-SHA256/AES-256-GCM format, client identifier,
-owner, and all ten historical migrations. No migration or retired watch table
+owner, and all ten historical migrations, followed by the additive Jellyfin
+migration. No migration or retired watch table
 is deleted. It refuses a missing secret or a newer schema instead of resetting
 the profile. Native jobs take an exclusive profile lock; concurrent CLI/desktop
 operations receive a clear error. The Electron app does not know this lock.
@@ -152,6 +182,21 @@ cargo clippy --locked --workspace --all-targets -- -D warnings
 cargo build --locked --workspace
 python3 scripts/native-smoke.py
 ```
+
+For an actual Jellyfin server test with generated audio, run:
+
+```sh
+python3 scripts/jellyfin-smoke.py
+# Or use an explicitly authorized Docker host over SSH:
+python3 scripts/jellyfin-smoke.py --ssh YOUR_HOST
+```
+
+This requires Docker access, `ffmpeg`, and `ffprobe`. It starts the pinned
+Jellyfin 10.11.6 image on loopback, creates a disposable user and music library,
+checks sign-in, all five supported bitrates, playlist order, shared
+tracks, export layouts, and backup restoration, then removes its container and
+data. The image remains cached. It never opens your normal app profile or an
+existing Jellyfin library.
 
 For a synthetic graphical launch, install Xvfb, Openbox, xdotool, and ImageMagick:
 

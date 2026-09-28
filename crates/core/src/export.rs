@@ -149,7 +149,7 @@ fn check_cancel(cancel: &AtomicBool) -> Result<()> {
 fn read_audio(source: &mut impl Read, out: &mut [u8]) -> Result<()> {
     source
         .read_exact(out)
-        .map_err(|_| anyhow::anyhow!("Plex returned an incomplete audio stream"))
+        .map_err(|_| anyhow::anyhow!("The music server returned an incomplete audio stream"))
 }
 fn write_track(
     path: &Path,
@@ -216,7 +216,7 @@ pub(crate) fn write_audio(
             && first_audio[2] & 0xf0 != 0
             && first_audio[2] & 0xf0 != 0xf0
             && first_audio[2] & 0x0c != 0x0c,
-        "Plex returned audio that is not MP3"
+        "The music server returned audio that is not MP3"
     );
     output.write_all(&first_audio)?;
     let mut buffer = [0u8; 65536];
@@ -224,7 +224,7 @@ pub(crate) fn write_audio(
         check_cancel(cancel)?;
         let n = source
             .read(&mut buffer)
-            .map_err(|_| anyhow::anyhow!("Plex audio download was interrupted"))?;
+            .map_err(|_| anyhow::anyhow!("Audio download was interrupted"))?;
         if n == 0 {
             break;
         }

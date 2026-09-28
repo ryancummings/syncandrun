@@ -18,7 +18,7 @@ use std::{
 use uuid::Uuid;
 
 // These are the historical migrations, including inert watch tables. Never renumber them.
-const MIGRATIONS: [(&str, &str); 10] = [
+const MIGRATIONS: [(&str, &str); 11] = [
     ("initial", include_str!("migrations/001_initial.sql")),
     (
         "initialize_manifest_revision",
@@ -56,7 +56,55 @@ const MIGRATIONS: [(&str, &str); 10] = [
         "owner_authorization",
         include_str!("migrations/010_owner_authorization.sql"),
     ),
+    (
+        "music_providers",
+        include_str!("migrations/011_music_providers.sql"),
+    ),
 ];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Provider {
+    Plex,
+    Jellyfin,
+}
+impl Provider {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Plex => "Plex",
+            Self::Jellyfin => "Jellyfin",
+        }
+    }
+    pub fn bitrates(self) -> &'static [u16] {
+        match self {
+            Self::Plex => &crate::BITRATES,
+            Self::Jellyfin => &crate::BITRATES[..5],
+        }
+    }
+    pub fn validate_bitrate(self, bitrate: u16) -> Result<()> {
+        ensure!(crate::BITRATES.contains(&bitrate), "Invalid MP3 bitrate");
+        ensure!(
+            self.bitrates().contains(&bitrate),
+            "Jellyfin supports MP3 exports up to 256 kbps; choose a lower bitrate"
+        );
+        Ok(())
+    }
+    fn stored(self) -> &'static str {
+        match self {
+            Self::Plex => "plex",
+            Self::Jellyfin => "jellyfin",
+        }
+    }
+}
+
+// Deliberately no Debug/Serialize: this type contains credentials.
+pub struct JellyfinConnection {
+    pub token: String,
+    pub server_id: String,
+    pub user_id: String,
+    pub base_uri: String,
+    pub library_id: String,
+}
 
 pub struct Profile {
     db: Connection,
@@ -153,7 +201,7 @@ impl Profile {
             [],
             |r| r.get(0),
         )?;
-        ensure!(newest <= 10, "Profile belongs to a newer app version");
+        ensure!(newest <= 11, "Profile belongs to a newer app version");
         for (i, (name, sql)) in MIGRATIONS.iter().enumerate() {
             let version = i + 1;
             let tx = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
@@ -271,8 +319,97 @@ impl Profile {
             [owner],
         )?;
         tx.execute("INSERT INTO plex_connection(id,encrypted_token,token_nonce,encrypted_account_token,account_token_nonce,server_machine_id,server_base_uri,library_section_id,created_at,updated_at) VALUES(1,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET encrypted_token=excluded.encrypted_token,token_nonce=excluded.token_nonce,encrypted_account_token=excluded.encrypted_account_token,account_token_nonce=excluded.account_token_nonce,server_machine_id=excluded.server_machine_id,server_base_uri=excluded.server_base_uri,library_section_id=excluded.library_section_id,updated_at=excluded.updated_at", params![token,nonce,account,account_nonce,connection.server_id,connection.base_uri,connection.library_id,now,now])?;
+        tx.execute(
+            "UPDATE music_provider SET provider='plex',source_revision=? WHERE id=1",
+            [Uuid::new_v4().to_string()],
+        )?;
         // Old snapshots must not be used against a different server or library.
         tx.execute_batch("DELETE FROM playlist_snapshots; DELETE FROM track_metadata; UPDATE settings SET selected_playlist_ids='[]',manifest_revision=NULL WHERE id=1;")?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Changes whenever a connection is saved or the active source changes.
+    pub fn source_revision(&self) -> Result<String> {
+        Ok(self.db.query_row(
+            "SELECT source_revision FROM music_provider WHERE id=1",
+            [],
+            |r| r.get(0),
+        )?)
+    }
+    pub fn active_provider(&self) -> Result<Provider> {
+        let value: String =
+            self.db
+                .query_row("SELECT provider FROM music_provider WHERE id=1", [], |r| {
+                    r.get(0)
+                })?;
+        match value.as_str() {
+            "plex" => Ok(Provider::Plex),
+            "jellyfin" => Ok(Provider::Jellyfin),
+            _ => bail!("Invalid music provider"),
+        }
+    }
+    pub fn set_active_provider(&mut self, provider: Provider) -> Result<()> {
+        ensure!(
+            match provider {
+                Provider::Plex => self.connection()?.is_some(),
+                Provider::Jellyfin => self.jellyfin_connection()?.is_some(),
+            },
+            "Connect to this music provider first"
+        );
+        if self.active_provider()? == provider {
+            return Ok(());
+        }
+        let tx = self.db.transaction()?;
+        tx.execute(
+            "UPDATE music_provider SET provider=?,source_revision=? WHERE id=1",
+            params![provider.stored(), Uuid::new_v4().to_string()],
+        )?;
+        tx.execute_batch("DELETE FROM playlist_snapshots; DELETE FROM track_metadata; UPDATE settings SET selected_playlist_ids='[]',manifest_revision=NULL WHERE id=1;")?;
+        tx.commit()?;
+        Ok(())
+    }
+    pub fn jellyfin_connection(&self) -> Result<Option<JellyfinConnection>> {
+        type Row = (Vec<u8>, Vec<u8>, String, String, String, String);
+        let row: Option<Row> = self.db.query_row("SELECT encrypted_token,token_nonce,server_id,user_id,base_uri,library_id FROM jellyfin_connection WHERE id=1", [], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?))).optional()?;
+        row.map(|(token, nonce, server_id, user_id, base_uri, library_id)| {
+            Ok(JellyfinConnection {
+                token: decrypt(&token, &nonce, &self.secret)?,
+                server_id,
+                user_id,
+                base_uri,
+                library_id,
+            })
+        })
+        .transpose()
+    }
+    pub(crate) fn save_jellyfin_connection(
+        &mut self,
+        connection: &JellyfinConnection,
+    ) -> Result<()> {
+        let (token, nonce) = encrypt(&connection.token, &self.secret)?;
+        let tx = self
+            .db
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let owner: Option<(String, String)> = tx
+            .query_row(
+                "SELECT server_id,user_id FROM jellyfin_connection WHERE id=1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?;
+        ensure!(
+            owner.is_none_or(
+                |(server, user)| server == connection.server_id && user == connection.user_id
+            ),
+            "Sign in with the Jellyfin server and account that own this profile"
+        );
+        tx.execute("INSERT INTO jellyfin_connection VALUES(1,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET encrypted_token=excluded.encrypted_token,token_nonce=excluded.token_nonce,base_uri=excluded.base_uri,library_id=excluded.library_id", params![token,nonce,connection.server_id,connection.user_id,connection.base_uri,connection.library_id])?;
+        tx.execute(
+            "UPDATE music_provider SET provider='jellyfin',source_revision=? WHERE id=1",
+            [Uuid::new_v4().to_string()],
+        )?;
+        tx.execute_batch(" DELETE FROM playlist_snapshots; DELETE FROM track_metadata; UPDATE settings SET selected_playlist_ids='[]',manifest_revision=NULL WHERE id=1;")?;
         tx.commit()?;
         Ok(())
     }
@@ -375,7 +512,7 @@ fn decrypt(token: &[u8], nonce: &[u8], secret: &str) -> Result<String> {
             },
         )
         .map_err(|_| {
-            anyhow::anyhow!("Cannot decrypt Plex connection; restore its matching secret")
+            anyhow::anyhow!("Cannot decrypt saved connection; restore its matching secret")
         })?;
     String::from_utf8(data).context("Invalid credential encoding")
 }
@@ -394,6 +531,81 @@ mod tests {
             base_uri: "http://127.0.0.1:12345/".into(),
             library_id: "1".into(),
         }
+    }
+    #[test]
+    fn jellyfin_owner_encryption_switching_and_reopen_preserve_plex() {
+        let root = tempdir().unwrap();
+        let mut profile = Profile::open(root.path()).unwrap();
+        profile
+            .save_connection("owner-1", &synthetic_connection())
+            .unwrap();
+        let mut jellyfin = JellyfinConnection {
+            token: "fake-jellyfin-token".into(),
+            server_id: "server".into(),
+            user_id: "user".into(),
+            base_uri: "http://127.0.0.1:1/jellyfin/".into(),
+            library_id: "music".into(),
+        };
+        let plex_revision = profile.source_revision().unwrap();
+        assert!(!plex_revision.is_empty());
+        profile.save_jellyfin_connection(&jellyfin).unwrap();
+        let jellyfin_revision = profile.source_revision().unwrap();
+        assert_ne!(plex_revision, jellyfin_revision);
+        let encrypted: Vec<u8> = profile
+            .db
+            .query_row("SELECT encrypted_token FROM jellyfin_connection", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert!(
+            !encrypted
+                .windows(jellyfin.token.len())
+                .any(|v| v == jellyfin.token.as_bytes())
+        );
+        assert_eq!(
+            profile.connection().unwrap().unwrap().token,
+            "fake-server-token"
+        );
+        profile
+            .save_playlists(&[Playlist {
+                id: "jellyfin:playlist:one".into(),
+                title: "Synthetic".into(),
+                tracks: vec![],
+            }])
+            .unwrap();
+        let stale_source = crate::provider::MusicSource::new(&profile).unwrap();
+        profile.set_active_provider(Provider::Plex).unwrap();
+        assert!(profile.selected_ids().unwrap().is_empty());
+        assert!(
+            stale_source
+                .playlists(&profile, &std::sync::atomic::AtomicBool::new(false))
+                .is_err()
+        );
+        jellyfin.user_id = "other-user".into();
+        assert!(profile.save_jellyfin_connection(&jellyfin).is_err());
+        jellyfin.user_id = "user".into();
+        jellyfin.server_id = "other-server".into();
+        assert!(profile.save_jellyfin_connection(&jellyfin).is_err());
+        assert_eq!(profile.active_provider().unwrap(), Provider::Plex);
+        profile.set_active_provider(Provider::Jellyfin).unwrap();
+        let revision = profile.source_revision().unwrap();
+        assert_ne!(revision, jellyfin_revision);
+        profile.set_active_provider(Provider::Jellyfin).unwrap();
+        assert_eq!(revision, profile.source_revision().unwrap());
+        jellyfin.server_id = "server".into();
+        jellyfin.library_id = "other-library".into();
+        profile.save_jellyfin_connection(&jellyfin).unwrap();
+        assert_ne!(revision, profile.source_revision().unwrap());
+        let revision = profile.source_revision().unwrap();
+        drop(profile);
+        let profile = Profile::open(root.path()).unwrap();
+        assert_eq!(revision, profile.source_revision().unwrap());
+        assert_eq!(profile.active_provider().unwrap(), Provider::Jellyfin);
+        assert_eq!(
+            profile.jellyfin_connection().unwrap().unwrap().token,
+            "fake-jellyfin-token"
+        );
+        assert_eq!(profile.owner().unwrap().as_deref(), Some("owner-1"));
     }
     #[test]
     fn historical_sql_matches_the_original_migrations() {
@@ -470,7 +682,7 @@ mod tests {
                 .query_row("SELECT count(*) FROM schema_migrations", [], |r| r
                     .get::<_, u32>(0))
                 .unwrap(),
-            10
+            11
         );
         profile
             .save_connection("owner-1", &synthetic_connection())
@@ -529,7 +741,7 @@ mod tests {
         profile
             .db
             .execute(
-                "INSERT INTO schema_migrations VALUES(11,'future','now')",
+                "INSERT INTO schema_migrations VALUES(12,'future','now')",
                 [],
             )
             .unwrap();

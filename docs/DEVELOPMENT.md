@@ -1,6 +1,6 @@
 # Development
 
-For the Linux Rust app and CLI, follow [the native development guide](RUST.md).
+For the Linux Rust app and CLI, including Jellyfin support, follow [the native development guide](RUST.md).
 
 ## Retained Electron build
 

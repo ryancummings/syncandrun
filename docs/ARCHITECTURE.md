@@ -1,7 +1,7 @@
 # Architecture
 
 The Linux implementation is a Rust workspace. `syncandrun-core` owns the local
-profile, Plex requests, and streaming export engine. The GPUI desktop app runs
+profile, Plex and Jellyfin requests, and streaming export engine. The GPUI desktop app runs
 blocking work on worker threads and receives progress through a channel; the CLI
 calls the same core. No local HTTP server is started. Linux supports direct USB MTP transfer and the MTP folder
 flow; the CLI also supports shared Tracks and Music/iTunes XML layouts.
@@ -10,10 +10,31 @@ Rust preserves the existing SQLite migration sequence and credential encryption
 format. Native operations lock the profile, validate single-owner sign-in, reject
 HTTP redirects, and keep tokens in request headers. Exports use unique incomplete
 folders, ID3v2.3 tags, and plain relative M3U8 files for MTP. Tests use synthetic
-profiles and a fake Plex server. See [the native guide](RUST.md).
+profiles and fake Plex/Jellyfin servers. See [the native guide](RUST.md).
 The desktop keeps nonsecret playlist and output preferences in an atomic JSON file
 inside the profile. Its MTP export reconciles generated files directly inside the
 chosen library folder using a hash manifest; it leaves unrelated files alone.
+
+## Music providers
+
+The native `provider::MusicSource` dispatches discovery, snapshots, diagnostics,
+and MP3 requests to Plex or Jellyfin. Export layouts, tags, cancellation, and MTP
+read-back use the same engine for both sources. Jellyfin uses server-local user
+sign-in and header authentication, with redirect rejection and bounded JSON
+responses. The saved connection pins the server and user identity. Playlist
+entries retain their order and repeats; IDs are prefixed by provider.
+
+Migration 011 adds Jellyfin credentials and the active music provider without
+replacing Plex credentials, the Plex owner, or the ten historical migrations.
+Switching sources clears snapshots and selection so an export cannot apply a
+previous source's plan to the newly selected source. A saved source revision
+also invalidates desktop playlist preferences after CLI source changes or a
+connection to another library. The Jellyfin password is
+used only for authentication; the resulting access token is encrypted in the
+profile. Each audio request uses a unique playback session to avoid reusing a previous
+transcode at another bitrate. Jellyfin stereo MP3 is limited to 256 kbps.
+Both connections belong to the same personal local profile, and each
+provider enforces its saved account identity on later sign-ins.
 
 ## Direct USB MTP
 
@@ -24,7 +45,7 @@ poll for Garmin USB devices, identify model/firmware/storage, and release the
 connection after each scan. Transfers reopen and check the selected device’s
 identity before writing. Raw serial numbers are not displayed or persisted.
 
-Plex MP3 streams pass through the same tag/validation writer as folder exports,
+Provider MP3 streams pass through the same tag/validation writer as folder exports,
 into a bounded 256 MiB memory buffer. MTP needs the exact length before upload;
 there is no audio staging directory. The transfer engine checks storage, creates
 new folders under Music, uploads and hashes each MP3 by reading it back, then
@@ -53,4 +74,4 @@ Plex connection details, encrypted credentials, playlist snapshots, and owner st
 
 `desktop/export.mjs` reads saved playlist snapshots and requests MP3 streams from Plex at the chosen bitrate. It writes ID3v2.3 tags, checks the MP3 header, and creates a new dated output folder. A failed run keeps an `.incomplete` folder and cannot overwrite a complete export. MTP output has one folder and ordered relative M3U8 per playlist. Music/iTunes output shares track files and writes playlist XML. Tokens never enter exported files.
 
-This implementation exports through JavaScript in Electron's main process. The Linux Rust implementation is independent of that runtime. The Electron implementation does not offer direct MTP transfer or storage discovery. Jellyfin remains unsupported. See [validation](VALIDATION.md) for what has been verified.
+This implementation exports through JavaScript in Electron's main process. The Linux Rust implementation is independent of that runtime. The Electron implementation does not offer direct MTP transfer or storage discovery. It supports Plex only. See [validation](VALIDATION.md) for what has been verified.
