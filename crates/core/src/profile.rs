@@ -680,8 +680,8 @@ mod tests {
     }
     #[test]
     fn historical_sql_matches_the_original_migrations() {
-        let original = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../companion/src/persistence/migrations");
+        let original =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/legacy-migrations");
         for (i, (name, sql)) in MIGRATIONS.iter().take(11).enumerate() {
             let source =
                 fs::read_to_string(original.join(format!("{:03}_{name}.ts", i + 1))).unwrap();

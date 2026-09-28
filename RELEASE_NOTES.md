@@ -1,7 +1,9 @@
-# Desktop export preview
+# SyncAndRun 0.2.0
 
-SyncAndRun now creates local music folders and playlists from Plex in a desktop app. The former Connect IQ app, watch pairing/API, and self-hosted deployment are retired. Their code remains in Git history; database migrations remain for existing local profiles.
+This release provides native Mac and Linux apps. Both apps use the same interface and support Plex, Jellyfin, and local MP3 or FLAC folders. You can choose playlists and MP3 quality, send music directly to a Garmin music watch, or export folders for a manual copy. Direct transfers read files back before reporting success.
 
-The desktop app offers MTP playlist folders, a Windows Garmin Express folder, and Music/iTunes playlist XML with shared tracks. MP3 quality ranges from 64 to 320 kbps. It uses a native folder picker and shows progress and transfer instructions. The package is an unsigned source preview, not a store release.
+Download the Mac DMG or Linux archive below. Follow the [installation and usage steps](README.md#download-and-install). The Mac DMG runs on Apple Silicon and has a local signature. Apple has not notarized it, so macOS can ask you to select Open Anyway after the first launch. The Linux archive targets Ubuntu 24.04 x86_64 and needs the system packages listed in the README.
 
-Synthetic export, Plex, UI, and Linux native launch checks have passed. Native macOS and Windows launch, current-export watch playback, and Express/Music/iTunes transfers remain acceptance work. See [VALIDATION.md](docs/VALIDATION.md).
+Direct transfer and playback passed a synthetic music test on a Forerunner 955 Solar under Linux. The Mac app detected the watch and read its storage. A direct Mac transfer and playback check remain open. Other Garmin models need their own physical checks. See [validation](docs/VALIDATION.md).
+
+The older desktop app and service are removed from this source tree. Existing local profiles keep their historical database migrations and encrypted connections. Back up the profile before an upgrade if you need to return to an older version.

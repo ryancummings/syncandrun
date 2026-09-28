@@ -1,7 +1,7 @@
 # Direct Garmin transfer and desktop portability
 
 On Linux and macOS, the Rust desktop app detects Garmin music devices over USB MTP, shows their model,
-firmware and free storage, and sends selected Plex playlists directly to Music.
+firmware and free storage, and sends selected playlists directly to Music.
 Choose **Direct to device**, select the device if there is more than one, and click
 **Transfer to device**. No local export folder or mounted filesystem is involved.
 
@@ -25,7 +25,7 @@ Transfer Protocol (MTP)**. A busy-device message usually means Files, another MT
 app, or another SyncAndRun process owns the USB interface. Close or unmount it
 there, then use **Scan for device**. The app scans periodically until it finds a usable
 device. It also scans after a transfer or removal so the free-space display updates.
-Use **Scan for device** after disconnecting or changing devices.
+A raw USB check removes a disconnected watch from the display. Use **Scan for device** when you want an immediate check.
 
 ## macOS development references
 
@@ -44,33 +44,9 @@ and [GPUI supports macOS](https://github.com/zed-industries/zed/blob/main/crates
 The native app now builds and launches on Apple Silicon macOS. The CLI detected
 a connected Forerunner 955 Solar through libmtp after Garmin Express Service
 and OpenMTP released the USB interface. The locally signed DMG bundles libmtp
-and its dependencies, and the app uses the existing Electron profile location
+and its dependencies, and the app uses the existing profile location
 under Application Support. The physical Mac transfer, read-back, playlist
 indexing and playback checks are separate acceptance work; see [validation](VALIDATION.md).
-
-## Windows development references
-
-Windows provides [Windows Portable Devices (WPD)](https://learn.microsoft.com/en-us/windows-hardware/drivers/portable/wpd-drivers-overview)
-and [standard MTP class drivers](https://learn.microsoft.com/en-us/windows-hardware/drivers/portable/the-mtp-setup-information---inf--file).
-This gives an application a native path to an attached watch without replacing
-its normal Windows driver. None of the references below establishes successful
-Windows transfer with SyncAndRun's Rust app or a Forerunner 955.
-
-| Project or API | Relevant evidence | Use for SyncAndRun |
-| --- | --- | --- |
-| [mtp-rs](https://github.com/vdavid/mtp-rs/blob/main/crates/mtp-rs/README.md) | Its Windows backend uses WPD for device discovery and file operations without installing a USB driver. The author reports hardware verification on a Pixel 9 Pro XL; its Forerunner 955 evidence is a separate read-only integration test, not a Windows watch transfer. | Candidate adapter for Windows if it can build with this workspace and pass Garmin hardware tests. |
-| [winmtp](https://docs.rs/winmtp/latest/winmtp/) | Windows-only Rust wrapper for WPD with device and content enumeration plus file transfer. | Smaller reference for a direct WPD adapter; check its API against SyncAndRun's read-back and cleanup needs. |
-| [libmtp Windows notes](https://github.com/libmtp/libmtp/blob/master/README.windows.txt) and [Garmin MTP CLI](https://github.com/Likenttt/garmin-mtp-cli) | libmtp documents a MinGW/MSYS build and libusb driver setup. Garmin MTP CLI disables its libmtp backend in the default Windows build because that route is not reliable through its current toolchain. | Treat reuse of the Linux USB wrapper on Windows as unproven; test native WPD before considering a driver change. |
-| [HifiMule](https://github.com/HifiMule/HifiMule) | Advertises Windows, Garmin device profiles and MTP music sync. Its maintainer asks for more device feedback. | Product comparison, not hardware acceptance for this app. |
-
-The first Windows check should enumerate and list the watch's Music storage
-through WPD with the normal driver, then upload and read back synthetic files
-using an isolated profile. Test playlist indexing and playback, cancellation,
-disconnect cleanup, competing access, and packaged launch separately. The Rust
-core currently uses Unix-specific profile permission APIs and a Linux-oriented
-default profile path, so Windows also needs profile portability work that keeps
-existing encrypted Electron profiles usable. The current Electron Windows build
-exports folders for manual transfer; it has no direct MTP implementation.
 
 ## Transfer behavior
 

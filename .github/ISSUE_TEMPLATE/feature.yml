@@ -1,0 +1,24 @@
+name: Feature request
+description: Suggest a change to the native app or CLI
+title: "Feature: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: What do you want to do?
+      description: Describe the task and where you get stuck today.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: What result would help?
+      description: Describe what the app would show or do.
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Computer and watch
+      description: Give the macOS or Linux version and watch model if they matter.

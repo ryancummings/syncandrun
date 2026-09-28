@@ -34,7 +34,7 @@ def system_library(path: str) -> bool:
 def make_icon() -> None:
     iconset = OUT / "SyncAndRun.iconset"
     iconset.mkdir()
-    source = ROOT / "desktop" / "icon.png"
+    source = ROOT / "assets" / "icon.png"
     for size in (16, 32, 128, 256, 512):
         for scale, suffix in ((1, ""), (2, "@2x")):
             run(

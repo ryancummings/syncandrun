@@ -1,9 +1,7 @@
 # Security
 
-Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/ryancummings/syncandrun/security/advisories/new). Include the affected commit and sanitized reproduction steps. Do not attach a real profile, database, Plex token, setup link, exported media, or private library metadata.
+Report a vulnerability through [GitHub private vulnerability reporting](https://github.com/ryancummings/syncandrun/security/advisories/new). Include the affected version or commit and steps that use synthetic data. Do not attach a real profile, database, token, music file, or private library name.
 
-SyncAndRun is a personal desktop app. Its internal Fastify service binds to `127.0.0.1:31415` while the app is open. It serves Plex sign-in, playlist data, and UI assets; there is no watch API or intended LAN endpoint. The first Plex account that signs in owns the local profile. Later sign-ins must match that account. State-changing requests use a session cookie and CSRF token.
+A local SQLite profile stores encrypted Plex and Jellyfin tokens. The encryption secret is stored beside the database. Back up and protect both files together. The first Plex account that signs in owns the profile. Later sign-ins must match that owner. Exported files do not contain service tokens.
 
-The SQLite profile contains encrypted Plex credentials and playlist metadata. The encryption secret is stored alongside it. Back up the database and secret together and keep backups private. Export folders contain music files and playlist names, so protect them like the source library. Exported files do not contain Plex tokens. Closing the app stops the loopback service.
-
-Dependencies and unsigned preview packages need normal local-app review before use. There is no auto updater. See [desktop use](docs/DESKTOP.md) for the profile backup action.
+The app sends music directly to a selected watch over USB MTP. Replace mode asks for confirmation before it removes old recognized music from the watch's `Music` folder. That removal cannot be undone. The app has no auto updater or local network service.

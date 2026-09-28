@@ -1,13 +1,15 @@
-# Contributor agent instructions
+# Development agent instructions
 
-Read `README.md`, `docs/ARCHITECTURE.md`, `CONTRIBUTING.md`, and `docs/DEVELOPMENT.md` before changing behavior. `docs/VALIDATION.md` separates automated results from physical device acceptance.
+Read `README.md`, `docs/ARCHITECTURE.md`, `CONTRIBUTING.md`, and `docs/DEVELOPMENT.md` before you change behavior. Read `docs/VALIDATION.md` before you claim device or package acceptance. Use `CONTEXT-MAP.md` to find the other guides.
 
-- Build the personal desktop export flow. The Connect IQ app, self-hosted deployment, and watch API are retired.
-- Keep the local profile single-owner. An existing profile and its encrypted Plex connection must remain usable after upgrades; retain historical database migrations.
-- Never print, commit, or include in issues Plex credentials, setup links, cookies, database contents, real library metadata, media, or profile backups.
-- Use fake Plex data and isolated profiles for automated tests. Never use production data or volumes for tests.
-- Start required development servers after checking whether one is running; wait for readiness before testing.
-- Preserve GPL-3.0 licensing, SubMusic ancestry, and asset attribution. Keep `upstream` pointed at `https://github.com/memen45/SubMusic.git`; do not rewrite inherited history.
-- Use public GitHub Issues and pull requests. No maintainer-private tracker, host paths, credentials, or agent runtime is required.
-- Run relevant checks and report unavailable prerequisites as not run. A cross-build is not native launch or physical-watch evidence.
-- Do not publish artifacts, submit to a store, change repository visibility, or deploy to another person's host without authorization for that action.
+- Work on the native Rust desktop and CLI. Keep macOS and Linux behavior aligned when code is shared.
+- Keep the local profile single-owner. Preserve encrypted Plex and Jellyfin connections and all historical database migrations.
+- Use fake music services, generated audio, and isolated profiles in tests. Never use a real profile or music library as a fixture.
+- Keep credentials, setup links, cookies, databases, watch credentials, signing keys, real music, and private library names out of logs, Git, issues, and pull requests.
+- Start any test server yourself. Check for an existing server and wait until the new server is ready.
+- Keep GPL-3.0, SubMusic history, and asset notices. Keep `upstream` at `https://github.com/memen45/SubMusic.git`.
+- Use public GitHub Issues and pull requests. Do not require a private tracker, host path, or agent runtime from contributors.
+- Run the relevant checks in `docs/DEVELOPMENT.md`. Report checks that could not run. Separate automated evidence from physical watch checks.
+- Follow `docs/AGENT_DEPLOYMENT.md` when you make a package or release. Publish artifacts or change repository visibility only with authorization.
+
+The retired app and service remain in Git history. The files in `tests/fixtures/legacy-migrations` preserve an independent check of the original profile schema.

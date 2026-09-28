@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible SyncAndRun desktop problem
+description: Report a problem in the Mac or Linux app
 title: "Bug: "
 labels: [bug]
 body:
@@ -7,18 +7,32 @@ body:
     id: problem
     attributes:
       label: What happened?
-      description: Describe the expected and actual result.
+      description: Tell us what you expected and what you saw.
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
       label: Steps to reproduce
-      description: Use synthetic names and data. Do not attach music, credentials, or a profile.
+      description: Use fake names and data. Do not attach music, credentials, or a profile.
     validations:
       required: true
   - type: input
     id: environment
     attributes:
-      label: Environment
-      description: App version or commit, operating system, transfer method, and watch model if relevant.
+      label: App and computer
+      description: Give the app version or commit and the macOS or Linux version.
+    validations:
+      required: true
+  - type: input
+    id: watch
+    attributes:
+      label: Watch, if used
+      description: Give the model, firmware, and USB or folder transfer method.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Private data
+      options:
+        - label: I removed real music names, credentials, profile files, and private library details.
+          required: true

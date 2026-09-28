@@ -13,14 +13,6 @@ The inherited Git history and relevant source-level copyright notices are
 retained. Changes made for SyncAndRun are also distributed under
 GPL-3.0.
 
-The retained Electron desktop interface bundles subsetted web fonts distributed under
-the SIL Open Font License, Version 1.1:
-
-- Archivo by The Archivo Project Authors —
-  `companion/ui/public/assets/fonts/LICENSE-Archivo.txt`
-- IBM Plex Sans and IBM Plex Mono by IBM Corp. —
-  `companion/ui/public/assets/fonts/LICENSE-IBM-Plex.txt`
-
 SyncAndRun is an independent, unofficial project. It is not
 affiliated with, endorsed by, or sponsored by Plex, Garmin, or the SubMusic
 maintainers. Plex and Garmin names are used only to describe interoperability.

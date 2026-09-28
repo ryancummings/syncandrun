@@ -1,0 +1,59 @@
+name: Publish release
+on:
+  push:
+    tags: ['v[0-9]*']
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - run: sudo apt-get update && sudo apt-get install -y clang pkg-config libmtp-dev libssl-dev libfontconfig1-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev libx11-xcb-dev libvulkan1 mesa-vulkan-drivers ffmpeg
+      - run: python3 scripts/package-linux.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-package
+          path: build/linux/*.tar.gz
+          if-no-files-found: error
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - run: brew install pkgconf libmtp ffmpeg
+      - run: python3 scripts/package-macos.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-package
+          path: build/macos/*.dmg
+          if-no-files-found: error
+  publish:
+    needs: [linux, macos]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Check tag and main branch
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')
+          test "$GITHUB_REF_NAME" = "v$version"
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: '*-package'
+          merge-multiple: true
+          path: dist
+      - name: Publish packages and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          sha256sum *.dmg *.tar.gz > SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" *.dmg *.tar.gz SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "SyncAndRun $GITHUB_REF_NAME" \
+            --notes-file ../RELEASE_NOTES.md
