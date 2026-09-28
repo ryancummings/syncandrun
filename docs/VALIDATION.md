@@ -1,5 +1,24 @@
 # Validation
 
+## Watch music management and shared tracks (2026-09-27)
+
+The updated CLI replaced recognized content inside Music on a Forerunner 955
+Solar with two synthetic playlists. Four generated MP3 uploads passed read-back;
+137 older music objects were removed. The run did not access a real Plex profile
+or print music names. The desktop Manage watch music page showed folder sizes,
+confirmed removal of one synthetic folder, and showed the remaining folder
+after refresh. Its two transfer choices and removal prompt were inspected in
+the native Xwayland window.
+
+An opt-in shared-track run sent one generated MP3 and two M3U8 playlists in one
+folder. Both playlists passed USB read-back with references to the same track.
+The watch has not been disconnected and checked for playlist browsing or
+playback of this layout. The shared layout stays opt-in in the CLI.
+
+Thirty synthetic core tests, strict Clippy, workspace build, and the CLI smoke
+passed. A physical GUI session used an isolated synthetic profile. Xvfb was
+not used for this revision.
+
 ## Direct Linux USB transfer (2026-09-27)
 
 The native GPUI desktop and CLI identified a plugged-in Forerunner 955 Solar

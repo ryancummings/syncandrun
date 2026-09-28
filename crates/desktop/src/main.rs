@@ -14,14 +14,16 @@ use std::{
 };
 use syncandrun_core::{
     BITRATES,
-    device::{self, Watch},
+    device::{self, Discovery, Watch},
     export::{self, Progress},
     plex::{self, LibraryOverview, Login, PlaylistSummary, Plex, ServerChoice},
     profile::{self, Profile},
 };
 
 enum Event {
-    Watches(Result<Vec<Watch>, String>),
+    Watches(Result<Discovery, String>),
+    MusicItems(Vec<device::MusicItem>),
+    MusicRemoved(usize),
     WatchProgress(device::TransferProgress),
     Transferred(device::TransferResult),
     Loaded {
@@ -87,6 +89,9 @@ struct Desktop {
     watches: Vec<Watch>,
     selected_watch: Option<String>,
     watch_status: String,
+    managing_watch: bool,
+    music_items: Vec<device::MusicItem>,
+    replace_watch_music: bool,
     scanning: bool,
     last_scan: Instant,
     direct: bool,
@@ -117,6 +122,8 @@ struct Desktop {
 enum Modal {
     CreateDefault(PathBuf),
     ClearLibrary(PathBuf),
+    ReplaceMusic(Watch),
+    RemoveMusic(Watch, u32, String),
 }
 impl Drop for Desktop {
     fn drop(&mut self) {
@@ -153,6 +160,9 @@ impl Desktop {
             watches: Vec::new(),
             selected_watch: None,
             watch_status: "Looking for a Garmin watch…".into(),
+            managing_watch: false,
+            music_items: Vec::new(),
+            replace_watch_music: false,
             scanning: false,
             last_scan: Instant::now(),
             direct: true,
@@ -236,7 +246,7 @@ impl Desktop {
         self.last_scan = Instant::now();
         let sender = self.sender.clone();
         std::thread::spawn(move || {
-            let result = device::discover().map_err(|e| e.to_string());
+            let result = device::discover_with_unavailable().map_err(|e| e.to_string());
             let _ = sender.send(Event::Watches(result));
         });
     }
@@ -262,6 +272,20 @@ impl Desktop {
             return;
         }
         let bitrate = self.bitrate;
+        let replace = self.replace_watch_music;
+        if replace {
+            self.modal = Some(Modal::ReplaceMusic(watch));
+            return;
+        }
+        self.start_watch_transfer(watch, ids, bitrate, false);
+    }
+    fn start_watch_transfer(
+        &mut self,
+        watch: Watch,
+        ids: Vec<String>,
+        bitrate: u16,
+        replace: bool,
+    ) {
         self.output = None;
         self.progress = None;
         self.export_started = Some(Instant::now());
@@ -272,19 +296,31 @@ impl Desktop {
                 let plex = Plex::new(&profile)?;
                 let plan = plex.refresh(&mut profile, &ids, &cancel)?;
                 let connection = profile.connection()?.context("Sign in to Plex first")?;
-                let result = device::transfer(
-                    &watch,
-                    &plan,
-                    bitrate,
-                    &cancel,
-                    |t, b| plex.audio(&connection, t, b),
-                    |p| {
-                        let _ = sender.send(Event::WatchProgress(p));
-                    },
-                )?;
+                let source = |t: &syncandrun_core::Track, b| plex.audio(&connection, t, b);
+                let progress = |p| {
+                    let _ = sender.send(Event::WatchProgress(p));
+                };
+                let result = if replace {
+                    device::replace_music(&watch, &plan, bitrate, &cancel, source, progress)?
+                } else {
+                    device::transfer(&watch, &plan, bitrate, &cancel, source, progress)?
+                };
                 Ok(Event::Transferred(result))
             },
         );
+    }
+    fn inspect_watch_music(&mut self) {
+        let Some(watch) = self
+            .watches
+            .iter()
+            .find(|w| Some(w.key()) == self.selected_watch)
+            .cloned()
+        else {
+            return;
+        };
+        self.job("Reading watch Music folder…", move |_, _, _| {
+            Ok(Event::MusicItems(device::music_items(&watch)?))
+        });
     }
     fn job(
         &mut self,
@@ -370,7 +406,8 @@ impl Desktop {
             Event::Watches(result) => {
                 self.scanning = false;
                 match result {
-                    Ok(watches) => {
+                    Ok(discovery) => {
+                        let watches = discovery.watches;
                         if !watches.iter().any(|w| Some(w.key()) == self.selected_watch) {
                             self.selected_watch = if watches.len() == 1 {
                                 Some(watches[0].key())
@@ -378,12 +415,19 @@ impl Desktop {
                                 None
                             };
                         }
-                        self.watch_status = if watches.is_empty() {
+                        let mut status = if watches.is_empty() && !discovery.unavailable.is_empty()
+                        {
+                            "No usable Garmin watch found."
+                        } else if watches.is_empty() {
                             "Plug in your Garmin music watch and select USB / MTP mode."
                         } else {
                             "Connected over USB · direct music transfer available"
                         }
-                        .into();
+                        .to_owned();
+                        if !discovery.unavailable.is_empty() {
+                            status.push_str(&format!(" · {} Garmin device(s) unavailable; close other MTP apps or check USB permissions", discovery.unavailable.len()));
+                        }
+                        self.watch_status = status;
                         self.watches = watches;
                     }
                     Err(error) => {
@@ -393,6 +437,15 @@ impl Desktop {
                     }
                 }
                 return;
+            }
+            Event::MusicItems(items) => {
+                self.music_items = items;
+                self.status = "Watch music list refreshed.".into();
+            }
+            Event::MusicRemoved(count) => {
+                self.music_items.clear();
+                self.status =
+                    format!("Removed {count} music objects. Scan watch music to refresh the list.");
             }
             Event::WatchProgress(p) => {
                 self.status = format!(
@@ -404,9 +457,10 @@ impl Desktop {
             }
             Event::Transferred(result) => {
                 self.progress = None;
+                self.music_items.clear();
                 self.status = format!(
-                    "Transferred and verified {} tracks in {} playlists on your watch. Disconnect USB to let Garmin index the music.",
-                    result.tracks, result.playlists
+                    "Transferred and verified {} tracks in {} playlists; removed {} old music objects. Disconnect USB to let Garmin index the music.",
+                    result.tracks, result.playlists, result.removed
                 );
                 self.last_scan = Instant::now() - Duration::from_secs(8);
             }
@@ -488,6 +542,7 @@ impl Desktop {
             }
             Event::Failed(message) => {
                 self.progress = None;
+                self.music_items.clear();
                 self.status = message;
             }
         }
@@ -604,6 +659,26 @@ impl Desktop {
     }
     fn confirm_modal(&mut self) {
         match self.modal.take() {
+            Some(Modal::ReplaceMusic(watch))
+                if !self.busy && Some(watch.key()) == self.selected_watch =>
+            {
+                let ids: Vec<_> = self
+                    .playlists
+                    .iter()
+                    .filter(|p| self.selected.contains(&p.id))
+                    .map(|p| p.id.clone())
+                    .collect();
+                self.start_watch_transfer(watch, ids, self.bitrate, true);
+            }
+            Some(Modal::RemoveMusic(watch, id, name))
+                if !self.busy && Some(watch.key()) == self.selected_watch =>
+            {
+                self.job("Removing watch music…", move |_, cancel, _| {
+                    Ok(Event::MusicRemoved(device::remove_music_item(
+                        &watch, id, &name, &cancel,
+                    )?))
+                });
+            }
             Some(Modal::CreateDefault(path))
                 if !self.busy && self.destination.as_ref() == Some(&path) =>
             {
@@ -706,13 +781,76 @@ impl Render for Desktop {
                 cx.listener(move |v, _, _, cx| {
                     if !v.busy {
                         v.selected_watch = Some(key.clone());
+                        v.music_items.clear();
                         cx.notify();
                     }
                 }),
             ));
         }
+        if self.selected_watch.is_some() {
+            watch_card = watch_card.child(
+                button(
+                    "manage-watch",
+                    if self.managing_watch {
+                        "Hide watch music"
+                    } else {
+                        "Manage watch music"
+                    },
+                    active,
+                )
+                .text_sm()
+                .on_click(cx.listener(|v, _, _, cx| {
+                    v.managing_watch = !v.managing_watch;
+                    if v.managing_watch {
+                        v.inspect_watch_music();
+                    }
+                    cx.notify();
+                })),
+            );
+        }
         let mut content = div().flex().flex_col().gap_3();
-        if let Some(choice) = self.choice.clone() {
+        if self.managing_watch {
+            content = content.child(div().text_2xl().child("Manage watch music"))
+                .child(div().text_sm().child("Only the selected watch’s Music folder is shown. Remove items individually or return to playlists to replace all music. Activities and Garmin system data are outside this scope."))
+                .child(button("refresh-watch-music", "Refresh watch music", active).on_click(cx.listener(|v, _, _, cx| { v.inspect_watch_music(); cx.notify(); })));
+            for (i, item) in self.music_items.iter().enumerate() {
+                let name = item.name.clone();
+                let id = item.id;
+                let size = if item.bytes >= 1_000_000 {
+                    format!("{:.1} MB", item.bytes as f64 / 1_000_000.)
+                } else {
+                    format!("{:.1} KB", item.bytes as f64 / 1_000.)
+                };
+                let label = format!(
+                    "{} {} · {}",
+                    if item.folder { "Folder:" } else { "File:" },
+                    name,
+                    size
+                );
+                content = content.child(
+                    panel()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .child(div().text_sm().child(label))
+                        .child(
+                            button(("remove-watch-item", i), "Remove…", active)
+                                .text_sm()
+                                .on_click(cx.listener(move |v, _, _, cx| {
+                                    if let Some(watch) = v
+                                        .watches
+                                        .iter()
+                                        .find(|w| Some(w.key()) == v.selected_watch)
+                                        .cloned()
+                                    {
+                                        v.modal = Some(Modal::RemoveMusic(watch, id, name.clone()));
+                                        cx.notify();
+                                    }
+                                })),
+                        ),
+                );
+            }
+        } else if let Some(choice) = self.choice.clone() {
             content = content.child(div().text_xl().child("Choose a music library"));
             if choice.libraries.is_empty() {
                 content =
@@ -1150,10 +1288,18 @@ impl Render for Desktop {
                 .unwrap_or_else(|| "Choose a library folder".into());
             let export_panel = panel().flex().flex_col().gap_4()
                 .child(div().text_xl().child("Transfer settings"))
-                .child(div().flex().flex_col().gap_2().children([(true, "Direct to watch"), (false, "Export to folder")].into_iter().map(|(direct, label)| {
-                    button(if direct { "direct-mode" } else { "folder-mode" }, format!("{}{}", if self.direct == direct { "✓ " } else { "" }, label), active)
-                        .on_click(cx.listener(move |v, _, _, cx| { if !v.busy { v.direct = direct; v.output = None; v.save_preferences(); cx.notify(); } }))
-                })))
+                .child(div().p_3().rounded_md().border_1().border_color(rgb(0x42614d)).flex().flex_col().gap_2()
+                    .child(div().text_sm().text_color(rgb(0xa8cbb4)).child("1. Choose where to send music"))
+                    .children([(true, "Direct to watch"), (false, "Export to folder")].into_iter().map(|(direct, label)| {
+                        button(if direct { "direct-mode" } else { "folder-mode" }, format!("{}{}", if self.direct == direct { "✓ " } else { "○ " }, label), active)
+                            .bg(rgb(if self.direct == direct { 0x24543b } else { 0x203027 }))
+                            .on_click(cx.listener(move |v, _, _, cx| { if !v.busy { v.direct = direct; v.output = None; v.save_preferences(); cx.notify(); } }))
+                    })))
+                .when(self.direct, |panel| panel.child(div().p_3().rounded_md().border_1().border_color(rgb(0x42614d)).flex().flex_col().gap_2()
+                    .child(div().text_sm().text_color(rgb(0xa8cbb4)).child("2. Choose what happens to music on the watch"))
+                    .child(button("add-watch-music", format!("{} Add playlists. Keep old music.", if self.replace_watch_music { "○" } else { "✓" }), active).bg(rgb(if self.replace_watch_music { 0x203027 } else { 0x24543b })).on_click(cx.listener(|v, _, _, cx| { v.replace_watch_music = false; cx.notify(); })))
+                    .child(button("replace-watch-music", format!("{} Replace old music with these playlists.", if self.replace_watch_music { "✓" } else { "○" }), active).bg(rgb(if self.replace_watch_music { 0x24543b } else { 0x203027 })).on_click(cx.listener(|v, _, _, cx| { v.replace_watch_music = true; cx.notify(); })))
+                    .child(div().text_sm().text_color(rgb(0xa8cbb4)).child("Replace sends and checks new music first. It then deletes old music in the watch’s Music folder. You need space for both copies until deletion ends."))))
                 .child(div().flex().flex_col().gap_2()
                     .child(div().text_sm().text_color(rgb(0xa8cbb4)).child("MP3 quality"))
                     .child(qualities)
@@ -1168,7 +1314,7 @@ impl Render for Desktop {
                         cx.listener(|view, _, _, cx| view.choose_folder(cx))
                     ))))
                 .child(div().text_sm().text_color(rgb(0x91a69a))
-                    .child(if self.direct { "Transfers directly over USB and verifies every file. Each transfer adds new playlist folders; earlier music is kept." } else { "Copy the exported playlist folders into your watch’s Music folder with an MTP app." }));
+                    .child(if self.direct { "The watch stays connected during transfer." } else { "Copy the exported playlist folders into your watch’s Music folder with an MTP app." }));
             let export_panel = if compact {
                 export_panel.w_full()
             } else {
@@ -1241,7 +1387,12 @@ impl Render for Desktop {
             }
         }
         let mut footer = div().flex().gap_3();
-        if self.connected && !self.settings && self.login.is_none() && self.choice.is_none() {
+        if self.connected
+            && !self.managing_watch
+            && !self.settings
+            && self.login.is_none()
+            && self.choice.is_none()
+        {
             let can_export = active
                 && !self.selected.is_empty()
                 && if self.direct {
@@ -1355,16 +1506,26 @@ impl Render for Desktop {
             )
             .child(footer);
         if let Some(modal) = &self.modal {
-            let (title, detail, confirm) = match modal {
+            let (title, detail, confirm): (&str, String, &str) = match modal {
                 Modal::CreateDefault(_) => (
                     "Create music library folder?",
-                    "SyncAndRun will create ~/Music/SyncAndRun and export the selected playlists there.",
+                    "SyncAndRun will create ~/Music/SyncAndRun and export the selected playlists there.".into(),
                     "Create and export",
                 ),
                 Modal::ClearLibrary(_) => (
                     "Clear exported music?",
-                    "Only unchanged files generated by SyncAndRun will be removed. Modified and unrelated files stay in the folder.",
+                    "Only unchanged files generated by SyncAndRun will be removed. Modified and unrelated files stay in the folder.".into(),
                     "Clear exported music",
+                ),
+                Modal::ReplaceMusic(watch) => (
+                    "Replace watch music?",
+                    format!("On {}, the app sends and checks your selected playlists first. It then deletes old music inside Music. This cannot be undone. Activities and Garmin files outside Music stay on the watch. If USB disconnects during deletion, some old music can remain.", watch.model),
+                    "Replace watch music",
+                ),
+                Modal::RemoveMusic(watch, _, name) => (
+                    "Remove this music?",
+                    format!("Remove ‘{name}’ from Music on {}? This cannot be undone. Activities and Garmin files outside Music stay on the watch. If USB disconnects, part of the folder can remain.", watch.model),
+                    "Remove item",
                 ),
             };
             shell = shell.child(

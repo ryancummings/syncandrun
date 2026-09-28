@@ -7,7 +7,7 @@ use crate::{
 use anyhow::{Context, Result, ensure};
 use serde::Serialize;
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     io::{self, Read, Write},
     sync::atomic::{AtomicBool, Ordering},
 };
@@ -30,6 +30,20 @@ impl Watch {
     }
 }
 pub fn discover() -> Result<Vec<Watch>> {
+    Ok(discover_with_unavailable()?.watches)
+}
+#[derive(Clone, Serialize)]
+pub struct UnavailableWatch {
+    pub bus: u32,
+    pub number: u8,
+    pub reason: String,
+}
+#[derive(Default, Serialize)]
+pub struct Discovery {
+    pub watches: Vec<Watch>,
+    pub unavailable: Vec<UnavailableWatch>,
+}
+pub fn discover_with_unavailable() -> Result<Discovery> {
     usb::discover()
 }
 
@@ -43,6 +57,24 @@ pub struct TransferResult {
     pub tracks: usize,
     pub playlists: usize,
     pub bytes: u64,
+    pub removed: usize,
+}
+#[derive(Clone, Serialize)]
+pub struct MusicItem {
+    pub id: u32,
+    pub name: String,
+    pub folder: bool,
+    pub bytes: u64,
+}
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TransferMode {
+    Add,
+    Replace,
+}
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Layout {
+    Separate,
+    Shared,
 }
 
 struct Storage {
@@ -53,6 +85,7 @@ struct Object {
     id: u32,
     name: String,
     folder: bool,
+    bytes: u64,
 }
 trait Target {
     fn storage(&mut self) -> Result<Storage>;
@@ -96,19 +129,142 @@ pub fn transfer<R: Read>(
     source: impl FnMut(&Track, u16) -> Result<R>,
     progress: impl FnMut(TransferProgress),
 ) -> Result<TransferResult> {
+    transfer_with_mode(
+        watch,
+        plan,
+        bitrate,
+        cancel,
+        source,
+        progress,
+        TransferMode::Add,
+    )
+}
+pub fn replace_music<R: Read>(
+    watch: &Watch,
+    plan: &[Playlist],
+    bitrate: u16,
+    cancel: &AtomicBool,
+    source: impl FnMut(&Track, u16) -> Result<R>,
+    progress: impl FnMut(TransferProgress),
+) -> Result<TransferResult> {
+    transfer_with_mode(
+        watch,
+        plan,
+        bitrate,
+        cancel,
+        source,
+        progress,
+        TransferMode::Replace,
+    )
+}
+pub fn transfer_shared<R: Read>(
+    watch: &Watch,
+    plan: &[Playlist],
+    bitrate: u16,
+    cancel: &AtomicBool,
+    source: impl FnMut(&Track, u16) -> Result<R>,
+    progress: impl FnMut(TransferProgress),
+) -> Result<TransferResult> {
+    transfer_with_layout(
+        watch,
+        plan,
+        bitrate,
+        cancel,
+        source,
+        progress,
+        (TransferMode::Add, Layout::Shared),
+    )
+}
+fn transfer_with_mode<R: Read>(
+    watch: &Watch,
+    plan: &[Playlist],
+    bitrate: u16,
+    cancel: &AtomicBool,
+    source: impl FnMut(&Track, u16) -> Result<R>,
+    progress: impl FnMut(TransferProgress),
+    mode: TransferMode,
+) -> Result<TransferResult> {
+    transfer_with_layout(
+        watch,
+        plan,
+        bitrate,
+        cancel,
+        source,
+        progress,
+        (mode, Layout::Separate),
+    )
+}
+fn transfer_with_layout<R: Read>(
+    watch: &Watch,
+    plan: &[Playlist],
+    bitrate: u16,
+    cancel: &AtomicBool,
+    source: impl FnMut(&Track, u16) -> Result<R>,
+    progress: impl FnMut(TransferProgress),
+    options: (TransferMode, Layout),
+) -> Result<TransferResult> {
     check_cancel(cancel)?;
     let mut usb = usb::Usb::open(watch)?;
-    transfer_to(&mut usb, plan, bitrate, cancel, source, progress)
+    transfer_to_with_layout(&mut usb, plan, bitrate, cancel, source, progress, options)
 }
+#[cfg(test)]
 fn transfer_to<R: Read>(
+    target: &mut impl Target,
+    plan: &[Playlist],
+    bitrate: u16,
+    cancel: &AtomicBool,
+    source: impl FnMut(&Track, u16) -> Result<R>,
+    progress: impl FnMut(TransferProgress),
+) -> Result<TransferResult> {
+    transfer_to_with_mode(
+        target,
+        plan,
+        bitrate,
+        cancel,
+        source,
+        progress,
+        TransferMode::Add,
+    )
+}
+#[cfg(test)]
+fn transfer_to_with_mode<R: Read>(
+    target: &mut impl Target,
+    plan: &[Playlist],
+    bitrate: u16,
+    cancel: &AtomicBool,
+    source: impl FnMut(&Track, u16) -> Result<R>,
+    progress: impl FnMut(TransferProgress),
+    mode: TransferMode,
+) -> Result<TransferResult> {
+    transfer_to_with_layout(
+        target,
+        plan,
+        bitrate,
+        cancel,
+        source,
+        progress,
+        (mode, Layout::Separate),
+    )
+}
+fn transfer_to_with_layout<R: Read>(
     target: &mut impl Target,
     plan: &[Playlist],
     bitrate: u16,
     cancel: &AtomicBool,
     mut source: impl FnMut(&Track, u16) -> Result<R>,
     mut progress: impl FnMut(TransferProgress),
+    options: (TransferMode, Layout),
 ) -> Result<TransferResult> {
-    let estimate = export::estimate(plan, bitrate, Route::Mtp)?;
+    let (mode, layout) = options;
+    let estimate = export::estimate(
+        plan,
+        bitrate,
+        if layout == Layout::Shared {
+            Route::Express
+        } else {
+            Route::Mtp
+        },
+    )?;
     ensure!(estimate.tracks > 0, "Choose at least one nonempty playlist");
     check_cancel(cancel)?;
     let storage = target.storage()?;
@@ -128,6 +284,13 @@ fn transfer_to<R: Read>(
         None => target.folder(0, "Music")?,
     };
     let existing = target.list(music)?;
+    // Validate the entire deletion scope before uploading anything. Unknown files
+    // under Music remain untouched, and make replacement refuse the request.
+    let old_objects = if mode == TransferMode::Replace {
+        deletion_plan(target, &existing)?
+    } else {
+        Vec::new()
+    };
     let mut names: HashSet<String> = existing.iter().map(|o| o.name.to_lowercase()).collect();
     let run = uuid::Uuid::new_v4().simple().to_string();
     let mut created = Vec::new();
@@ -135,21 +298,47 @@ fn transfer_to<R: Read>(
         tracks: 0,
         playlists: 0,
         bytes: 0,
+        removed: 0,
     };
     let outcome = (|| {
+        let mut shared_tracks: HashMap<String, String> = HashMap::new();
+        let mut shared_used = HashSet::new();
+        let mut playlist_names = HashSet::new();
+        let shared_folder = if layout == Layout::Shared {
+            let mut name = format!("Shared music - SAR {}", &run[..8]);
+            while !names.insert(name.to_lowercase()) {
+                name.push('_');
+            }
+            let id = target.folder(music, &name)?;
+            created.push(id);
+            Some((name, id))
+        } else {
+            None
+        };
         for playlist in plan.iter().filter(|p| !p.tracks.is_empty()) {
             check_cancel(cancel)?;
             let title = export::safe_name(&playlist.title);
-            let mut folder_name = format!("{title} - SAR {}", &run[..8]);
-            while !names.insert(folder_name.to_lowercase()) {
-                folder_name.push('_');
-            }
-            let folder = target.folder(music, &folder_name)?;
-            created.push(folder);
+            let (folder_name, folder) = if let Some((name, id)) = &shared_folder {
+                (name.clone(), *id)
+            } else {
+                let mut name = format!("{title} - SAR {}", &run[..8]);
+                while !names.insert(name.to_lowercase()) {
+                    name.push('_');
+                }
+                let id = target.folder(music, &name)?;
+                created.push(id);
+                (name, id)
+            };
             let mut used = HashSet::new();
             let mut m3u = String::new();
             for track in &playlist.tracks {
                 check_cancel(cancel)?;
+                if let Some(name) = shared_tracks.get(&track.id) {
+                    m3u.push_str(
+                        &format!("0:/Music/{folder_name}/{name}\r\n").to_ascii_uppercase(),
+                    );
+                    continue;
+                }
                 let mut notify = |phase| {
                     progress(TransferProgress {
                         tracks: Progress {
@@ -167,12 +356,22 @@ fn transfer_to<R: Read>(
                     audio.0.len() as u64 + 65536 <= target.storage()?.free,
                     "Watch storage filled up during transfer"
                 );
-                let name = export::filename(track, &mut used);
+                let name = export::filename(
+                    track,
+                    if layout == Layout::Shared {
+                        &mut shared_used
+                    } else {
+                        &mut used
+                    },
+                );
                 notify("Sending to watch");
                 let id = target.upload(folder, &name, &audio.0, cancel)?;
                 created.push(id);
                 notify("Verifying on watch");
                 target.verify(id, &audio.0, cancel)?;
+                if layout == Layout::Shared {
+                    shared_tracks.insert(track.id.clone(), name.clone());
+                }
                 // Garmin rewrites relative paths to this volume path but can keep the
                 // original MTP object length, truncating read-back. Supply its final
                 // path up front (including CRLF) so the object length is correct.
@@ -189,7 +388,13 @@ fn transfer_to<R: Read>(
             }
             check_cancel(cancel)?;
             // Publish the playlist only after every track is verified.
-            let id = target.upload(folder, &format!("{title}.m3u8"), m3u.as_bytes(), cancel)?;
+            let mut playlist_name = format!("{title}.m3u8");
+            if layout == Layout::Shared {
+                while !playlist_names.insert(playlist_name.to_lowercase()) {
+                    playlist_name.insert(0, '_');
+                }
+            }
+            let id = target.upload(folder, &playlist_name, m3u.as_bytes(), cancel)?;
             created.push(id);
             target.verify(id, m3u.as_bytes(), cancel)?;
             result.playlists += 1;
@@ -204,7 +409,166 @@ fn transfer_to<R: Read>(
         }
         return Err(error).context(if incomplete { "Transfer stopped. Some new files could not be removed; reconnect and remove the incomplete SAR folders with an MTP app before retrying" } else { "Transfer stopped; this attempt's files were removed" });
     }
+    if mode == TransferMode::Replace {
+        // Staging succeeded. From here on deletion is irreversible. A failure or
+        // cancellation leaves the new verified playlists and any remaining old music.
+        for id in old_objects {
+            if cancel.load(Ordering::Relaxed) {
+                anyhow::bail!(
+                    "Replacement stopped after removing {} old music objects. New playlists remain; some old music may remain. Scan the watch before retrying.",
+                    result.removed
+                );
+            }
+            if target.delete(id).is_err() {
+                anyhow::bail!(
+                    "Replacement stopped after removing {} old music objects. New playlists remain; some old music may remain. Scan the watch before retrying.",
+                    result.removed
+                );
+            }
+            result.removed += 1;
+            progress(TransferProgress {
+                tracks: Progress {
+                    completed: result.tracks,
+                    expected: estimate.tracks,
+                },
+                phase: "Removing old music",
+            });
+        }
+    }
     Ok(result)
+}
+
+fn music_root(target: &mut impl Target) -> Result<Option<u32>> {
+    let entry = target
+        .list(0)?
+        .into_iter()
+        .find(|o| o.name.eq_ignore_ascii_case("Music"));
+    ensure!(
+        entry.as_ref().is_none_or(|o| o.folder),
+        "Watch Music entry is not a folder"
+    );
+    Ok(entry.map(|o| o.id))
+}
+fn music_file(name: &str) -> bool {
+    let extension = name
+        .rsplit_once('.')
+        .map(|(_, ext)| ext.to_ascii_lowercase());
+    matches!(
+        extension.as_deref(),
+        Some(
+            "mp3"
+                | "m4a"
+                | "aac"
+                | "flac"
+                | "wav"
+                | "wma"
+                | "ogg"
+                | "m3u"
+                | "m3u8"
+                | "pls"
+                | "jpg"
+                | "jpeg"
+                | "png"
+        )
+    )
+}
+fn deletion_plan(target: &mut impl Target, entries: &[Object]) -> Result<Vec<u32>> {
+    fn visit(
+        target: &mut impl Target,
+        item: &Object,
+        depth: usize,
+        seen: &mut HashSet<u32>,
+        ids: &mut Vec<u32>,
+    ) -> Result<()> {
+        ensure!(
+            depth <= 16 && seen.insert(item.id),
+            "Music folder is too deep or contains repeated objects"
+        );
+        if item.folder {
+            for child in target.list(item.id)? {
+                visit(target, &child, depth + 1, seen, ids)?;
+            }
+        } else {
+            ensure!(
+                music_file(&item.name),
+                "Music contains an unsupported file; remove it separately with an MTP app before replacing all music"
+            );
+        }
+        ids.push(item.id);
+        Ok(())
+    }
+    let mut ids = Vec::new();
+    let mut seen = HashSet::new();
+    for item in entries {
+        visit(target, item, 0, &mut seen, &mut ids)?;
+    }
+    Ok(ids)
+}
+pub fn music_items(watch: &Watch) -> Result<Vec<MusicItem>> {
+    let mut target = usb::Usb::open(watch)?;
+    music_items_from(&mut target)
+}
+fn music_items_from(target: &mut impl Target) -> Result<Vec<MusicItem>> {
+    let Some(root) = music_root(target)? else {
+        return Ok(Vec::new());
+    };
+    fn size(
+        target: &mut impl Target,
+        item: &Object,
+        depth: usize,
+        seen: &mut HashSet<u32>,
+    ) -> Result<u64> {
+        ensure!(
+            depth <= 16 && seen.insert(item.id),
+            "Music folder is too deep or contains repeated objects"
+        );
+        if !item.folder {
+            return Ok(item.bytes);
+        }
+        let mut total = 0u64;
+        for child in target.list(item.id)? {
+            total = total.saturating_add(size(target, &child, depth + 1, seen)?);
+        }
+        Ok(total)
+    }
+    let mut seen = HashSet::new();
+    target
+        .list(root)?
+        .into_iter()
+        .map(|o| {
+            Ok(MusicItem {
+                id: o.id,
+                bytes: size(target, &o, 0, &mut seen)?,
+                name: o.name,
+                folder: o.folder,
+            })
+        })
+        .collect()
+}
+pub fn remove_music_item(watch: &Watch, id: u32, name: &str, cancel: &AtomicBool) -> Result<usize> {
+    check_cancel(cancel)?;
+    let mut target = usb::Usb::open(watch)?;
+    let root = music_root(&mut target)?.context("Watch Music folder is missing")?;
+    let matches: Vec<_> = target
+        .list(root)?
+        .into_iter()
+        .filter(|o| o.id == id && o.name == name)
+        .collect();
+    ensure!(
+        matches.len() == 1,
+        "Music item changed; scan the watch again"
+    );
+    let ids = deletion_plan(&mut target, &matches)?;
+    let mut removed = 0;
+    for id in ids {
+        if cancel.load(Ordering::Relaxed) || target.delete(id).is_err() {
+            anyhow::bail!(
+                "Removal stopped after deleting {removed} music objects. This cannot be undone; scan the watch to see what remains."
+            );
+        }
+        removed += 1;
+    }
+    Ok(removed)
 }
 
 // Garmin canonicalizes M3U8 paths and letter case. Compare ordered references.
@@ -251,6 +615,8 @@ mod tests {
         fail_upload: bool,
         corrupt: bool,
         disconnected: bool,
+        fail_delete_after: Option<usize>,
+        deleted: usize,
     }
     impl Default for Fake {
         fn default() -> Self {
@@ -278,6 +644,8 @@ mod tests {
                 fail_upload: false,
                 corrupt: false,
                 disconnected: false,
+                fail_delete_after: None,
+                deleted: 0,
             }
         }
     }
@@ -297,6 +665,7 @@ mod tests {
                     id,
                     name: e.name.clone(),
                     folder: e.data.is_none(),
+                    bytes: e.data.as_ref().map_or(0, |data| data.len() as u64),
                 })
                 .collect())
         }
@@ -330,10 +699,16 @@ mod tests {
         fn delete(&mut self, id: u32) -> Result<()> {
             ensure!(!self.disconnected, "Disconnected");
             ensure!(
+                self.fail_delete_after
+                    .is_none_or(|limit| self.deleted < limit),
+                "Delete failed"
+            );
+            ensure!(
                 !self.entries.values().any(|e| e.parent == id),
                 "Folder not empty"
             );
             self.entries.remove(&id);
+            self.deleted += 1;
             Ok(())
         }
     }
@@ -485,5 +860,209 @@ mod tests {
             .is_err()
         );
         assert_eq!(target.entries.len(), 2);
+    }
+    #[test]
+    fn replacement_stages_then_removes_only_old_music() {
+        let mut target = Fake::default();
+        target.entries.insert(
+            9,
+            Entry {
+                parent: 0,
+                name: "GARMIN".into(),
+                data: None,
+            },
+        );
+        target.entries.insert(
+            10,
+            Entry {
+                parent: 9,
+                name: "activity.fit".into(),
+                data: Some(vec![4]),
+            },
+        );
+        let result = transfer_to_with_mode(
+            &mut target,
+            &plan(),
+            192,
+            &AtomicBool::new(false),
+            audio,
+            |_| {},
+            TransferMode::Replace,
+        )
+        .unwrap();
+        assert_eq!(result.removed, 1);
+        assert!(!target.entries.contains_key(&2));
+        assert_eq!(target.entries[&10].data, Some(vec![4]));
+        assert!(target.entries.values().any(|e| e.name.ends_with(".m3u8")));
+    }
+    #[test]
+    fn watch_music_sizes_sum_files_inside_folders() {
+        let mut target = Fake::default();
+        target.entries.insert(
+            3,
+            Entry {
+                parent: 1,
+                name: "Album".into(),
+                data: None,
+            },
+        );
+        target.entries.insert(
+            4,
+            Entry {
+                parent: 3,
+                name: "song.mp3".into(),
+                data: Some(vec![0; 20]),
+            },
+        );
+        target.entries.insert(
+            5,
+            Entry {
+                parent: 3,
+                name: "list.m3u8".into(),
+                data: Some(vec![0; 7]),
+            },
+        );
+        let items = music_items_from(&mut target).unwrap();
+        assert_eq!(
+            items
+                .iter()
+                .find(|item| item.name == "Album")
+                .unwrap()
+                .bytes,
+            27
+        );
+        assert_eq!(
+            items
+                .iter()
+                .find(|item| item.name == "Existing.mp3")
+                .unwrap()
+                .bytes,
+            1
+        );
+    }
+    #[test]
+    fn shared_layout_uploads_each_track_once_for_multiple_playlists() {
+        let mut target = Fake::default();
+        let mut playlists = plan();
+        let mut second = playlists[0].clone();
+        second.title = "Second list".into();
+        let mut unique = second.tracks[0].clone();
+        unique.id = "fake-2".into();
+        unique.title = "Another song".into();
+        second.tracks.push(unique);
+        playlists.push(second);
+        let result = transfer_to_with_layout(
+            &mut target,
+            &playlists,
+            192,
+            &AtomicBool::new(false),
+            audio,
+            |_| {},
+            (TransferMode::Add, Layout::Shared),
+        )
+        .unwrap();
+        assert_eq!((result.tracks, result.playlists), (2, 2));
+        let folders: Vec<_> = target
+            .entries
+            .values()
+            .filter(|e| e.parent == 1 && e.data.is_none())
+            .collect();
+        assert_eq!(folders.len(), 1);
+        let folder_id = *target
+            .entries
+            .iter()
+            .find(|(_, e)| e.parent == 1 && e.data.is_none())
+            .unwrap()
+            .0;
+        let files: Vec<_> = target
+            .entries
+            .values()
+            .filter(|e| e.parent == folder_id)
+            .collect();
+        assert_eq!(files.iter().filter(|e| e.name.ends_with(".mp3")).count(), 2);
+        assert_eq!(
+            files.iter().filter(|e| e.name.ends_with(".m3u8")).count(),
+            2
+        );
+        let playlists: Vec<_> = files
+            .iter()
+            .filter(|e| e.name.ends_with(".m3u8"))
+            .map(|e| String::from_utf8(e.data.clone().unwrap()).unwrap())
+            .collect();
+        let shared_path = playlists[0].lines().next().unwrap();
+        assert!(shared_path.starts_with("0:/MUSIC/"));
+        assert_eq!(
+            playlists
+                .iter()
+                .flat_map(|p| p.lines())
+                .filter(|line| *line == shared_path)
+                .count(),
+            4
+        );
+    }
+    #[test]
+    fn replacement_rejects_unknown_content_before_transfer() {
+        let mut target = Fake::default();
+        target.entries.insert(
+            3,
+            Entry {
+                parent: 1,
+                name: "unknown.bin".into(),
+                data: Some(vec![4]),
+            },
+        );
+        let error = transfer_to_with_mode(
+            &mut target,
+            &plan(),
+            192,
+            &AtomicBool::new(false),
+            audio,
+            |_| {},
+            TransferMode::Replace,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("unsupported"));
+        assert_eq!(target.entries.len(), 3);
+    }
+    #[test]
+    fn interrupted_removal_reports_irreversible_partial_result() {
+        let mut target = Fake {
+            fail_delete_after: Some(1),
+            ..Default::default()
+        };
+        target.entries.insert(
+            3,
+            Entry {
+                parent: 1,
+                name: "Old.m3u8".into(),
+                data: Some(vec![4]),
+            },
+        );
+        target.next = 4;
+        let error = transfer_to_with_mode(
+            &mut target,
+            &plan(),
+            192,
+            &AtomicBool::new(false),
+            audio,
+            |_| {},
+            TransferMode::Replace,
+        )
+        .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("after removing 1 old music objects")
+        );
+        assert!(
+            target
+                .entries
+                .values()
+                .any(|e| e.name.ends_with(".m3u8") && e.name != "Old.m3u8")
+        );
+        assert_eq!(
+            target.entries.contains_key(&2) as u8 + target.entries.contains_key(&3) as u8,
+            1
+        );
     }
 }

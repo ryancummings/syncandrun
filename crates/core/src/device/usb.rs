@@ -1,5 +1,5 @@
 //! Small ownership wrapper around libmtp. Protocol handling and Garmin quirks stay in libmtp.
-use super::{Object, Storage, Target, Watch};
+use super::{Discovery, Object, Storage, Target, UnavailableWatch, Watch};
 use anyhow::{Context, Result, bail, ensure};
 use libmtp_sys as ffi;
 use sha2::{Digest, Sha256};
@@ -151,19 +151,41 @@ impl Usb {
         Ok(usb)
     }
 }
-pub(super) fn discover() -> Result<Vec<Watch>> {
+fn collect_watches<T>(
+    devices: impl IntoIterator<Item = (u32, u8, T)>,
+    mut inspect: impl FnMut(T, u32, u8) -> Result<Vec<Watch>>,
+) -> Discovery {
+    let mut result = Discovery::default();
+    for (bus, number, device) in devices {
+        match inspect(device, bus, number) {
+            Ok(watches) if !watches.is_empty() => result.watches.extend(watches),
+            Ok(_) => result.unavailable.push(UnavailableWatch {
+                bus,
+                number,
+                reason: "No writable Garmin storage available".into(),
+            }),
+            Err(_) => result.unavailable.push(UnavailableWatch {
+                bus,
+                number,
+                reason: "Garmin unavailable; close other MTP apps and check USB permissions".into(),
+            }),
+        }
+    }
+    result
+}
+pub(super) fn discover() -> Result<Discovery> {
     let guard = lock()?;
     let raws = raw_devices()?;
     drop(guard);
-    let mut watches = Vec::new();
-    for mut raw in raws
-        .into_iter()
-        .filter(|r| r.device_entry.vendor_id == 0x091e)
-    {
-        let usb = Usb::from_raw(&mut raw, lock()?)?;
-        watches.extend(usb.watches(raw.bus_location, raw.devnum)?);
-    }
-    Ok(watches)
+    Ok(collect_watches(
+        raws.into_iter()
+            .filter(|r| r.device_entry.vendor_id == 0x091e)
+            .map(|raw| (raw.bus_location, raw.devnum, raw)),
+        |mut raw, bus, number| {
+            let usb = Usb::from_raw(&mut raw, lock()?)?;
+            usb.watches(bus, number)
+        },
+    ))
 }
 
 struct Upload<'a> {
@@ -264,6 +286,7 @@ impl Target for Usb {
                 id: info.item_id,
                 name,
                 folder: info.filetype == ffi::LIBMTP_filetype_t_LIBMTP_FILETYPE_FOLDER,
+                bytes: info.filesize,
             });
             let next = info.next;
             unsafe {
@@ -375,5 +398,53 @@ impl Target for Usb {
             unsafe { ffi::LIBMTP_Delete_Object(self.device, id) },
             "remove an incomplete transfer",
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn busy_device_does_not_discard_available_watch() {
+        let scan = collect_watches([(1, 2, false), (1, 3, true)], |ok, bus, number| {
+            if !ok {
+                bail!("private device error")
+            }
+            Ok(vec![Watch {
+                bus,
+                number,
+                storage_id: 4,
+                fingerprint: "fake".into(),
+                model: "Synthetic Garmin".into(),
+                firmware: "1".into(),
+                free_bytes: 10,
+                total_bytes: 20,
+            }])
+        });
+        assert_eq!(scan.watches.len(), 1);
+        assert_eq!(scan.watches[0].key(), "1:3:4");
+        assert_eq!(scan.unavailable.len(), 1);
+        assert!(!scan.unavailable[0].reason.contains("private"));
+    }
+    #[test]
+    fn inaccessible_storage_is_reported_without_hiding_other_devices() {
+        let scan = collect_watches([(1, 2, false), (2, 5, true)], |ok, bus, number| {
+            Ok(if ok {
+                vec![Watch {
+                    bus,
+                    number,
+                    storage_id: 7,
+                    fingerprint: "fake".into(),
+                    model: "Synthetic Garmin".into(),
+                    firmware: "1".into(),
+                    free_bytes: 10,
+                    total_bytes: 20,
+                }]
+            } else {
+                vec![]
+            })
+        });
+        assert_eq!(scan.watches[0].key(), "2:5:7");
+        assert_eq!(scan.unavailable[0].number, 2);
     }
 }

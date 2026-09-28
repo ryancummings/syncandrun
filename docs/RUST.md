@@ -27,7 +27,13 @@ and free space. Choose playlists and quality, leave **Direct to watch** selected
 and click **Transfer to watch**. No local output folder is required. Close or
 unmount the watch in Files and other MTP applications if they hold the connection.
 The app checks free space and verifies files by reading them back over USB.
-Each run adds new folders; it does not remove earlier transfers. Disconnect USB
+The default adds new folders. Select **Replace watch music** for a confirmed,
+permanent replacement of recognized content within the watch’s Music folder.
+Use **Manage watch music** to inspect or remove one item. Replacement stages and
+verifies new music first, so it needs enough free space for both old and new
+content. Unknown files under Music block replacement. Cancellation or USB failure
+during removal can leave a mix of old and new music; removed files cannot be
+restored. Activities and Garmin system data are outside the deletion scope. Disconnect USB
 after completion so the watch can index the music. See [direct MTP details](DIRECT-MTP.md).
 
 Choose **Export to folder** to retain the local library workflow. Create and
@@ -54,14 +60,23 @@ syncandrun playlists --json
 syncandrun refresh --playlist plex:playlist:123
 syncandrun estimate --bitrate 192
 syncandrun transfer --playlist plex:playlist:123 --bitrate 192
+syncandrun transfer --playlist plex:playlist:123 --replace-music --yes-replace-music
+syncandrun transfer --playlist plex:playlist:123 --shared-tracks
 syncandrun export --destination /path/to/music --bitrate 192
 syncandrun backup --destination /path/to/private-backups
 ```
 
 `devices` identifies connected Garmin storage without opening a Plex profile.
 `transfer` uses the only connected watch, or accepts `--device bus:number:storage_id`
-from `devices` when several targets are present. It refreshes the playlist selection
+from `devices` when several targets are present, even if another Garmin is busy.
+Busy or inaccessible Garmins are reported separately. It refreshes the playlist selection
 and uses the same direct transfer engine as the GUI.
+
+`--shared-tracks` puts each track in one new Music folder and places multiple
+M3U8 playlists beside it. It stores a repeated track once per run. It is an
+opt-in add mode because on-watch playlist browsing and playback still need
+testing. USB read-back passed on a Forerunner 955 Solar. It cannot be combined
+with `--replace-music` yet.
 
 `login` opens the browser and then asks for a server and music library by number.
 It deliberately does not print authentication links or accept tokens in command

@@ -26,8 +26,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--write-watch', action='store_true', required=True)
     parser.add_argument('--gui', action='store_true')
+    parser.add_argument('--replace-watch', action='store_true', help='Permanently replace recognized content under watch Music with synthetic playlists')
+    parser.add_argument('--shared-tracks', action='store_true', help='Test one shared folder with multiple playlists and synthetic tracks')
     parser.add_argument('--screenshot', type=Path)
     args = parser.parse_args()
+    if args.replace_watch and args.shared_tracks:
+        parser.error('--replace-watch and --shared-tracks cannot be combined')
     # Keep the source MP3 in memory; the app receives it over HTTP like Plex audio.
     tone = subprocess.check_output(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i',
         'sine=frequency=440:duration=3', '-filter:a', 'volume=0.1', '-codec:a',
@@ -72,7 +76,15 @@ def main():
             assert len(json.loads(cli('playlists', '--json'))) == 2  # fixture readiness
             if not args.gui:
                 print(cli('devices'), end='')
-                print(cli('transfer', '--playlist', 'plex:playlist:10', '--playlist', 'plex:playlist:20'), end='')
+                transfer_args = ['transfer', '--playlist', 'plex:playlist:10', '--playlist', 'plex:playlist:20']
+                if args.replace_watch:
+                    transfer_args += ['--replace-music', '--yes-replace-music']
+                if args.shared_tracks:
+                    transfer_args += ['--shared-tracks']
+                outcome = cli(*transfer_args)
+                if args.shared_tracks:
+                    assert 'Transferred and verified 1 tracks in 2 playlists' in outcome
+                print(outcome, end='')
                 assert not list(root.rglob('*.mp3'))
                 print('Physical CLI acceptance passed: direct transfer and full read-back verification, no local MP3 files.')
             else:

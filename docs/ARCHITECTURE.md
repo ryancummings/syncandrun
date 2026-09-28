@@ -30,7 +30,13 @@ there is no audio staging directory. The transfer engine checks storage, creates
 new folders under Music, uploads and hashes each MP3 by reading it back, then
 publishes and validates the playlist. It deletes only objects created by the
 current attempt on cancellation or failure; unsuccessful cleanup is reported.
-A private target trait supplies an in-memory fake for failure tests.
+A private target trait supplies an in-memory fake for failure tests. Discovery
+keeps writable watches when another Garmin is busy and reports unavailable
+devices separately. Optional replacement validates the Music subtree, stages
+and verifies new playlists, then removes old recognized music objects. Unknown
+files stop replacement before upload. Deletion is confined to Music and cannot
+be rolled back; partial removal is reported. The desktop can inspect and remove
+individual top-level Music items.
 
 Garmin rewrites playlist paths while retaining the old MTP object length on the
 validated Forerunner. Direct transfers therefore write canonical `0:/MUSIC/…`

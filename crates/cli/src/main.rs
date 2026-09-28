@@ -34,6 +34,15 @@ enum Command {
         /// Device key from the devices command (required when several are connected)
         #[arg(long)]
         device: Option<String>,
+        /// Replace recognized content in the watch Music folder after verification
+        #[arg(long, requires = "yes_replace_music")]
+        replace_music: bool,
+        /// Confirm permanent removal of other watch music during --replace-music
+        #[arg(long)]
+        yes_replace_music: bool,
+        /// Store each track once in a shared folder with multiple playlists
+        #[arg(long, conflicts_with = "replace_music")]
+        shared_tracks: bool,
     },
     /// Sign in using your browser, then choose a server and music library
     Login,
@@ -100,11 +109,18 @@ fn ids(profile: &Profile, supplied: Vec<String>) -> Result<Vec<String>> {
 }
 fn run(args: Args) -> Result<()> {
     if matches!(args.command, Command::Devices) {
-        let watches = device::discover()?;
-        if watches.is_empty() {
-            println!("No Garmin watch connected.");
+        let scan = device::discover_with_unavailable()?;
+        if scan.watches.is_empty() {
+            println!(
+                "{}",
+                if scan.unavailable.is_empty() {
+                    "No Garmin watch connected."
+                } else {
+                    "No usable Garmin watch found."
+                }
+            );
         }
-        for watch in watches {
+        for watch in scan.watches {
             println!(
                 "{}  {}  firmware {}  {:.2} GB free / {:.2} GB",
                 watch.key(),
@@ -112,6 +128,12 @@ fn run(args: Args) -> Result<()> {
                 watch.firmware,
                 watch.free_bytes as f64 / 1e9,
                 watch.total_bytes as f64 / 1e9
+            );
+        }
+        for unavailable in scan.unavailable {
+            eprintln!(
+                "{}:{}  {}",
+                unavailable.bus, unavailable.number, unavailable.reason
             );
         }
         return Ok(());
@@ -128,8 +150,18 @@ fn run(args: Args) -> Result<()> {
             playlists,
             bitrate,
             device: key,
+            replace_music,
+            yes_replace_music: _,
+            shared_tracks,
         } => {
-            let watches = device::discover()?;
+            let scan = device::discover_with_unavailable()?;
+            for unavailable in scan.unavailable {
+                eprintln!(
+                    "{}:{}  {}",
+                    unavailable.bus, unavailable.number, unavailable.reason
+                );
+            }
+            let watches = scan.watches;
             let watch = match key {
                 Some(key) => watches
                     .iter()
@@ -148,22 +180,23 @@ fn run(args: Args) -> Result<()> {
             let connection = profile
                 .connection()?
                 .context("Run syncandrun login first")?;
-            let result = device::transfer(
-                watch,
-                &plan,
-                bitrate,
-                &cancel,
-                |t, b| plex.audio(&connection, t, b),
-                |p| {
-                    eprintln!(
-                        "{}: {}/{} tracks",
-                        p.phase, p.tracks.completed, p.tracks.expected
-                    )
-                },
-            )?;
+            let source = |t: &syncandrun_core::Track, b| plex.audio(&connection, t, b);
+            let progress = |p: device::TransferProgress| {
+                eprintln!(
+                    "{}: {}/{} tracks",
+                    p.phase, p.tracks.completed, p.tracks.expected
+                )
+            };
+            let result = if replace_music {
+                device::replace_music(watch, &plan, bitrate, &cancel, source, progress)?
+            } else if shared_tracks {
+                device::transfer_shared(watch, &plan, bitrate, &cancel, source, progress)?
+            } else {
+                device::transfer(watch, &plan, bitrate, &cancel, source, progress)?
+            };
             println!(
-                "Transferred and verified {} tracks in {} playlists on {}.",
-                result.tracks, result.playlists, watch.model
+                "Transferred and verified {} tracks in {} playlists on {}; removed {} old music objects.",
+                result.tracks, result.playlists, watch.model, result.removed
             );
         }
         Command::Login => {
