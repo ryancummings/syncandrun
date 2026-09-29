@@ -22,7 +22,7 @@ The legacy credential test and smoke script need Node.js as an independent encry
 
 On Apple Silicon macOS, the app built and launched from a drag-install DMG. The DMG bundles libmtp, ffmpeg, ffprobe, fonts, and their license files. Strict `codesign` checks passed. The bundled audio tools worked without Homebrew in `PATH`. A synthetic local MP3/M3U8 folder export passed.
 
-The CLI and packaged app detected a Forerunner 955 Solar and read its storage after other MTP apps released USB. This was a read-only check. A direct Mac transfer, watch playlist listing, and playback remain open checks. The new device-disconnect display and steady waiting line also need a physical unplug check.
+The CLI and packaged app detected a Forerunner 955 Solar and read its storage after other MTP apps released USB. That initial test was read-only. The owner has since confirmed a Mac-to-watch transfer and playback on the watch. This report did not record playlist listing details or the app build used for that check. The device-disconnect display and steady waiting line still need a physical unplug check.
 
 ## Linux physical watch results
 

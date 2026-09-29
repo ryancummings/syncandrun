@@ -11,7 +11,7 @@ its MTP connection at the same time.
 
 | Watch family | Garmin evidence for personal audio | SyncAndRun status |
 | --- | --- | --- |
-| Forerunner 955 Solar | [Personal audio in Garmin Express](https://www8.garmin.com/manuals/webhelp/GUID-9D99A9D4-467A-4F1A-A0EA-023184FEA3DD/EN-AU/GUID-CD4439DF-46FF-4279-A8D5-8DA61C87A4EB.html) | Direct Linux MTP transfer, playlist indexing, and synthetic playback checked on firmware 2905. See [validation](VALIDATION.md). |
+| Forerunner 955 Solar | [Personal audio in Garmin Express](https://www8.garmin.com/manuals/webhelp/GUID-9D99A9D4-467A-4F1A-A0EA-023184FEA3DD/EN-AU/GUID-CD4439DF-46FF-4279-A8D5-8DA61C87A4EB.html) | Direct Linux MTP transfer, playlist indexing, and synthetic playback checked on firmware 2905. The owner also confirmed Mac-to-watch transfer and playback. See [validation](VALIDATION.md). |
 | Forerunner 965 | [Personal audio and playlists](https://www8.garmin.com/manuals/webhelp/GUID-0221611A-992D-495E-8DED-1DD448F7A066/EN-GB/GUID-CD4439DF-46FF-4279-A8D5-8DA61C87A4EB.html) | Format documented; direct SyncAndRun transfer untested. |
 | fēnix 8 | [Personal audio and playlists](https://www8.garmin.com/manuals/webhelp/GUID-EECCAC99-90D6-4AB1-9A3A-EC433D3365E2/EN-US/fenix_8_Series_OM_EN-US.pdf) | Format documented; direct SyncAndRun transfer untested. |
 | Venu 3 series | [Personal audio and playlists](https://www8.garmin.com/manuals/webhelp/GUID-9CC4A873-E034-4A06-B2E0-636DCFE760EE/EN-US/GUID-CD4439DF-46FF-4279-A8D5-8DA61C87A4EB.html) | Format documented; direct SyncAndRun transfer untested. |
