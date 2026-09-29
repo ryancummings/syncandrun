@@ -2,6 +2,8 @@
 
 SyncAndRun moves music from Plex, Jellyfin, or a local folder to a Garmin music watch. It runs as a native desktop app on macOS and Linux. Choose playlists, choose MP3 quality, and send the music over USB. You can also export playlist folders for a manual copy.
 
+**[Download SyncAndRun for Mac or Linux](https://github.com/ryancummings/syncandrun/releases/latest)** · [Installation steps](#download-and-install)
+
 ![Plex playlists in the native Mac app](docs/screenshots/native-plex.png)
 
 ![Local folder playlists and MP3 quality](docs/screenshots/native-folder.png)
