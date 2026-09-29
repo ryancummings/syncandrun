@@ -50,7 +50,7 @@ If the app does not see the watch, close other apps that use its USB connection.
 
 SyncAndRun keeps one owner's connections in a local profile. It encrypts saved Plex and Jellyfin credentials. The app has no analytics, cloud relay, or background service. Keep profile backups and exported music private. See [Privacy](PRIVACY.md) and [Security](SECURITY.md).
 
-Direct transfer and playback were checked with synthetic music on a Forerunner 955 Solar under Linux. The Mac app detected that watch and read its storage, but a Mac transfer and on-watch playback still need a physical check. Other models need separate checks. See [Validation](docs/VALIDATION.md).
+Direct transfer and playback were checked with synthetic music on a Forerunner 955 Solar under Linux. The owner also confirmed a Mac-to-watch transfer and playback on that watch. Other models need separate checks. See [Validation](docs/VALIDATION.md).
 
 The Mac and Linux apps use the same Rust code and interface. Windows support is a future plan. This repository contains no Windows app package.
 
