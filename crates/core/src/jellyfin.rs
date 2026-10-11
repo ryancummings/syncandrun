@@ -70,6 +70,10 @@ fn base(s: &str) -> Result<Url> {
     }
     Ok(u)
 }
+/// Checks a server address without contacting the server.
+pub fn check_server_address(s: &str) -> Result<()> {
+    base(s).map(|_| ())
+}
 fn cancelled(cancel: &AtomicBool) -> Result<()> {
     ensure!(!cancel.load(Ordering::Relaxed), "Operation cancelled");
     Ok(())
@@ -767,5 +771,7 @@ mod tests {
                 .contains("http:// or https://")
         );
         assert!(base("http://192.168.1.20:8096").is_ok());
+        assert!(check_server_address("192.168.1.20:8096").is_err());
+        assert!(check_server_address("http://192.168.1.20:8096").is_ok());
     }
 }

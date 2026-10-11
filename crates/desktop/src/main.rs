@@ -23,7 +23,7 @@ use syncandrun_core::{
     BITRATES,
     device::{self, Discovery, Watch},
     export::{self, Progress},
-    jellyfin::{Jellyfin, JellyfinLogin},
+    jellyfin::{self, Jellyfin, JellyfinLogin},
     plex::{self, LibraryOverview, Login, PlaylistSummary, Plex, ServerChoice},
     profile::{self, Profile, Provider},
     provider::MusicSource,
@@ -142,6 +142,7 @@ struct Desktop {
     jellyfin_setup: bool,
     jellyfin_login: Option<Arc<JellyfinLogin>>,
     jellyfin_url: Entity<input::Input>,
+    jellyfin_url_error: Option<String>,
     jellyfin_user: Entity<input::Input>,
     jellyfin_password: Entity<input::Input>,
     playlists: Vec<PlaylistSummary>,
@@ -262,6 +263,7 @@ impl Desktop {
             jellyfin_setup: false,
             jellyfin_login: None,
             jellyfin_url: cx.new(|cx| input::Input::new(false, cx)),
+            jellyfin_url_error: None,
             jellyfin_user: cx.new(|cx| input::Input::new(false, cx)),
             jellyfin_password: cx.new(|cx| input::Input::new(true, cx)),
             playlists: vec![],
@@ -606,6 +608,8 @@ impl Desktop {
         self.choice = None;
         self.jellyfin_login = None;
         self.jellyfin_setup = false;
+        self.jellyfin_url_error = None;
+        self.jellyfin_url_error = None;
         self.jellyfin_password
             .update(cx, |input, cx| input.clear(cx));
         self.selected.clear();
@@ -652,6 +656,11 @@ impl Desktop {
             return;
         }
         let url = self.jellyfin_url.read(cx).value().to_owned();
+        if let Err(error) = jellyfin::check_server_address(&url) {
+            self.jellyfin_url_error = Some(error.to_string());
+            return;
+        }
+        self.jellyfin_url_error = None;
         let username = self.jellyfin_user.read(cx).value().to_owned();
         let password = self.jellyfin_password.read(cx).value().to_owned();
         self.jellyfin_password
@@ -1578,6 +1587,9 @@ impl Render for Desktop {
             if active {
                 form = form
                     .child(self.jellyfin_url.clone())
+                    .when_some(self.jellyfin_url_error.clone(), |form, error| {
+                        form.child(div().text_sm().text_color(rgb(0xe07a5f)).child(error))
+                    })
                     .child("Username")
                     .child(self.jellyfin_user.clone())
                     .child("Password")
