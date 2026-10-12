@@ -8,7 +8,7 @@ SyncAndRun moves music from Plex, Jellyfin, or a local folder to a Garmin music 
 
 ![Local folder playlists and MP3 quality](docs/screenshots/native-folder.png)
 
-These screenshots use an isolated demo profile, a fake Plex server, and generated audio. The playlist names and track counts are synthetic.
+These screenshots use an isolated demo profile, a fake Plex server, and generated audio. The playlist names, track counts, and folder path are synthetic.
 
 ## Download and install
 
@@ -39,14 +39,14 @@ Extract the Linux archive, open its `SyncAndRun-0.2.0-linux-x86_64` folder, and 
 2. Sign in or choose a folder that contains MP3 or FLAC files.
 3. Choose the playlists and MP3 quality that you want.
 4. Connect a Garmin music watch in USB transfer mode.
-5. Select Direct to device and choose Add playlists or Replace old music.
+5. Under Destination, select Device. Under Music already on the device, select Keep or Replace.
 6. Select Transfer to device. Wait for the file checks to finish before you unplug the watch.
 
-Replace old music removes recognized music from the watch after the new playlists pass read-back checks. This action cannot be undone. Choose Add playlists if you want to keep the watch's existing music.
+Replace removes recognized music from the watch after the new playlists pass read-back checks. This action cannot be undone. Select Keep if you want to keep the watch's existing music.
 
-You can select Export to folder when you want to copy files with another MTP app. Copy the exported playlist folders into the watch's `Music` folder, then eject the watch. The app can also show and remove individual items from that folder.
+You can select Folder under Destination when you want to copy files with another MTP app. Copy the exported playlist folders into the watch's `Music` folder, then eject the watch. The Device content page can also show and remove individual items from that folder.
 
-If the app does not see the watch, close other apps that use its USB connection. Then select Scan for device. The app also checks for a device automatically and removes a disconnected watch from the display. See [device help](docs/DIRECT-MTP.md) and the [model guide](docs/GARMIN-COMPATIBILITY.md).
+If the app does not see the watch, close other apps that use its USB connection. Then select Scan again in the device card at the bottom of the sidebar. The app also checks for a device automatically and removes a disconnected watch from the display. See [device help](docs/DIRECT-MTP.md) and the [model guide](docs/GARMIN-COMPATIBILITY.md).
 
 ## Privacy and compatibility
 
