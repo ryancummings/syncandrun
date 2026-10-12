@@ -16,16 +16,16 @@ Choose **Direct to device**, select the device if there is more than one, and cl
   none was copied.
 - [mtp-rs](https://github.com/vdavid/mtp-rs) offers a pure Rust implementation
   with Forerunner 955 fixes. Version 0.32.0 was evaluated, but its nusb dependency
-  requires core-foundation 0.10.1 while GPUI 0.2.2 pins 0.10.0. Cargo rejects
-  that combination even for Linux. Using libmtp avoids patching the UI framework.
+  requires core-foundation 0.10.1 while GPUI 0.2.2, which the app used then, pinned 0.10.0.
+  Cargo rejected that combination even for Linux. Using libmtp avoids patching the UI framework.
 
 Install `libmtp-dev` on Debian/Ubuntu or `libmtp` on Arch, including the package’s
 USB permission rules. No daemon or MCP server is needed: the device uses **Media
 Transfer Protocol (MTP)**. A busy-device message usually means Files, another MTP
 app, or another SyncAndRun process owns the USB interface. Close or unmount it
-there, then use **Scan for device**. The app scans periodically until it finds a usable
+there, then use **Scan again** in the device card. The app scans periodically until it finds a usable
 device. It also scans after a transfer or removal so the free-space display updates.
-A raw USB check removes a disconnected watch from the display. Use **Scan for device** when you want an immediate check.
+A raw USB check removes a disconnected watch from the display. Use **Scan again** when you want an immediate check.
 
 ## macOS development references
 

@@ -1,6 +1,6 @@
 # Architecture
 
-SyncAndRun uses a Rust workspace. `syncandrun-core` owns profiles, music sources, exports, and USB transfers. `syncandrun-desktop` draws the Mac and Linux interface with GPUI. `syncandrun-cli` uses the same core for terminal commands. The desktop sends slow work to worker threads and shows progress from events.
+SyncAndRun uses a Rust workspace. `syncandrun-core` owns profiles, music sources, exports, and USB transfers. `syncandrun-desktop` draws the Mac and Linux interface with GPUI Kit components on GPUI. Its colors and fonts come from `crates/desktop/src/theme.json`. `syncandrun-cli` uses the same core for terminal commands. The desktop sends slow work to worker threads and shows progress from events.
 
 ## Music and profiles
 

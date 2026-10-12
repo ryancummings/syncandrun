@@ -148,18 +148,22 @@ def run(args):
                         time.sleep(5)
                         geometry = dict(line.split('=', 1) for line in subprocess.check_output(
                             ['xdotool', 'getwindowgeometry', '--shell', window], text=True).splitlines())
+                        window_width = int(geometry['WIDTH'])
                         window_height = int(geometry['HEIGHT'])
-                        footer_y = window_height - 55
-                        confirm_y = window_height // 2 + 62
-                        if args.gui_settings or args.gui_export:
-                            subprocess.run(['xdotool', 'mousemove', '--window', window, '345', '149', 'click', '1'], check=True)
+                        assert window_width >= 1100, 'Use a window at least 1100 pixels wide for the side-by-side layout'
+                        # Sidebar items, the transfer panel and alert dialogs have fixed offsets.
+                        settings = ('70', '315')
+                        export = (str(window_width - 160), str(window_height - 35))
+                        change_folder = (str(window_width - 70), '239')
+                        confirm = (str(window_width // 2 + 130), str(window_height // 10 + 113))
+                        subprocess.run(['xdotool', 'windowactivate', '--sync', window], check=True)
+                        if args.gui_settings:
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, *settings, 'click', '1'], check=True)
                             time.sleep(.5)
                         if args.gui_export:
                             gui_destination = root / 'gui-exports'
                             gui_destination.mkdir()
-                            if window_height < 1000:
-                                subprocess.run(['xdotool', 'mousemove', '--window', window, '600', '520', 'click', '--repeat', '5', '--delay', '80', '5'], check=True)
-                            subprocess.run(['xdotool', 'mousemove', '--window', window, '120', str(496 if window_height < 1000 else 820), 'click', '1'], check=True)
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, *change_folder, 'click', '1'], check=True)
                             time.sleep(2)
                             subprocess.run(['xdotool', 'key', 'alt+Home'], check=True)
                             time.sleep(.5)
@@ -173,22 +177,20 @@ def run(args):
                                 geometry = dict(line.split('=', 1) for line in subprocess.check_output(['xdotool', 'getwindowgeometry', '--shell', dialog], text=True).splitlines())
                                 subprocess.run(['xdotool', 'mousemove', '--window', dialog, str(int(geometry['WIDTH']) - 90), str(int(geometry['HEIGHT']) - 25), 'click', '1'], check=True)
                             time.sleep(1)
-                            subprocess.run(['xdotool', 'mousemove', '--window', window, '80', '149', 'click', '1'], check=True)
-                        # Exercise playlist movement before exporting.
+                            subprocess.run(['xdotool', 'windowactivate', '--sync', window], check=True)
+                        # Clear the second playlist so the export covers only the first one.
                         if not args.gui_settings:
-                            subprocess.run(['xdotool', 'mousemove', '--window', window, '120', '454', 'click', '1'], check=True)
-                            if not args.gui_export:
-                                subprocess.run(['xdotool', 'mousemove', '--window', window, '120', '454', 'click', '1'], check=True)
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, '276', '194', 'click', '1'], check=True)
                         time.sleep(.5)
                         if args.gui_default_export:
                             default_library = synthetic_home / 'Music' / 'SyncAndRun'
                             assert not default_library.exists(), 'Default library existed before confirmation'
-                            subprocess.run(['xdotool', 'mousemove', '--window', window, '160', str(footer_y), 'click', '1'], check=True)
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, *export, 'click', '1'], check=True)
                             time.sleep(.5)
                             assert not default_library.exists(), 'Default library was created before confirmation'
                             if args.prompt_screenshot:
                                 subprocess.run(['import', '-window', window, str(args.prompt_screenshot)], check=True)
-                            subprocess.run(['xdotool', 'mousemove', '--window', window, '465', str(confirm_y), 'click', '1'], check=True)
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, *confirm, 'click', '1'], check=True)
                             for _ in range(100):
                                 if (default_library / '.syncandrun-files.json').exists():
                                     break
@@ -198,7 +200,7 @@ def run(args):
                             assert len(list(default_library.rglob('*.mp3'))) == 3, 'Confirmed default library export failed'
                             print('Native GPUI default library confirmation and export passed.')
                         if args.gui_export:
-                            subprocess.run(['xdotool', 'mousemove', '--window', window, '160', str(footer_y), 'click', '1'], check=True)
+                            subprocess.run(['xdotool', 'mousemove', '--window', window, *export, 'click', '1'], check=True)
                             for _ in range(100):
                                 outputs = list(gui_destination.rglob('*.mp3'))
                                 if len(outputs) == 3:
@@ -214,15 +216,17 @@ def run(args):
                             print('Native GPUI export passed through the GTK portal folder picker.')
                             if args.gui_purge:
                                 (gui_destination / 'notes.txt').write_text('keep me')
-                                subprocess.run(['xdotool', 'mousemove', '--window', window, '345', '149', 'click', '1'], check=True)
-                                if window_height < 1000:
-                                    subprocess.run(['xdotool', 'mousemove', '--window', window, '600', '520', 'click', '--repeat', '8', '--delay', '80', '5'], check=True)
-                                subprocess.run(['xdotool', 'mousemove', '--window', window, '130', str(965 if window_height >= 1000 else 550), 'click', '1'], check=True)
+                                subprocess.run(['xdotool', 'mousemove', '--window', window, *settings, 'click', '1'], check=True)
+                                time.sleep(.5)
+                                subprocess.run(['xdotool', 'mousemove', '--window', window, '640', str(window_height // 2), 'click', '--repeat', '10', '--delay', '60', '5'], check=True)
+                                time.sleep(.3)
+                                # Clear exported music sits at the bottom of Settings, above the status bar.
+                                subprocess.run(['xdotool', 'mousemove', '--window', window, '537', str(window_height - 99), 'click', '1'], check=True)
                                 time.sleep(.5)
                                 assert len(list(gui_destination.rglob('*.mp3'))) == 3, 'Music was cleared before confirmation'
                                 if args.prompt_screenshot:
                                     subprocess.run(['import', '-window', window, str(args.prompt_screenshot)], check=True)
-                                subprocess.run(['xdotool', 'mousemove', '--window', window, '465', str(confirm_y), 'click', '1'], check=True)
+                                subprocess.run(['xdotool', 'mousemove', '--window', window, *confirm, 'click', '1'], check=True)
                                 for _ in range(100):
                                     if not (gui_destination / '.syncandrun-files.json').exists():
                                         break

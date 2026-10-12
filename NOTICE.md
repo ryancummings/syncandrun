@@ -17,7 +17,7 @@ SyncAndRun is an independent, unofficial project. It is not
 affiliated with, endorsed by, or sponsored by Plex, Garmin, or the SubMusic
 maintainers. Plex and Garmin names are used only to describe interoperability.
 
-The native interface uses GPUI (Apache-2.0). The macOS app bundles IBM Plex Sans
+The native interface uses GPUI Kit and GPUI (Apache-2.0). It embeds Lucide icons from GPUI Kit under the ISC License. The macOS app bundles IBM Plex Sans
 and IBM Plex Mono from IBM under the SIL Open Font License, Version 1.1;
 see `assets/fonts/LICENSE.txt`. Linux uses system fonts. Rust dependency versions
 are recorded in Cargo.lock; their licenses remain those of their respective authors.

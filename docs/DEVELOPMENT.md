@@ -1,6 +1,6 @@
 # Development
 
-SyncAndRun has one Rust workspace for the Mac app, Linux app, and CLI. The app uses GPUI for its window and libmtp for direct USB transfer. It does not start a local web server. Read [Architecture](ARCHITECTURE.md) before you change profile, export, or device behavior.
+SyncAndRun has one Rust workspace for the Mac app, Linux app, and CLI. The app uses GPUI Kit for its window and controls, and libmtp for direct USB transfer. It does not start a local web server. Read [Architecture](ARCHITECTURE.md) before you change profile, export, or device behavior.
 
 ## Build and check the workspace
 
@@ -32,6 +32,8 @@ Launch the app with an isolated profile. Pass `--no-usb` when a device test is n
 ```sh
 cargo run --locked -p syncandrun-desktop -- --profile /tmp/syncandrun-demo --no-usb
 ```
+
+The smoke script can also drive the window with `--gui`, `--gui-default-export`, `--gui-export`, and `--gui-purge`. These options click fixed positions through `xdotool`, so they need an X11 or XWayland window at least 1100 pixels wide. Add `--screenshot FILE` to save the final window.
 
 For a physical device check, use [Validation](VALIDATION.md) and record the model, firmware, host system, source commit, and result. A successful build does not prove that the watch indexed a playlist or played its tracks.
 
