@@ -8,7 +8,7 @@ SyncAndRun moves music from Plex, Jellyfin, or a local folder to a Garmin music 
 
 ![Local folder playlists and MP3 quality](docs/screenshots/native-folder.png)
 
-These screenshots use an isolated demo profile, a fake Plex server, and generated audio. The playlist names and track counts are synthetic.
+These screenshots use an isolated demo profile, a fake Plex server, and generated audio. The playlist names, track counts, and folder path are synthetic.
 
 ## Download and install
 
