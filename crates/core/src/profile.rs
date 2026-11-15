@@ -118,7 +118,21 @@ pub struct Profile {
     db: Connection,
     secret: String,
     pub root: PathBuf,
-    _lock: std::fs::File,
+    // Last field, so the database closes before another process can take the profile.
+    _lock: ProfileLock,
+}
+
+/// Exclusive `flock` on `native.lock`, released when dropped.
+///
+/// The lock belongs to the open file description, which a child forked by any thread shares
+/// until it execs (SAR-30). Closing our descriptor alone would leave the profile locked for
+/// that window, so drop unlocks explicitly first.
+struct ProfileLock(std::fs::File);
+
+impl Drop for ProfileLock {
+    fn drop(&mut self) {
+        let _ = fs2::FileExt::unlock(&self.0);
+    }
 }
 
 // Deliberately no Debug/Serialize: this type contains credentials.
@@ -187,6 +201,7 @@ impl Profile {
             .open(root.join("native.lock"))?;
         fs2::FileExt::try_lock_exclusive(&lock)
             .context("This profile is in use by another native app or CLI operation")?;
+        let lock = ProfileLock(lock);
         private_dir(&root.join("data"))?;
         let secret_path = root.join("secret");
         let db_path = root.join("data/syncandrun.sqlite");
@@ -829,6 +844,30 @@ mod tests {
         assert!(Profile::open(root.path()).is_err());
         drop(profile);
         let reopened = Profile::open(root.path());
+        assert!(reopened.is_ok(), "{}", reopened.err().unwrap());
+    }
+    #[test]
+    fn dropping_a_profile_releases_its_lock_while_a_forked_child_holds_the_descriptor() {
+        // SAR-30: a child forked by any thread (for example to start ffmpeg) holds a copy of
+        // the lock descriptor until it execs. The flock belongs to the shared open file
+        // description, so dropping the profile must unlock it, not just close our copy.
+        let root = tempdir().unwrap();
+        let profile = Profile::open(root.path()).unwrap();
+        // SAFETY: the child only calls async-signal-safe functions before _exit.
+        let child = unsafe { libc::fork() };
+        assert!(child >= 0, "fork failed");
+        if child == 0 {
+            unsafe {
+                libc::sleep(30);
+                libc::_exit(0);
+            }
+        }
+        drop(profile);
+        let reopened = Profile::open(root.path());
+        unsafe {
+            libc::kill(child, libc::SIGKILL);
+            libc::waitpid(child, std::ptr::null_mut(), 0);
+        }
         assert!(reopened.is_ok(), "{}", reopened.err().unwrap());
     }
     #[test]
